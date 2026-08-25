@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Tài khoản duy nhất có email. Phụ huynh tự tạo tài khoản cho con,
+/// nên chính hành động này là cơ chế đồng ý của người đại diện.
+model Parent {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  children Child[]
+  reports  Report[]
+}
+
+/// Tài khoản của trẻ: KHÔNG email, KHÔNG tên thật.
+/// `username` do phụ huynh đặt, dùng để đăng nhập.
+model Child {
+  id           String   @id @default(cuid())
+  parentId     String
+  username     String   @unique
+  displayName  String
+  passwordHash String
+  birthYear    Int?
+  createdAt    DateTime @default(now())
+
+  parent Parent @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  games  Game[]
+
+  @@index([parentId])
+}
+
+enum GameStatus {
+  PUBLISHED
+  HIDDEN
+  REMOVED
+}
+
+model Game {
+  id          String @id @default(cuid())
+  childId     String
+  title       String
+  description String @default("")
+
+  /// Ba nội dung đều địa chỉ hoá theo nội dung — cùng sha256 thì dùng chung file.
+  sb3Sha256   String
+  sb3Size     Int
+  htmlSha256  String
+  thumbSha256 String
+
+  /// Mặc định PUBLISHED theo quyết định "public ngay".
+  /// Đổi default sang HIDDEN là bật được chế độ duyệt-trước.
+  status GameStatus @default(PUBLISHED)
+
+  playCount   Int @default(0)
+  reportCount Int @default(0)
+
+  /// Từ analysis của packager — ảnh hưởng dung lượng runtime nhúng vào HTML.
+  usesMusic Boolean @default(false)
+  /// Sb3Warning[] trả về từ validate (biến đám mây, file bị strip...).
+  warnings Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  child          Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
+  reports        Report[]
+  moderationLogs ModerationLog[]
+  tags           GameTag[]
+
+  @@index([childId])
+  @@index([status, createdAt])
+  @@index([sb3Sha256])
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+model Report {
+  id       String @id @default(cuid())
+  gameId   String
+  /// Null khi người report không đăng nhập.
+  reporterParentId String?
+  /// Lưu hash của IP chứ không lưu IP thô — đủ để chống spam, không thành PII dư thừa.
+  reporterIpHash String
+  reason         String
+  status         ReportStatus @default(OPEN)
+  createdAt      DateTime     @default(now())
+
+  game     Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  reporter Parent? @relation(fields: [reporterParentId], references: [id], onDelete: SetNull)
+
+  /// Một người chỉ report một game một lần.
+  @@unique([gameId, reporterIpHash])
+  @@index([status])
+}
+
+model ModerationLog {
+  id      String @id @default(cuid())
+  gameId  String
+  /// Ai thao tác: parent id, admin id, hoặc "system" khi tự động ẩn theo ngưỡng.
+  actorId String
+  action  String
+  note    String @default("")
+
+  createdAt DateTime @default(now())
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([gameId])
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  slug  String    @unique
+  label String
+  games GameTag[]
+}
+
+model GameTag {
+  gameId String
+  tagId  String
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, tagId])
+}

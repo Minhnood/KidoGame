@@ -1,0 +1,88 @@
+# Caddyfile cho production.
+#
+# Đây là bản tương ứng của infra/player-server.mjs (bản dev). Hai file này PHẢI
+# giữ cùng một bộ header — nếu sửa một bên thì sửa cả bên kia, vì bộ e2e chỉ
+# kiểm được bản dev.
+#
+# Điểm cốt lõi: HAI DOMAIN RIÊNG. File của người dùng không bao giờ được serve
+# từ app origin. Cookie phiên là host-only trên app domain nên không lọt sang
+# player domain.
+
+{
+	email admin@kidogame.vn
+}
+
+# ---------------------------------------------------------------------------
+# App origin — Next.js. Là nơi DUY NHẤT có cookie phiên.
+# ---------------------------------------------------------------------------
+app.kidogame.vn {
+	encode zstd gzip
+
+	reverse_proxy web:3000
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		-Server
+	}
+	# CSP do Next tự đặt trong next.config.ts để dev và prod dùng chung một nguồn.
+}
+
+# ---------------------------------------------------------------------------
+# Player origin — chỉ file tĩnh. KHÔNG có ứng dụng, KHÔNG có cookie.
+# ---------------------------------------------------------------------------
+play.kidogame.vn {
+	encode zstd gzip
+	root * /srv/storage
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		# Tên file LÀ sha256 của nội dung -> nội dung không bao giờ đổi.
+		Cache-Control "public, max-age=31536000, immutable"
+		-Server
+	}
+
+	# --- HTML game đã đóng gói ---------------------------------------------
+	# HTML này tự nhúng thẻ meta CSP rất lỏng (`default-src *`). Header dưới đây
+	# vẫn có hiệu lực vì policy từ header và từ meta được áp dụng ĐỒNG THỜI,
+	# kết quả là GIAO của hai policy.
+	#
+	# Runtime cần 'unsafe-inline'/'unsafe-eval' (compiler sinh JS lúc chạy) và
+	# blob: (inline worker). Nhưng connect-src bị khoá nên game không gửi được
+	# dữ liệu ra host nào khác.
+	@html path /html/*
+	header @html {
+		Content-Type "text/html; charset=utf-8"
+		Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; form-action 'none'; frame-ancestors https://app.kidogame.vn"
+	}
+
+	# --- File .sb3 gốc cho trẻ tải về ---------------------------------------
+	# TUYỆT ĐỐI không để text/html ở đây.
+	@sb3 path /sb3/*
+	header @sb3 {
+		Content-Type "application/octet-stream"
+		Content-Disposition "attachment"
+		Access-Control-Allow-Origin "*"
+	}
+
+	# --- Thumbnail ----------------------------------------------------------
+	@thumb path /thumb/*
+	header @thumb {
+		Content-Type "image/webp"
+		Access-Control-Allow-Origin "*"
+	}
+
+	# Chỉ cho phép đúng dạng đường dẫn địa chỉ-hoá-theo-nội-dung, chặn mọi thứ khác.
+	@valid path_regexp ^/(sb3|html|thumb)/[0-9a-f]{2}/[0-9a-f]{64}\.(sb3|html|webp)$
+	handle @valid {
+		file_server
+	}
+	handle {
+		respond "404" 404
+	}
+}
