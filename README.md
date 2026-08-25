@@ -15,7 +15,7 @@ createdb kidogame
 
 cd apps/web
 cp .env.example .env          # sửa DATABASE_URL cho đúng user của bạn
-pnpm db:push                  # tạo bảng
+pnpm db:push                  # tạo bảng + áp dụng constraints.sql
 pnpm db:seed                  # tạo tài khoản demo
 ```
 
@@ -39,7 +39,15 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 pnpm --filter @kidogame/sb3 test           # 33 unit test, gồm fixture độc hại
 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs   # 14 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs    # 19 kiểm tra
+```
+
+`e2e-auth.mjs` tự tạo tài khoản với email ngẫu nhiên nên chạy lại nhiều lần được.
+Dọn dữ liệu test:
+
+```sql
+delete from "Parent" where email like 'e2e-%@kidogame.test';
 ```
 
 `infra/e2e-check.mjs` kiểm cả các tính chất bảo mật, không chỉ chức năng: iframe
@@ -60,6 +68,26 @@ Vài lựa chọn có chủ đích cho đối tượng trẻ em:
 - Ô chọn file là component tự làm (`file-picker.tsx`), không dùng
   `<input type="file">` trần — trình duyệt tự vẽ chữ "Choose File" bằng tiếng Anh
   và CSS không đổi được.
+
+## Tài khoản và phân quyền
+
+Ba vai, và ranh giới giữa chúng là có chủ đích:
+
+- **Phụ huynh** — tài khoản duy nhất có email. Tạo tài khoản cho con, khoá/mở khoá,
+  đổi mật khẩu cho con, **ẩn game của con**. KHÔNG đăng game hộ con.
+- **Bé** — không email, không tên thật. Chỉ bé mới đăng được game, để game ghi công
+  đúng người làm.
+- **Khách** — chỉ xem và chơi.
+
+Phiên lưu trong DB, **không dùng JWT**: phụ huynh phải thu hồi được phiên của con
+ngay lập tức (khoá tài khoản, đổi mật khẩu). JWT đã phát ra thì không gọi về được.
+
+Mật khẩu băm bằng scrypt của `node:crypto` (N=2^16), không thêm dependency native.
+Băm mật khẩu **chỉ ở `src/lib/password.ts`** — đừng tự gọi scrypt ở chỗ khác, hai
+bên lệch định dạng là hash không verify được mà không ai báo lỗi.
+
+Chống dò mật khẩu khoá theo danh tính (email/username), **không theo IP**: cả một
+lớp học hay một gia đình thường dùng chung IP.
 
 ## Cấu trúc
 
@@ -82,12 +110,17 @@ Vài lựa chọn có chủ đích cho đối tượng trẻ em:
   không bám vào class trang trí. Bám vào class là đổi giao diện một cái là test vỡ hàng loạt.
 - Next tự render một route-announcer rỗng cũng mang `role="alert"`. Khi tìm hộp lỗi
   phải khoanh phạm vi (`form [role=alert]`), không thì `.first()` bắt trúng cái rỗng.
+- **Click submit trong e2e phải khoanh vào đúng form.** Thanh điều hướng có nút
+  "Đăng xuất" cũng là `<button type="submit">`, nên `click('button[type=submit]')`
+  sẽ đăng xuất giữa bài test và làm test đổ ở chỗ khác hẳn.
+- `prisma db push` không tạo được CHECK constraint. Chúng nằm trong
+  `prisma/constraints.sql`, script `db:push` đã tự gọi — nhưng nếu bạn chạy
+  `prisma db push` trực tiếp thì phải chạy `pnpm db:constraints` sau đó.
 
 ## Trạng thái
 
-Xong: M0 (đóng gói player), M1 (upload → chơi được).
-Chưa làm: auth phụ huynh/trẻ (M2), tìm kiếm và tag (M3), report và admin (M4),
-Docker Compose (M5).
+Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ huynh/bé).
+Chưa làm: tìm kiếm và tag (M3), nút report + trang admin (M4), Docker Compose (M5).
 
-Hiện `/api/upload` gắn game vào tài khoản trẻ đầu tiên trong DB — chỗ này sẽ
-thay bằng session ở M2.
+Tài khoản demo sau khi seed: `demo@kidogame.local` / `demo1234ab` (phụ huynh),
+`beminh` / `be1234` (bé).

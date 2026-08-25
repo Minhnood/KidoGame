@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Sb3Error, LIMITS } from '@kidogame/sb3';
-import { prisma } from '@/lib/db';
 import { ingestGame } from '@/lib/ingest';
+import { getActor } from '@/lib/session';
 
 // Đóng gói cần Node API (sharp, zlib, fs) — không chạy được trên edge runtime.
 export const runtime = 'nodejs';
@@ -14,6 +14,22 @@ export async function POST(request: Request) {
     form = await request.formData();
   } catch {
     return NextResponse.json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });
+  }
+
+  // Chỉ tài khoản của BÉ được đăng game. Phụ huynh không đăng hộ — game phải
+  // gắn đúng với bé để trang quản lý của phụ huynh và phần ghi công có nghĩa.
+  const actor = await getActor();
+  if (!actor) {
+    return NextResponse.json(
+      { error: 'Bé cần đăng nhập trước khi đăng game nhé.', code: 'UNAUTHENTICATED' },
+      { status: 401 }
+    );
+  }
+  if (actor.kind !== 'child') {
+    return NextResponse.json(
+      { error: 'Game cần được đăng từ tài khoản của bé, không phải tài khoản bố mẹ.', code: 'WRONG_ACTOR' },
+      { status: 403 }
+    );
   }
 
   const file = form.get('file');
@@ -32,22 +48,12 @@ export async function POST(request: Request) {
   const title = String(form.get('title') ?? '');
   const description = String(form.get('description') ?? '');
 
-  // M1 chưa có auth: gắn tạm vào tài khoản demo do seed tạo ra.
-  // M2 sẽ thay bằng child id lấy từ session.
-  const child = await prisma.child.findFirst({ orderBy: { createdAt: 'asc' } });
-  if (!child) {
-    return NextResponse.json(
-      { error: 'Chưa có tài khoản nào. Chạy `pnpm db:seed` trước đã.' },
-      { status: 500 }
-    );
-  }
-
   try {
     const result = await ingestGame({
       sb3: Buffer.from(await file.arrayBuffer()),
       title,
       description,
-      childId: child.id,
+      childId: actor.id,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (e) {

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Nunito } from 'next/font/google';
 import Link from 'next/link';
-import { ButtonLink } from '@/components/button';
+import { SiteNav } from '@/components/site-nav';
 import { Wrap } from '@/components/page';
 import './globals.css';
 
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="text-xl font-extrabold tracking-tight no-underline">
               Kido<span className="text-accent">Game</span>
             </Link>
-            <ButtonLink href="/upload">Đăng game</ButtonLink>
+            <SiteNav />
           </Wrap>
         </header>
         <main>

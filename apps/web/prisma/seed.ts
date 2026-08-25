@@ -1,36 +1,35 @@
 import { PrismaClient } from '@prisma/client';
-import { scryptSync, randomBytes } from 'node:crypto';
+import { hashPassword } from '../src/lib/password';
 
 const prisma = new PrismaClient();
 
-/**
- * Hash mật khẩu tạm cho seed. M2 sẽ thay bằng argon2id cho toàn hệ thống —
- * scrypt ở đây chỉ để seed không lưu mật khẩu dạng thô.
+/*
+ * Dùng CHUNG hàm hashPassword của ứng dụng, không tự băm ở đây.
+ *
+ * Trước đó file này tự gọi scrypt và ghi ra định dạng `scrypt$<salt>$<hash>`
+ * (3 phần), còn verifyPassword đọc định dạng `scrypt$N$r$p$<salt>$<hash>`
+ * (6 phần) — nên tài khoản seed ra không đăng nhập được. Băm mật khẩu ở hai
+ * chỗ khác nhau là cái bẫy: hai bên lệch nhau mà không ai báo lỗi.
  */
-function hash(password: string): string {
-  const salt = randomBytes(16).toString('hex');
-  return `scrypt$${salt}$${scryptSync(password, salt, 64).toString('hex')}`;
-}
-
 async function main() {
   const parent = await prisma.parent.upsert({
     where: { email: 'demo@kidogame.local' },
-    update: {},
+    update: { passwordHash: await hashPassword('demo1234ab') },
     create: {
       email: 'demo@kidogame.local',
-      passwordHash: hash('demo1234'),
+      passwordHash: await hashPassword('demo1234ab'),
       isAdmin: true,
     },
   });
 
   const child = await prisma.child.upsert({
     where: { username: 'beminh' },
-    update: {},
+    update: { passwordHash: await hashPassword('be1234') },
     create: {
       parentId: parent.id,
       username: 'beminh',
       displayName: 'Bé Minh',
-      passwordHash: hash('be1234'),
+      passwordHash: await hashPassword('be1234'),
       birthYear: 2016,
     },
   });
@@ -46,8 +45,8 @@ async function main() {
   });
 
   console.log('seed xong:');
-  console.log('  phụ huynh:', parent.email, '(mật khẩu: demo1234)');
-  console.log('  bé:', child.username, '(mật khẩu: be1234)');
+  console.log('  phụ huynh:', parent.email, '/ demo1234ab');
+  console.log('  bé:', child.username, '/ be1234');
 }
 
 main()

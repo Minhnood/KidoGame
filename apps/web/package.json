@@ -7,10 +7,11 @@
     "build": "next build",
     "start": "next start -p 3000",
     "player": "node ../../infra/player-server.mjs",
-    "db:push": "prisma db push",
+    "db:push": "prisma db push && pnpm db:constraints",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:constraints": "node prisma/apply-constraints.mjs"
   },
   "dependencies": {
     "@kidogame/sb3": "workspace:*",

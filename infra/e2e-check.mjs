@@ -16,6 +16,9 @@ const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const PLAYER = process.env.PLAYER_ORIGIN ?? 'http://127.0.0.1:3001';
 // Đường dẫn tới một file .sb3 thật để thử luồng upload. Bỏ trống thì bỏ qua phần đó.
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
+// Tài khoản bé do `pnpm db:seed` tạo — cần để thử luồng đăng game.
+const CHILD_USERNAME = process.env.CHILD_USERNAME ?? 'beminh';
+const CHILD_PASSWORD = process.env.CHILD_PASSWORD ?? 'be1234';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -126,11 +129,19 @@ await page.screenshot({ path: '/tmp/kidogame-home.png' });
 
 // ---------- Upload qua form: đường chấp nhận ----------
 if (FIXTURE) {
+  // Từ M2, đăng game cần phiên của bé. Dùng tài khoản do `pnpm db:seed` tạo.
+  await page.goto(`${APP}/be-dang-nhap`, { waitUntil: 'networkidle' });
+  await page.fill('#username', CHILD_USERNAME);
+  await page.fill('#password', CHILD_PASSWORD);
+  await page.click('[data-testid=auth-form] button[type=submit]');
+  await page.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
+  check('Bé đăng nhập được bằng tài khoản seed', !/be-dang-nhap/.test(page.url()), page.url());
+
   await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
   await page.fill('#title', 'Game kiểm thử e2e');
   await page.fill('#description', 'Do infra/e2e-check.mjs tạo ra.');
   await page.setInputFiles('#file', FIXTURE);
-  await page.click('button[type=submit]');
+  await page.click('[data-testid=upload-form] button[type=submit]');
   await page.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
   check('Upload .sb3 hợp lệ qua form thành công', /\/game\//.test(page.url()), page.url());
 
@@ -143,7 +154,7 @@ if (FIXTURE) {
   await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
   await page.fill('#title', 'File giả mạo');
   await page.setInputFiles('#file', fakePath);
-  await page.click('button[type=submit]');
+  await page.click('[data-testid=upload-form] button[type=submit]');
   // Hộp lỗi có role=alert. PHẢI khoanh trong form: Next tự render một
   // route-announcer rỗng cũng mang role=alert, .first() sẽ bắt trúng cái đó.
   await page.waitForSelector('form [role=alert]', { timeout: 30000 }).catch(() => {});

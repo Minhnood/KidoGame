@@ -18,6 +18,7 @@ model Parent {
 
   children Child[]
   reports  Report[]
+  sessions Session[]
 }
 
 /// Tài khoản của trẻ: KHÔNG email, KHÔNG tên thật.
@@ -31,10 +32,53 @@ model Child {
   birthYear    Int?
   createdAt    DateTime @default(now())
 
-  parent Parent @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  games  Game[]
+  /// Phụ huynh khoá được tài khoản con mà không cần xoá.
+  isLocked Boolean @default(false)
+
+  parent   Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  games    Game[]
+  sessions Session[]
 
   @@index([parentId])
+}
+
+/// Phiên đăng nhập lưu trong DB, KHÔNG dùng JWT.
+///
+/// Lý do: phụ huynh phải thu hồi được phiên của con ngay lập tức (khoá tài khoản,
+/// đổi mật khẩu). JWT thì token đã phát ra không gọi về được, còn hàng ở đây thì
+/// xoá là mất hiệu lực tức thì.
+///
+/// Đúng một trong hai cột parentId/childId được set — xem `CHECK` constraint
+/// thêm bằng migration, Prisma không diễn đạt được ràng buộc này.
+model Session {
+  /// sha256 của token trong cookie. Rò database KHÔNG kéo theo rò phiên.
+  tokenHash String   @id
+  parentId  String?
+  childId   String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  /// Hash của IP + user agent, chỉ để phụ huynh nhận ra phiên lạ. Không lưu IP thô.
+  clientHash String @default("")
+
+  parent Parent? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child  Child?  @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@index([childId])
+  @@index([expiresAt])
+}
+
+/// Đếm số lần đăng nhập sai để chặn dò mật khẩu.
+///
+/// Khoá theo (loại, danh tính) chứ không theo IP: trẻ trong cùng một lớp hay một
+/// nhà sẽ dùng chung IP, khoá theo IP là khoá oan cả lớp.
+model LoginAttempt {
+  id          String   @id @default(cuid())
+  /// "parent:<email>" hoặc "child:<username>", đã lowercase.
+  identity    String   @unique
+  failedCount Int      @default(0)
+  lockedUntil DateTime?
+  updatedAt   DateTime @updatedAt
 }
 
 enum GameStatus {
