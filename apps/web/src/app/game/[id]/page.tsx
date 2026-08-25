@@ -1,7 +1,9 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { objectUrl } from '@/lib/storage';
+import { ButtonAnchor, ButtonLink } from '@/components/button';
+import { Notice } from '@/components/notice';
+import { PageTitle } from '@/components/page';
 import { PlayCounter } from './play-counter';
 
 export const dynamic = 'force-dynamic';
@@ -27,10 +29,10 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <h1>{game.title}</h1>
-      <p className="muted">
-        Của bé {game.child.displayName} · {game.playCount} lượt chơi
-      </p>
+      <PageTitle
+        title={game.title}
+        lead={`Của bé ${game.child.displayName} · ${game.playCount} lượt chơi`}
+      />
 
       <PlayCounter gameId={game.id} />
 
@@ -50,19 +52,21 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         referrerPolicy="no-referrer"
       />
 
-      {cloudWarning && <p className="notice">⚠️ {cloudWarning.message}</p>}
+      <div className="mx-auto max-w-180">
+        {cloudWarning && <Notice tone="warn">{cloudWarning.message}</Notice>}
 
-      {game.description && <p style={{ maxWidth: 680 }}>{game.description}</p>}
+        {game.description && <p className="mt-4">{game.description}</p>}
 
-      <p style={{ margin: '18px 0 48px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {/* Tải source gốc: văn hoá cốt lõi của Scratch, trẻ học bằng cách mở game của nhau. */}
-        <a className="btn btn-ghost" href={objectUrl('sb3', game.sb3Sha256)} download>
-          Tải file .sb3 gốc
-        </a>
-        <Link className="btn btn-ghost" href="/">
-          Xem game khác
-        </Link>
-      </p>
+        <div className="mb-12 mt-5 flex flex-wrap gap-2.5">
+          {/* Tải source gốc: văn hoá cốt lõi của Scratch, trẻ học bằng cách mở game của nhau. */}
+          <ButtonAnchor variant="ghost" href={objectUrl('sb3', game.sb3Sha256)} download>
+            Tải file .sb3 gốc
+          </ButtonAnchor>
+          <ButtonLink href="/" variant="ghost">
+            Xem game khác
+          </ButtonLink>
+        </div>
+      </div>
     </>
   );
 }

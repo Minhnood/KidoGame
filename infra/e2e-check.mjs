@@ -1,6 +1,10 @@
 /**
  * Kiểm tra end-to-end trên hai server đang chạy thật (app + player origin).
  *
+ * Selector ở đây CHỈ dùng data-testid hoặc thuộc tính ngữ nghĩa (role, class
+ * .stage-frame là CSS thật). Đừng bám vào class trang trí — đổi giao diện là
+ * test vỡ hàng loạt, đúng như lần chuyển sang Tailwind.
+ *
  * Chạy:
  *   pnpm --filter @kidogame/web dev        # cửa sổ 1
  *   node infra/player-server.mjs           # cửa sổ 2
@@ -48,17 +52,17 @@ page.on('request', (req) => {
 
 // ---------- Trang chủ ----------
 await page.goto(APP, { waitUntil: 'networkidle' });
-const cards = await page.locator('.card').count();
+const cards = await page.locator('[data-testid=game-card]').count();
 check('Trang chủ hiện danh sách game', cards > 0, `${cards} game`);
 
-const thumbOk = await page.locator('.card img').first().evaluate((img) => {
+const thumbOk = await page.locator('[data-testid=game-card] img').first().evaluate((img) => {
   const el = img instanceof HTMLImageElement ? img : null;
   return !!el && el.naturalWidth > 0 && el.naturalHeight > 0;
 });
 check('Thumbnail tải được từ player origin', thumbOk);
 
 // ---------- Trang chơi game ----------
-await page.locator('.card').first().click();
+await page.locator('[data-testid=game-card]').first().click();
 await page.waitForLoadState('networkidle');
 
 const frameEl = await page.locator('iframe.stage-frame').elementHandle();
@@ -113,7 +117,7 @@ check(
 // ---------- Đếm lượt chơi ----------
 await page.waitForTimeout(800);
 await page.reload({ waitUntil: 'networkidle' });
-const playText = await page.locator('.muted').first().innerText();
+const playText = await page.locator('[data-testid=page-lead]').first().innerText();
 check('Lượt chơi được ghi nhận', /[1-9]\d* lượt chơi/.test(playText), playText);
 
 await page.screenshot({ path: '/tmp/kidogame-game.png' });
@@ -140,9 +144,11 @@ if (FIXTURE) {
   await page.fill('#title', 'File giả mạo');
   await page.setInputFiles('#file', fakePath);
   await page.click('button[type=submit]');
-  await page.waitForSelector('.error', { timeout: 30000 }).catch(() => {});
+  // Hộp lỗi có role=alert. PHẢI khoanh trong form: Next tự render một
+  // route-announcer rỗng cũng mang role=alert, .first() sẽ bắt trúng cái đó.
+  await page.waitForSelector('form [role=alert]', { timeout: 30000 }).catch(() => {});
 
-  const errText = await page.locator('.error').first().innerText().catch(() => '');
+  const errText = await page.locator('form [role=alert]').first().innerText().catch(() => '');
   check(
     'File HTML đổi tên .sb3 bị từ chối, có thông báo cho bé',
     errText.length > 0 && !/\/game\//.test(page.url()),

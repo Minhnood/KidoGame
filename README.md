@@ -46,12 +46,28 @@ SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs
 trỏ đúng player origin, có sandbox, cookie phiên không rò sang player origin, và
 file HTML đổi tên `.sb3` bị từ chối.
 
+## Giao diện
+
+Tailwind v4, cấu hình CSS-first. **Design token nằm trong `@theme` ở
+`src/app/globals.css`** — đổi màu thương hiệu, bo góc, cỡ chữ chỉ sửa ở đó.
+
+Vài lựa chọn có chủ đích cho đối tượng trẻ em:
+
+- Vùng chạm tối thiểu 48px (`--spacing-touch`), không phải 44px như web người lớn.
+- Font Nunito có bộ dấu tiếng Việt đầy đủ, `next/font` self-host nên lúc chạy
+  không có request nào ra Google — hợp CSP `default-src 'self'`.
+- `line-height` rộng hơn mặc định vì dấu tiếng Việt sẽ chạm nhau.
+- Ô chọn file là component tự làm (`file-picker.tsx`), không dùng
+  `<input type="file">` trần — trình duyệt tự vẽ chữ "Choose File" bằng tiếng Anh
+  và CSS không đổi được.
+
 ## Cấu trúc
 
 | Thư mục | Vai trò |
 |---|---|
 | `packages/sb3` | Kiểm tra, chuẩn hoá, đóng gói, thumbnail. **Toàn bộ phần bảo mật nằm ở đây.** |
-| `apps/web` | Next.js: giao diện, API, Prisma |
+| `apps/web` | Next.js + Tailwind v4: giao diện, API, Prisma |
+| `apps/web/src/components` | Bộ component dùng chung (button, field, notice, card, file-picker) |
 | `infra` | Server tĩnh cho dev, Caddyfile cho production, script e2e |
 | `storage` | File theo địa chỉ nội dung: `sb3/`, `html/`, `thumb/` |
 
@@ -62,6 +78,10 @@ file HTML đổi tên `.sb3` bị từ chối.
 - **Đổi `next.config.ts` thì phải restart dev server**, Next không hot-reload file này.
 - `infra/player-server.mjs` và `infra/Caddyfile` phải giữ cùng bộ header. Sửa một
   bên nhớ sửa bên kia — e2e chỉ kiểm được bản dev.
+- **Selector trong e2e chỉ dùng `data-testid` hoặc thuộc tính ngữ nghĩa** (`role`),
+  không bám vào class trang trí. Bám vào class là đổi giao diện một cái là test vỡ hàng loạt.
+- Next tự render một route-announcer rỗng cũng mang `role="alert"`. Khi tìm hộp lỗi
+  phải khoanh phạm vi (`form [role=alert]`), không thì `.first()` bắt trúng cái rỗng.
 
 ## Trạng thái
 

@@ -2,6 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/button';
+import { Field, TextArea, TextInput } from '@/components/field';
+import { FilePicker } from '@/components/file-picker';
+import { Notice } from '@/components/notice';
+import { PageTitle } from '@/components/page';
 
 interface UploadOk {
   gameId: string;
@@ -49,40 +54,59 @@ export default function UploadPage() {
 
   return (
     <>
-      <h1>Đăng game của bé</h1>
-      <p className="muted">
-        Mở Scratch, chọn <strong>File → Save to your computer</strong> để lấy file{' '}
-        <strong>.sb3</strong>, rồi tải lên đây.
-      </p>
+      <PageTitle title="Đăng game của bé" />
 
-      <form className="upload" onSubmit={onSubmit}>
-        <label htmlFor="title">Tên game</label>
-        <input id="title" name="title" type="text" maxLength={80} required placeholder="Mèo phiêu lưu" />
+      <form
+        onSubmit={onSubmit}
+        className="mb-12 max-w-140 rounded-card border border-border bg-surface p-6"
+      >
+        <Field id="title" label="Tên game">
+          <TextInput id="title" name="title" maxLength={80} required placeholder="Mèo phiêu lưu" />
+        </Field>
 
-        <label htmlFor="description">Giới thiệu game (không bắt buộc)</label>
-        <textarea
-          id="description"
-          name="description"
-          maxLength={500}
-          placeholder="Bấm phím mũi tên để di chuyển, ăn hết sao là thắng!"
-        />
+        <Field id="description" label="Giới thiệu game" hint="Không bắt buộc — bỏ trống cũng được.">
+          <TextArea
+            id="description"
+            name="description"
+            maxLength={500}
+            placeholder="Bấm phím mũi tên để di chuyển, ăn hết sao là thắng!"
+          />
+        </Field>
 
-        <label htmlFor="file">File game (.sb3)</label>
-        <input id="file" name="file" type="file" accept=".sb3" required />
+        <Field
+          id="file"
+          label="File game"
+          hint={
+            <>
+              Trong Scratch, chọn <strong>File → Save to your computer</strong> để lấy file có đuôi{' '}
+              <strong>.sb3</strong>, rồi chọn file đó ở đây.
+            </>
+          }
+        >
+          <FilePicker id="file" name="file" accept=".sb3" required />
+        </Field>
 
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <Notice tone="error" role="alert">
+            {error}
+          </Notice>
+        )}
         {warnings.map((w) => (
-          <p className="notice" key={w}>
-            ⚠️ {w}
-          </p>
+          <Notice tone="warn" role="status" key={w}>
+            {w}
+          </Notice>
         ))}
 
-        <p style={{ marginTop: 22 }}>
-          <button className="btn" type="submit" disabled={busy}>
+        <div className="mt-7">
+          <Button type="submit" size="lg" disabled={busy}>
             {busy ? 'Đang xử lý game…' : 'Đăng game'}
-          </button>
-        </p>
-        {busy && <p className="muted">Đang kiểm tra và đóng gói, mất khoảng vài giây…</p>}
+          </Button>
+          {busy && (
+            <p className="mt-2.5 text-ink-soft" role="status">
+              Đang kiểm tra và đóng gói, mất khoảng vài giây…
+            </p>
+          )}
+        </div>
       </form>
     </>
   );

@@ -5,3 +5,4 @@ storage/
 .next/
 dist/
 *.log
+*.tsbuildinfo
