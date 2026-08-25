@@ -81,6 +81,33 @@ body {
   background: var(--color-ink);
 }
 
+/*
+ * Chỉ hiện trên thiết bị con trỏ thô (cảm ứng).
+ *
+ * Dùng media query CSS chứ KHÔNG kiểm tra bằng JS: kiểm bằng JS thì lần render đầu
+ * ở server không biết thiết bị là gì, nút sẽ nhấp nháy hiện rồi biến mất (hoặc gây
+ * lệch hydration). CSS quyết định ngay từ khung hình đầu tiên.
+ */
+.touch-only {
+  display: none;
+}
+@media (pointer: coarse) {
+  .touch-only {
+    display: flex;
+  }
+}
+
+/*
+ * ĐÃ THỬ VÀ BỎ: cộng thêm chiều cao khung trên điện thoại để chừa dải trống cho
+ * nút cảm ứng. Không dùng được vì runtime canh stage vào GIỮA (resizeMode
+ * "preserve-ratio"), nên một nửa phần dư dồn lên trên, tạo dải đen trống hoác ở
+ * đầu khung mà nút vẫn vắt ngang mép stage.
+ *
+ * Nút cảm ứng vì vậy nằm đè lên stage, cỡ nhỏ và nền trong (xem
+ * packages/sb3/src/touch-controls.ts). Trải nghiệm tốt nhất trên điện thoại vẫn
+ * là bấm nút toàn màn hình.
+ */
+
 /* Viền focus rõ ràng — trẻ dùng bàn phím và điều hướng bằng tab nhiều hơn ta tưởng. */
 :where(a, button, input, textarea, select):focus-visible {
   outline: 3px solid var(--color-accent);

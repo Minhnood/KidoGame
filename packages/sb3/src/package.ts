@@ -1,6 +1,9 @@
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { Sb3Error } from './errors.js';
+import { detectTouchKeys, type TouchKey } from './keys.js';
+import { buildTouchControls } from './touch-controls.js';
+import type { ProjectJson } from './validate.js';
 
 // @turbowarp/packager là CJS (main: dist/packager.js), không có ESM export.
 //
@@ -41,11 +44,18 @@ export interface PackagedHtml {
   /** true nếu project dùng music -> runtime lớn hơn (3.8MB thay vì 1.8MB). */
   usesMusic: boolean;
   extensions: string[];
+  /** Các nút cảm ứng đã nhúng. Rỗng nghĩa là game không dùng phím nào. */
+  touchKeys: TouchKey[];
 }
 
 export interface PackageOptions {
   /** Tên hiển thị, dùng cho <title>. Đã được sanitize ở tầng trên. */
   title: string;
+  /**
+   * project.json đã qua kiểm tra, để dò xem game dùng phím nào mà sinh đúng
+   * bộ nút cảm ứng. Bỏ trống thì không có nút cảm ứng nào.
+   */
+  projectJson?: ProjectJson;
 }
 
 /**
@@ -100,9 +110,17 @@ export async function packageToHtml(sb3: Buffer, opts: PackageOptions): Promise<
   p.options.appearance.background = '#1b1b32';
   p.options.appearance.accent = '#ff8c1a';
 
-  // Không bao giờ nhận custom code.
-  p.options.custom.js = '';
-  p.options.custom.css = '';
+  /*
+   * custom.js/custom.css chèn code thẳng vào output.
+   *
+   * Chỉ được nhận code của CHÍNH TA: ở đây là bộ nút cảm ứng sinh từ danh sách
+   * phím đã lọc qua whitelist trong keys.ts. TUYỆT ĐỐI không nối dữ liệu người
+   * dùng (tên game, mô tả, nội dung project) vào hai trường này.
+   */
+  const touchKeys = opts.projectJson ? detectTouchKeys(opts.projectJson) : [];
+  const controls = buildTouchControls(touchKeys);
+  p.options.custom.js = controls.js;
+  p.options.custom.css = controls.css;
 
   let out: { data: ArrayBuffer | Uint8Array };
   try {
@@ -117,5 +135,6 @@ export async function packageToHtml(sb3: Buffer, opts: PackageOptions): Promise<
     sha256: crypto.createHash('sha256').update(html).digest('hex'),
     usesMusic: project.analysis.usesMusic,
     extensions: project.analysis.extensions,
+    touchKeys,
   };
 }

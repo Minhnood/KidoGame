@@ -70,7 +70,15 @@ function hasProfanity(strings: string[], words: string[]): string | null {
   for (const s of strings) {
     const hay = s.toLowerCase();
     for (const w of words) {
-      // Ranh giới thô: tránh "hell" khớp trong "hello".
+      /*
+       * Ranh giới thô: chặn "hell" khớp trong "hello" — chỉ tính là khớp khi hai
+       * bên KHÔNG phải chữ/số.
+       *
+       * Lưu ý mức bảo đảm thật sự yếu hơn nghe tưởng: dấu câu, xuống dòng, ngoặc,
+       * gạch nối đều được coi là ranh giới hợp lệ. Nên một token 2 ký tự vẫn khớp
+       * rất dễ khi quét lượng chuỗi lớn. Vì vậy chọn wordlist theo bề mặt quét là
+       * việc của người GỌI hàm này — xem apps/web/src/lib/profanity.ts.
+       */
       const i = hay.indexOf(w);
       if (i === -1) continue;
       const before = i === 0 ? ' ' : hay[i - 1];

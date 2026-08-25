@@ -31,6 +31,16 @@ export async function SiteNav() {
         </ButtonLink>
       )}
 
+      {actor?.kind === 'parent' && actor.isAdmin && (
+        <Link
+          href="/admin"
+          data-testid="nav-admin"
+          className="min-h-touch inline-flex items-center px-2 font-semibold text-white/80 no-underline hover:text-white"
+        >
+          Kiểm duyệt
+        </Link>
+      )}
+
       {actor ? (
         <form action={logoutAction}>
           <button

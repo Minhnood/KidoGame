@@ -160,10 +160,15 @@ if (FIXTURE) {
   await page.waitForSelector('form [role=alert]', { timeout: 30000 }).catch(() => {});
 
   const errText = await page.locator('form [role=alert]').first().innerText().catch(() => '');
+  /*
+   * Khẳng định ĐÚNG thông báo, không chỉ "có lỗi nào đó".
+   * Bản trước chỉ kiểm errText.length > 0 nên khi bé dính giới hạn 10 game/ngày,
+   * phép kiểm vẫn báo xanh dù file độc hại chưa hề bị chặn vì lý do đúng.
+   */
   check(
-    'File HTML đổi tên .sb3 bị từ chối, có thông báo cho bé',
-    errText.length > 0 && !/\/game\//.test(page.url()),
-    errText
+    'File HTML đổi tên .sb3 bị từ chối vì không phải file Scratch',
+    /không phải file Scratch/i.test(errText) && !/\/game\//.test(page.url()),
+    errText.replace(/\n/g, ' ')
   );
 }
 

@@ -203,4 +203,37 @@ describe('quét từ ngữ', () => {
     const r = await validateAndNormalize(await validSb3([], p), { profanity: ['ngu'] });
     expect(r.stats.targets).toBe(2);
   });
+
+  /*
+   * Hồi quy cho một ca có thật: một game Scratch tiếng Anh bị từ chối vì trong
+   * nội dung có chuỗi `vl` đứng tách biệt. `vl` là viết tắt tiếng Việt, đem quét
+   * hàng nghìn chuỗi tiếng Anh thì nó chỉ còn là hai chữ cái.
+   *
+   * Hai phép kiểm dưới đây khẳng định RANH GIỚI CHỈ CHẶN được chữ và số — dấu câu
+   * vẫn tính là ranh giới hợp lệ. Đây là hành vi đúng của hàm so khớp, nên cách
+   * chữa không nằm ở đây mà ở phía gọi: đừng đưa token quá ngắn vào danh sách
+   * quét nội dung (xem apps/web/src/lib/profanity.ts).
+   */
+  it('token ngắn vẫn khớp khi đứng cạnh dấu câu — lý do phải tách wordlist theo bề mặt quét', async () => {
+    const p = validProject();
+    p.targets![1].blocks!.say = {
+      opcode: 'looks_sayforsecs',
+      inputs: { MESSAGE: [1, [10, 'level (vl) cleared!']] },
+      fields: {},
+    };
+    expect(await codeOf(validSb3([], p), { profanity: ['vl'] })).toBe('PROFANITY');
+  });
+
+  it('cùng nội dung đó KHÔNG bị chặn khi wordlist không chứa token ngắn', async () => {
+    const p = validProject();
+    p.targets![1].blocks!.say = {
+      opcode: 'looks_sayforsecs',
+      inputs: { MESSAGE: [1, [10, 'level (vl) cleared!']] },
+      fields: {},
+    };
+    const r = await validateAndNormalize(await validSb3([], p), {
+      profanity: ['fuck', 'lồn'],
+    });
+    expect(r.stats.targets).toBe(2);
+  });
 });

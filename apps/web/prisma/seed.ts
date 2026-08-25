@@ -14,7 +14,9 @@ const prisma = new PrismaClient();
 async function main() {
   const parent = await prisma.parent.upsert({
     where: { email: 'demo@kidogame.local' },
-    update: { passwordHash: await hashPassword('demo1234ab') },
+    // isAdmin cũng nằm ở nhánh update: seed chạy lại trên DB cũ vẫn phải ra admin,
+    // nếu không thì trang /admin trả 404 mà không hiểu vì sao.
+    update: { passwordHash: await hashPassword('demo1234ab'), isAdmin: true },
     create: {
       email: 'demo@kidogame.local',
       passwordHash: await hashPassword('demo1234ab'),

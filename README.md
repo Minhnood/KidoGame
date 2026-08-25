@@ -36,23 +36,115 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 ## Kiểm thử
 
 ```bash
-pnpm --filter @kidogame/sb3 test           # 33 unit test, gồm fixture độc hại
+pnpm --filter @kidogame/sb3 test           # 48 unit test, gồm fixture độc hại
 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs   # 14 kiểm tra
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs    # 19 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 14 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 19 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 29 kiểm tra
+GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 6 kiểm tra
 ```
 
-`e2e-auth.mjs` tự tạo tài khoản với email ngẫu nhiên nên chạy lại nhiều lần được.
-Dọn dữ liệu test:
+**Chạy e2e ở cổng khác 3000 là hỏng.** Player server gửi header
+`frame-ancestors <APP_ORIGIN>`, mặc định là `http://localhost:3000`. Đổi cổng app mà
+quên đổi player thì trình duyệt chặn iframe, và biểu hiện KHÔNG phải lỗi CSP dễ thấy —
+mà là "game không boot", "stage 0x0", trông y như lỗi đóng gói. Muốn chạy cổng khác thì
+phải khởi động player server khớp theo:
 
-```sql
-delete from "Parent" where email like 'e2e-%@kidogame.test';
+```bash
+APP_ORIGIN=http://localhost:3100 PLAYER_PORT=3002 node infra/player-server.mjs
+PLAYER_ORIGIN=http://127.0.0.1:3002 pnpm --filter @kidogame/web exec next dev -p 3100
+APP_ORIGIN=http://localhost:3100 PLAYER_ORIGIN=http://127.0.0.1:3002 \
+  SB3_FIXTURE=... node infra/e2e-check.mjs
 ```
+
+`e2e-touch.mjs` cần một game CÓ dùng phím (mũi tên hoặc phím cách), không thì
+không có nút nào để kiểm.
+
+### Test trên điện thoại thật
+
+```bash
+node infra/dev-lan.mjs
+```
+
+Script in ra một URL dạng `http://192.168.1.2:3000` — mở URL đó bằng trình duyệt điện
+thoại **cùng mạng Wi-Fi**. Ctrl+C dừng cả hai server.
+
+Không tự chạy hai server bằng tay được, vì phải khớp ĐỒNG THỜI ba thứ:
+
+1. `PLAYER_HOST=0.0.0.0` — mặc định player chỉ nghe `127.0.0.1`, mà `127.0.0.1` trên
+   điện thoại là chính cái điện thoại đó, không bao giờ tới được máy bạn.
+2. `PLAYER_ORIGIN=http://<ip>:3001` — app sinh URL iframe/thumbnail theo biến này, và
+   `frame-src` trong CSP của app cũng lấy từ đây.
+3. `APP_ORIGIN=http://<ip>:3000` — player gửi `frame-ancestors <APP_ORIGIN>`.
+
+Sai bất kỳ cái nào là iframe bị chặn, mà triệu chứng nhìn **y hệt lỗi đóng gói**:
+"game không boot", "stage 0x0". Đừng đi tìm bug trong `packages/sb3` khi gặp cảnh đó.
+
+Script cố ý dùng `next dev` chứ không `next start`: `next start` đặt
+`NODE_ENV=production`, khi đó cookie phiên bật `secure: true` nên trình duyệt **từ chối
+lưu cookie qua `http://`** trên LAN — đăng nhập trên điện thoại sẽ im lặng không vào
+được. Chơi game thì không cần đăng nhập, nhưng thử luồng đăng game thì cần.
 
 `infra/e2e-check.mjs` kiểm cả các tính chất bảo mật, không chỉ chức năng: iframe
 trỏ đúng player origin, có sandbox, cookie phiên không rò sang player origin, và
 file HTML đổi tên `.sb3` bị từ chối.
+
+### Tài khoản test
+
+**Tài khoản cố định, do `pnpm db:seed` tạo:**
+
+| Đăng nhập tại | Tài khoản | Mật khẩu | Vai trò |
+|---|---|---|---|
+| `/dang-nhap` | `demo@kidogame.local` | `demo1234ab` | Phụ huynh, **có `isAdmin`** — vào được `/admin` |
+| `/be-dang-nhap` | `beminh` | `be1234` | Bé "Bé Minh", con của tài khoản trên |
+
+`isAdmin` nằm ở cả nhánh `create` lẫn `update` của seed, nên chạy seed lại trên DB cũ
+vẫn ra admin. Đây là tài khoản admin DUY NHẤT — chưa có giao diện nào phong admin cho
+người khác, muốn thêm thì sửa cột `Parent.isAdmin` thẳng trong DB.
+
+**Tài khoản do e2e tự sinh khi chạy** (mỗi lần chạy là một bộ mới, `<hex>` là 8 ký tự
+ngẫu nhiên — cố ý như vậy để chạy lại nhiều lần mà không phải dọn DB):
+
+| Do file nào tạo | Email phụ huynh | Mật khẩu | Tên đăng nhập của bé | Mật khẩu bé |
+|---|---|---|---|---|
+| `e2e-auth.mjs` | `e2e-<hex>@kidogame.test` | `matkhau-dai-1234` | `e2e<hex>` | `be1234` |
+| `e2e-moderation.mjs` | `e2e-mod-<hex>@kidogame.test` | `matkhau-dai-1234` | `emod<hex>` | `be1234` |
+
+Hai điều dễ làm bạn bối rối khi nhìn vào DB:
+
+- **Bé do `e2e-auth.mjs` tạo luôn ở trạng thái đang khoá.** Phép kiểm cuối cùng của file
+  đó là "khoá tài khoản thu hồi phiên ngay", nên nó khoá xong thì kết thúc. Đúng ý đồ,
+  không phải rác hỏng.
+- **`e2e-check.mjs` KHÔNG tự tạo tài khoản** — nó đăng nhập bằng chính bé `beminh` của
+  seed rồi upload game thật. Nghĩa là mỗi lần chạy `beminh` lại có thêm một game tên
+  "Game kiểm thử e2e". Chạy quá 10 lần trong một ngày là bé chạm rate limit
+  `UPLOADS_PER_CHILD_PER_DAY`, và test sẽ đổ vì lý do chẳng liên quan gì tới thứ nó
+  định kiểm. Thấy vậy thì dọn game của `beminh` chứ đừng đi sửa test.
+
+`e2e-moderation.mjs` cần seed đã chạy vì nó đăng nhập bằng tài khoản admin demo. Đổi
+được bằng biến môi trường `ADMIN_EMAIL` / `ADMIN_PASS` nếu bạn dùng admin khác.
+
+`e2e-check.mjs` đổi được tài khoản bé qua `CHILD_USERNAME` / `CHILD_PASSWORD` nếu bạn
+không muốn nó dùng `beminh`.
+
+**Dọn dữ liệu test.** Xoá một phụ huynh sẽ cascade xuống bé → game của bé → báo cáo và
+`ModerationLog` GẮN VỚI những game đó, cùng mọi phiên đăng nhập. Nhưng báo cáo do chính
+phụ huynh đó GỬI ĐI trên game của người khác thì không bị xoá — cột `reporterParentId`
+chỉ bị đặt về null (`onDelete: SetNull`), để lịch sử kiểm duyệt không bị thủng.
+
+```sql
+-- Toàn bộ tài khoản do e2e sinh ra
+delete from "Parent" where email like 'e2e-%@kidogame.test';
+
+-- Game rác mà e2e-check chất lên tài khoản seed
+delete from "Game" where title = 'Game kiểm thử e2e';
+```
+
+Xoá bản ghi trong DB KHÔNG xoá file trong `storage/`. Các file `.sb3`/HTML/thumbnail
+mồ côi vẫn nằm đó, vô hại vì tên file là sha256 của nội dung nên lần upload sau trùng
+nội dung sẽ dùng lại chính chúng. Muốn dọn sạch đĩa thì xoá cả thư mục `storage/` rồi
+seed lại từ đầu.
 
 ## Giao diện
 
@@ -89,6 +181,29 @@ bên lệch định dạng là hash không verify được mà không ai báo l�
 Chống dò mật khẩu khoá theo danh tính (email/username), **không theo IP**: cả một
 lớp học hay một gia đình thường dùng chung IP.
 
+## Nút điều khiển trên điện thoại
+
+Game dùng phím mũi tên hoặc phím cách sẽ tự có nút cảm ứng khi mở trên điện thoại.
+
+Cách hoạt động: lúc đóng gói, `packages/sb3/src/keys.ts` dò `project.json` xem game
+dùng phím nào, rồi `touch-controls.ts` sinh CSS/JS nhúng vào trang game qua
+`options.custom.js`. Game **không** dùng phím thì không có nút nào.
+
+Vì sao nút phải nằm bên trong trang game: game chạy trong iframe **khác origin**,
+trang cha không bắn được sự kiện bàn phím vào trong. Nút gọi thẳng
+`vm.postIOData('keyboard', ...)`, không giả lập `KeyboardEvent`.
+
+Hai điều đã thử và bỏ, đừng làm lại:
+
+- **Cộng chiều cao khung game để chừa dải trống cho nút.** Runtime canh stage vào
+  giữa (`preserve-ratio`) nên nửa phần dư dồn lên trên, tạo dải đen trống ở đầu
+  khung mà nút vẫn vắt ngang mép stage.
+- **Dùng `chunks.gamepad` của packager.** Đó là hỗ trợ tay cầm vật lý và con trỏ
+  ảo, không phải nút cảm ứng.
+
+Trải nghiệm tốt nhất trên điện thoại vẫn là bấm nút toàn màn hình — khung nhúng
+chỉ cao khoảng 280px nên nút nào cũng chiếm chỗ.
+
 ## Cấu trúc
 
 | Thư mục | Vai trò |
@@ -119,8 +234,38 @@ lớp học hay một gia đình thường dùng chung IP.
 
 ## Trạng thái
 
-Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ huynh/bé).
-Chưa làm: tìm kiếm và tag (M3), nút report + trang admin (M4), Docker Compose (M5).
+Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ huynh/bé),
+M4 (báo cáo → tự ẩn ở ngưỡng 3 → trang kiểm duyệt của admin).
+Chưa làm: tìm kiếm và tag (M3), email + quên mật khẩu (M2.5), Docker Compose (M5).
 
-Tài khoản demo sau khi seed: `demo@kidogame.local` / `demo1234ab` (phụ huynh),
-`beminh` / `be1234` (bé).
+Kiểm duyệt hoạt động thế nào: ai cũng báo cáo được, kể cả khách chưa đăng nhập. Đủ
+`REPORT_AUTO_HIDE_THRESHOLD` (= 3, trong `src/lib/moderation.ts`) báo cáo thì game tự
+chuyển sang `HIDDEN` và ghi `ModerationLog` với `actorId = "system"`. Admin
+(`Parent.isAdmin`) vào `/admin` để gỡ hẳn hoặc cho hiện lại; cho hiện lại sẽ đưa
+`reportCount` về 0, nếu không thì chỉ một báo cáo nữa là game bị ẩn lại ngay.
+
+Chống báo cáo trùng khoá theo **danh tính** nếu đã đăng nhập, chỉ khách vãng lai mới
+khoá theo IP — cùng lý do với chỗ chống dò mật khẩu: cả lớp học đi chung một IP. Lưu ý
+ở máy dev không có header `x-forwarded-for` nên mọi khách vãng lai dùng chung một khoá,
+tức chỉ báo cáo được 1 lần cho mỗi game. Sau Caddy ở production thì mỗi IP là một khoá.
+
+Ràng buộc unique `(gameId, reporterIpHash)` **không phân biệt `status`**, nên một người
+đã báo cáo thì không báo lại được nữa dù admin đã bác bỏ báo cáo cũ. Cố ý như vậy để
+người bị bác bỏ không spam lại, nhưng hệ quả là nếu game thật sự xấu đi về sau thì phải
+có người MỚI phát hiện mới báo cáo được.
+
+Trang `/admin` có bộ lọc (`?loc=can-xem|tat-ca|dang-hien|da-an|da-go`), phân trang 20
+game mỗi trang (`?trang=N`), thumbnail, lý do báo cáo, lịch sử `ModerationLog`, và nút
+khoá thẳng tài khoản bé.
+
+**Admin xem được game đã ẩn.** `/game/[id]` có ngoại lệ đúng cho `isAdmin` — không có
+nó thì admin phải quyết định gỡ hay giữ mà không nhìn thấy nội dung, vì bấm vào tên game
+từ `/admin` cũng nhận 404. Ở chế độ này trang hiện banner cảnh báo, **không đếm lượt
+chơi**, và ẩn nút báo cáo.
+
+**Hạn chế đã biết:** admin khoá tài khoản bé thì thao tác đó KHÔNG được ghi vào
+`ModerationLog`, vì bảng ấy bắt buộc có `gameId` (khoá ngoại tới `Game`) mà khoá tài
+khoản không gắn với game nào. Muốn có vết kiểm toán đầy đủ thì phải nới schema — cho
+`gameId` nullable, hoặc tách một bảng log riêng cho thao tác lên tài khoản.
+
+Tài khoản đăng nhập thử: xem mục [Tài khoản test](#tài-khoản-test).

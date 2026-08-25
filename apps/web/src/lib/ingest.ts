@@ -8,7 +8,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import { prisma } from './db';
 import { putObject } from './storage';
-import { PROFANITY } from './profanity';
+import { PROFANITY_CONTENT, PROFANITY_TEXT } from './profanity';
 
 /** Số game một bé được đăng trong 24h. Chặn spam làm ngập trang chủ. */
 export const UPLOADS_PER_CHILD_PER_DAY = 10;
@@ -30,9 +30,10 @@ export function sanitizeText(input: string, maxLength: number): string {
     .slice(0, maxLength);
 }
 
+/** Chỉ dùng cho tiêu đề/mô tả — nội dung .sb3 do `validateAndNormalize` lo, với danh sách khác. */
 function containsProfanity(text: string): boolean {
   const hay = text.toLowerCase();
-  return PROFANITY.some((w) => {
+  return PROFANITY_TEXT.some((w) => {
     const i = hay.indexOf(w);
     if (i === -1) return false;
     const before = i === 0 ? ' ' : hay[i - 1];
@@ -85,10 +86,15 @@ export async function ingestGame(input: IngestInput): Promise<IngestResult> {
   }
 
   // 1. Kiểm tra + chuẩn hoá. Ném lỗi nếu có gì đáng ngờ.
-  const normalized = await validateAndNormalize(input.sb3, { profanity: PROFANITY });
+  // Nội dung game dùng danh sách HẸP HƠN tiêu đề: xem lý do trong profanity.ts.
+  const normalized = await validateAndNormalize(input.sb3, { profanity: PROFANITY_CONTENT });
 
-  // 2. Đóng gói thành HTML standalone.
-  const packaged = await packageToHtml(normalized.sb3, { title });
+  // 2. Đóng gói thành HTML standalone. Truyền project.json vào để dò phím mà
+  //    game dùng, từ đó sinh đúng bộ nút cảm ứng cho điện thoại.
+  const packaged = await packageToHtml(normalized.sb3, {
+    title,
+    projectJson: normalized.projectJson,
+  });
 
   // 3. Thumbnail (không bao giờ ném lỗi).
   const entries = await readSb3Zip(normalized.sb3);

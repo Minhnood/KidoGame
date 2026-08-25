@@ -12,6 +12,10 @@ export type { PackagedHtml, PackageOptions } from './package.js';
 
 export { renderThumbnail, THUMB_WIDTH, THUMB_HEIGHT } from './thumbnail.js';
 
+export { detectTouchKeys } from './keys.js';
+export type { TouchKey } from './keys.js';
+export { buildTouchControls } from './touch-controls.js';
+
 export { readSb3Zip } from './zip.js';
 export type { ZipEntry } from './zip.js';
 
