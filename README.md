@@ -42,7 +42,16 @@ pnpm --filter @kidogame/sb3 test           # 48 unit test, gồm fixture độc 
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 14 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 19 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 29 kiểm tra
-GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 6 kiểm tra
+GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 12 kiểm tra
+MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs                  # 13 kiểm tra
+```
+
+`e2e-email.mjs` cần server được khởi động với stdout đổ vào file, vì nó moi link
+xác minh / đặt lại mật khẩu **từ log server**:
+
+```bash
+pnpm --filter @kidogame/web exec next dev -p 3000 > /tmp/kg-mail.log 2>&1 &
+MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs
 ```
 
 **Chạy e2e ở cổng khác 3000 là hỏng.** Player server gửi header
@@ -235,8 +244,41 @@ chỉ cao khoảng 280px nên nút nào cũng chiếm chỗ.
 ## Trạng thái
 
 Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ huynh/bé),
-M4 (báo cáo → tự ẩn ở ngưỡng 3 → trang kiểm duyệt của admin).
-Chưa làm: tìm kiếm và tag (M3), email + quên mật khẩu (M2.5), Docker Compose (M5).
+M2.5 (xác minh email + quên mật khẩu), M4 (báo cáo → tự ẩn ở ngưỡng 3 → trang
+kiểm duyệt của admin).
+Chưa làm: tìm kiếm và tag (M3), Docker Compose (M5).
+
+### M2.5 — Email
+
+Gửi mail đi qua `src/lib/mail.ts`, tầng này thay được nhà cung cấp. **Không có
+`RESEND_API_KEY` thì mail được IN RA console server thay vì gửi đi thật** — nhờ vậy
+chạy được toàn bộ luồng trên máy dev mà không cần API key, không cần mạng, và không
+sợ lỡ tay gửi thư cho người thật. Cắm nhà cung cấp thật chỉ bằng biến môi trường:
+
+```bash
+RESEND_API_KEY="re_xxx"
+MAIL_FROM="KidoGame <no-reply@kidogame.vn>"
+APP_ORIGIN="https://app.kidogame.vn"   # dùng dựng link tuyệt đối trong mail
+```
+
+Ở production mà thiếu `RESEND_API_KEY` thì việc gửi **ném lỗi** chứ không âm thầm
+rơi về console — in mail chứa token ra log production chính là rò token.
+
+Token nằm ở bảng `AuthToken`, lưu sha256 chứ không lưu token thô, giống hệt
+`Session`: rò database không kéo theo rò token. Dùng một lần, và xin token mới thì
+mọi token cũ cùng loại chưa dùng bị vô hiệu ngay. Hạn: đặt lại mật khẩu 1 giờ, xác
+minh email 24 giờ. Tối đa 5 lần xin mỗi giờ cho mỗi tài khoản mỗi loại.
+
+Ba quyết định có chủ đích:
+
+- **Chưa xác minh email KHÔNG chặn gì cả**, chỉ hiện cảnh báo. Chặn thì đứa trẻ phải
+  ngồi chờ bố mẹ mở hòm thư mới có tài khoản để đăng game.
+- **Form quên mật khẩu luôn trả về đúng một câu**, dù email có tài khoản hay không.
+  Phân biệt hai trường hợp là biến nó thành công cụ dò xem ai đã đăng ký.
+- **Đặt lại mật khẩu thu hồi mọi phiên của phụ huynh** nhưng KHÔNG đụng phiên của
+  các bé — bố mẹ đổi mật khẩu của mình thì không có lý do gì bắt con đăng nhập lại.
+  Việc đặt lại cũng tự đánh dấu email đã xác minh, vì bấm được link trong mail đã
+  chứng minh đúng điều mà xác minh cần chứng minh.
 
 Kiểm duyệt hoạt động thế nào: ai cũng báo cáo được, kể cả khách chưa đăng nhập. Đủ
 `REPORT_AUTO_HIDE_THRESHOLD` (= 3, trong `src/lib/moderation.ts`) báo cáo thì game tự

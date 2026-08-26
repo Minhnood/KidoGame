@@ -13,6 +13,11 @@ import {
   setChildLocked,
 } from './auth';
 import {
+  requestEmailVerification,
+  requestPasswordReset,
+  resetPasswordWithToken,
+} from './account';
+import {
   adminDismissReports,
   adminRemoveGame,
   adminRestoreGame,
@@ -64,9 +69,63 @@ export async function registerParentAction(
   form: FormData
 ): Promise<FormState> {
   const state = await run(async () => {
-    await registerParent(String(form.get('email') ?? ''), String(form.get('password') ?? ''));
+    const parentId = await registerParent(
+      String(form.get('email') ?? ''),
+      String(form.get('password') ?? '')
+    );
+    /*
+     * Mail xác minh gửi trượt KHÔNG được làm hỏng việc đăng ký. Tài khoản đã tạo
+     * xong và phiên đã mở; bắt người dùng đăng ký lại chỉ vì nhà cung cấp mail
+     * đang lỗi là vô lý. Họ bấm "gửi lại" ở trang quản lý là được.
+     */
+    try {
+      await requestEmailVerification(parentId);
+    } catch (e) {
+      console.error('[action] không gửi được mail xác minh lúc đăng ký:', e);
+    }
   });
   if (state && 'ok' in state) redirect('/phu-huynh');
+  return state;
+}
+
+// --- Xác minh email / quên mật khẩu ------------------------------------------
+
+export async function resendVerificationAction(
+  _prev: FormState,
+  _form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    const parentId = await requireParent();
+    await requestEmailVerification(parentId);
+  });
+  revalidatePath('/phu-huynh');
+  return state;
+}
+
+/**
+ * Luôn trả về `ok`, kể cả khi email không có tài khoản nào.
+ *
+ * Phân biệt hai trường hợp là biến form này thành công cụ dò xem ai đã đăng ký.
+ * `requestPasswordReset` cũng tự nuốt lỗi gửi mail vì đúng lý do đó.
+ */
+export async function requestPasswordResetAction(
+  _prev: FormState,
+  form: FormData
+): Promise<FormState> {
+  return run(async () => {
+    await requestPasswordReset(String(form.get('email') ?? ''));
+  });
+}
+
+export async function resetPasswordAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const state = await run(async () => {
+    await resetPasswordWithToken(
+      String(form.get('token') ?? ''),
+      String(form.get('password') ?? '')
+    );
+  });
+  // Đổi mật khẩu đã thu hồi hết phiên, nên chắc chắn đang ở trạng thái chưa đăng nhập.
+  if (state && 'ok' in state) redirect('/dang-nhap?dat-lai=xong');
   return state;
 }
 

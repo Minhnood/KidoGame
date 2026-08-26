@@ -16,9 +16,41 @@ model Parent {
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  children Child[]
-  reports  Report[]
-  sessions Session[]
+  /// Null nghĩa là chưa bấm link xác minh trong mail.
+  ///
+  /// CỐ TÌNH không chặn đăng nhập khi chưa xác minh: phụ huynh đăng ký xong là
+  /// tạo tài khoản cho con ngay, chặn ở đây thì đứa trẻ ngồi chờ bố mẹ mở mail.
+  /// Xác minh dùng để bảo đảm luồng quên-mật-khẩu gửi tới đúng hòm thư thật.
+  emailVerifiedAt DateTime?
+
+  children   Child[]
+  reports    Report[]
+  sessions   Session[]
+  authTokens AuthToken[]
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+/// Token dùng MỘT LẦN gửi qua email: xác minh email và đặt lại mật khẩu.
+///
+/// Giống Session, cột khoá chính là sha256 của token thật nằm trong link —
+/// rò database KHÔNG kéo theo rò token, vì từ hash không dựng ngược lại được.
+model AuthToken {
+  tokenHash String       @id
+  parentId  String
+  purpose   TokenPurpose
+  expiresAt DateTime
+  /// Đánh dấu đã dùng thay vì xoá: còn nhìn thấy token vừa bị dùng lại lần hai.
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  parent Parent @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, purpose])
+  @@index([expiresAt])
 }
 
 /// Tài khoản của trẻ: KHÔNG email, KHÔNG tên thật.

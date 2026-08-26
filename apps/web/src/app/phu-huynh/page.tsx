@@ -8,6 +8,7 @@ import { Field, TextInput } from '@/components/field';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { GameVisibilityToggle, LockToggle, ResetPasswordForm } from './child-controls';
+import { VerifyEmailButton } from './verify-email-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,11 @@ export default async function ParentDashboard() {
   const actor = await getActor();
   if (!actor) redirect('/dang-nhap');
   if (actor.kind !== 'parent') redirect('/');
+
+  const me = await prisma.parent.findUnique({
+    where: { id: actor.id },
+    select: { emailVerifiedAt: true },
+  });
 
   const children = await prisma.child.findMany({
     where: { parentId: actor.id },
@@ -37,6 +43,21 @@ export default async function ParentDashboard() {
         Game của bé được hiển thị công khai ngay sau khi đăng. Bố mẹ xem lại ở đây và ẩn bất kỳ
         game nào, bất cứ lúc nào.
       </Notice>
+
+      {/*
+        Chưa xác minh email KHÔNG chặn gì cả — chỉ nhắc. Chặn thì đứa trẻ phải ngồi
+        chờ bố mẹ mở hòm thư mới có tài khoản để đăng game. Nhưng phải nhắc, vì email
+        chưa xác minh là email không lấy lại được mật khẩu.
+      */}
+      {!me?.emailVerifiedAt && (
+        <div data-testid="email-unverified">
+          <Notice tone="warn">
+            Email của bạn chưa được xác minh. Chưa xác minh thì nếu quên mật khẩu sẽ không lấy
+            lại được tài khoản.
+            <VerifyEmailButton />
+          </Notice>
+        </div>
+      )}
 
       <h2 className="mb-3 mt-9 text-xl font-bold">Tài khoản của các bé</h2>
 

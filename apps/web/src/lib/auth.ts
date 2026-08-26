@@ -84,11 +84,12 @@ const normalizeUsername = (raw: string) => raw.trim().toLowerCase();
 
 // --- Phụ huynh ---------------------------------------------------------------
 
-export async function registerParent(emailRaw: string, password: string): Promise<void> {
+/** Trả về id phụ huynh vừa tạo, để tầng gọi còn gửi mail xác minh. */
+export async function registerParent(emailRaw: string, password: string): Promise<string> {
   const email = normalizeEmail(emailRaw);
 
   // Cố tình kiểm rất nhẹ: mọi regex email đều sai ở đâu đó, và ở đây không cần
-  // đúng tuyệt đối. Xác thực thật là gửi mail xác nhận (chưa làm ở M2).
+  // đúng tuyệt đối. Xác thực thật nằm ở mail xác minh (M2.5, xem account.ts).
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     throw new AuthError('Email không hợp lệ.');
   }
@@ -106,6 +107,7 @@ export async function registerParent(emailRaw: string, password: string): Promis
   });
 
   await createSession({ parentId: parent.id });
+  return parent.id;
 }
 
 export async function loginParent(
