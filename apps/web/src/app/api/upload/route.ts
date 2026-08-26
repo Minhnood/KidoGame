@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Sb3Error, LIMITS } from '@kidogame/sb3';
-import { ingestGame } from '@/lib/ingest';
+import { ingestGame, MAX_TAGS_PER_GAME } from '@/lib/ingest';
 import { getActor } from '@/lib/session';
 
 // Đóng gói cần Node API (sharp, zlib, fs) — không chạy được trên edge runtime.
@@ -48,12 +48,24 @@ export async function POST(request: Request) {
   const title = String(form.get('title') ?? '');
   const description = String(form.get('description') ?? '');
 
+  /*
+   * Tag do bé tick, nên không bao giờ tin thẳng: chỉ nhận slug, cắt còn tối đa 2,
+   * và `ingestGame` còn đối chiếu lại với bảng Tag. Slug lạ bị bỏ im lặng chứ
+   * không báo lỗi — bé không làm gì sai, và game vẫn nên đăng được.
+   */
+  const tagSlugs = form
+    .getAll('tags')
+    .map((v) => String(v))
+    .filter((v) => /^[a-z0-9-]{1,40}$/.test(v))
+    .slice(0, MAX_TAGS_PER_GAME);
+
   try {
     const result = await ingestGame({
       sb3: Buffer.from(await file.arrayBuffer()),
       title,
       description,
       childId: actor.id,
+      tagSlugs,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (e) {

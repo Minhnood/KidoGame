@@ -10,6 +10,7 @@
     "db:push": "prisma db push && pnpm db:constraints",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "db:backfill-search": "tsx prisma/backfill-search.ts",
     "typecheck": "tsc --noEmit",
     "db:constraints": "node prisma/apply-constraints.mjs"
   },

@@ -138,6 +138,16 @@ model Game {
   playCount   Int @default(0)
   reportCount Int @default(0)
 
+  /// Tên + mô tả đã bỏ dấu và về chữ thường, để tìm kiếm không dấu.
+  ///
+  /// Trẻ gõ "meo" phải ra "Mèo phiêu lưu". Dùng cột thay vì extension `unaccent`
+  /// của Postgres để khỏi phải CREATE EXTENSION lúc dựng DB trên VPS.
+  /// Xem `src/lib/search.ts`. Nhớ ghi lại cột này mỗi khi tên/mô tả đổi.
+  ///
+  /// KHÔNG đánh index: truy vấn là `LIKE '%...%'` nên btree không giúp được gì.
+  /// Khi nào số game đủ lớn để thấy chậm thì chuyển sang pg_trgm.
+  titleSearch String @default("")
+
   /// Từ analysis của packager — ảnh hưởng dung lượng runtime nhúng vào HTML.
   usesMusic Boolean @default(false)
   /// Sb3Warning[] trả về từ validate (biến đám mây, file bị strip...).

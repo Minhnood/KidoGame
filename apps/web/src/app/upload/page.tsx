@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
+import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
 import { UploadForm } from './upload-form';
 
@@ -29,10 +30,15 @@ export default async function UploadPage() {
     );
   }
 
+  const tags = await prisma.tag.findMany({
+    orderBy: { label: 'asc' },
+    select: { slug: true, label: true },
+  });
+
   return (
     <>
       <PageTitle title="Đăng game của bé" lead={`Game sẽ hiện tên ${actor.displayName}`} />
-      <UploadForm />
+      <UploadForm tags={tags} />
     </>
   );
 }

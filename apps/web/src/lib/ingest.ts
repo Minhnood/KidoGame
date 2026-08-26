@@ -9,9 +9,18 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from './db';
 import { putObject } from './storage';
 import { PROFANITY_CONTENT, PROFANITY_TEXT } from './profanity';
+import { buildTitleSearch } from './search';
 
 /** Số game một bé được đăng trong 24h. Chặn spam làm ngập trang chủ. */
 export const UPLOADS_PER_CHILD_PER_DAY = 10;
+
+/**
+ * Số tag tối đa cho mỗi game.
+ *
+ * Ít có chủ đích: cho chọn thoải mái thì bé nào cũng tick hết mọi tag để game
+ * xuất hiện ở mọi nơi, và bộ lọc mất sạch ý nghĩa.
+ */
+export const MAX_TAGS_PER_GAME = 2;
 
 export const MAX_TITLE_LENGTH = 80;
 export const MAX_DESCRIPTION_LENGTH = 500;
@@ -47,6 +56,8 @@ export interface IngestInput {
   title: string;
   description: string;
   childId: string;
+  /** Slug tag do bé chọn. Slug lạ bị bỏ qua im lặng, không làm hỏng việc đăng. */
+  tagSlugs?: string[];
 }
 
 export interface IngestResult {
@@ -114,6 +125,7 @@ export async function ingestGame(input: IngestInput): Promise<IngestResult> {
       childId: input.childId,
       title,
       description,
+      titleSearch: buildTitleSearch(title, description),
       sb3Sha256: normalized.sha256,
       sb3Size: normalized.sb3.length,
       htmlSha256: packaged.sha256,
@@ -123,6 +135,26 @@ export async function ingestGame(input: IngestInput): Promise<IngestResult> {
       warnings: normalized.warnings as unknown as Prisma.InputJsonValue,
     },
   });
+
+  /*
+   * Gắn tag SAU khi tạo game, và chỉ gắn những slug thật sự có trong bảng Tag.
+   * Đối chiếu lại ở đây chứ không tin danh sách gửi lên, vì client sửa được.
+   * Gắn trượt cũng không huỷ game — game đã đóng gói xong rồi, mất tag còn hơn
+   * mất cả game.
+   */
+  const wanted = [...new Set(input.tagSlugs ?? [])].slice(0, MAX_TAGS_PER_GAME);
+  if (wanted.length > 0) {
+    const tags = await prisma.tag.findMany({
+      where: { slug: { in: wanted } },
+      select: { id: true },
+    });
+    if (tags.length > 0) {
+      await prisma.gameTag.createMany({
+        data: tags.map((tag) => ({ gameId: game.id, tagId: tag.id })),
+        skipDuplicates: true,
+      });
+    }
+  }
 
   return {
     gameId: game.id,

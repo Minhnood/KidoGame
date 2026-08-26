@@ -44,6 +44,7 @@ SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 19
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 29 kiểm tra
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 12 kiểm tra
 MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs                  # 13 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-discovery.mjs    # 14 kiểm tra
 ```
 
 `e2e-email.mjs` cần server được khởi động với stdout đổ vào file, vì nó moi link
@@ -244,9 +245,48 @@ chỉ cao khoảng 280px nên nút nào cũng chiếm chỗ.
 ## Trạng thái
 
 Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ huynh/bé),
-M2.5 (xác minh email + quên mật khẩu), M4 (báo cáo → tự ẩn ở ngưỡng 3 → trang
-kiểm duyệt của admin).
-Chưa làm: tìm kiếm và tag (M3), Docker Compose (M5).
+M2.5 (xác minh email + quên mật khẩu), M3 (tìm kiếm + tag + lọc tuổi),
+M4 (báo cáo → tự ẩn ở ngưỡng 3 → trang kiểm duyệt của admin).
+Chưa làm: Docker Compose (M5).
+
+### M3 — Khám phá
+
+Trang chủ nhận ba tham số URL, cộng dồn được với nhau (AND, không phải OR):
+`?q=` tìm theo tên/mô tả · `?tag=` lọc theo tag · `?tuoi=` lọc theo tuổi.
+
+**Tìm kiếm không dấu.** Trẻ gõ "meo" phải ra "Mèo phiêu lưu", nếu không thì với một
+đứa bé ô tìm kiếm coi như hỏng. Cách làm: cột `Game.titleSearch` lưu tên + mô tả đã
+bỏ dấu và về chữ thường, và chuỗi người dùng gõ vào cũng được bỏ dấu trước khi so.
+
+Dùng cột chứ KHÔNG dùng extension `unaccent` của Postgres, để khỏi phải
+`CREATE EXTENSION` lúc dựng DB trên VPS — cùng lý do dự án chọn `scrypt` thay
+`argon2`. Đổi lại phải nhớ ghi cột này mỗi khi tên hoặc mô tả đổi.
+
+Cột không có index: truy vấn là `LIKE '%...%'` nên btree không giúp gì. Khi nào đủ
+game để thấy chậm thì chuyển sang `pg_trgm`.
+
+Đổi hàm chuẩn hoá trong `src/lib/search.ts` thì phải chạy lại backfill, không thì
+game cũ tìm theo kiểu mới sẽ không ra:
+
+```bash
+pnpm db:backfill-search
+```
+
+Script này dùng CHUNG hàm của ứng dụng chứ không tự chuẩn hoá — chép logic sang
+script là cái bẫy đã có tiền lệ ở đây (`seed.ts` từng tự gọi `scrypt` khác định dạng
+với `password.ts`, tài khoản seed ra không đăng nhập được mà không ai báo lỗi).
+
+**Tag.** Bé tự tick lúc đăng, tối đa `MAX_TAGS_PER_GAME` (= 2). Ít có chủ đích: cho
+chọn thoải mái thì bé nào cũng tick hết mọi tag và bộ lọc mất sạch ý nghĩa. Slug gửi
+lên luôn được đối chiếu lại với bảng `Tag`; slug lạ bị bỏ im lặng chứ không làm hỏng
+việc đăng game.
+
+**Lọc tuổi là tuổi của BÉ LÀM RA GAME, không phải độ tuổi phù hợp để chơi.** Nhãn
+trên giao diện viết rõ "Bé mấy tuổi làm?" chính vì thế. Nếu để chữ chung chung như
+"độ tuổi", phụ huynh sẽ đọc thành "game này hợp cho trẻ mấy tuổi" — một lời hứa mà
+hệ thống không có cơ sở nào để đưa ra, vì không ai chấm nội dung game cả. Dữ liệu
+lấy từ `Child.birthYear`, mà cột đó không bắt buộc, nên game của bé không khai năm
+sinh sẽ không xuất hiện ở bất kỳ khung tuổi nào.
 
 ### M2.5 — Email
 
