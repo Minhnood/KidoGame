@@ -185,14 +185,38 @@ export async function adminDismissReports(
  * Thu hồi phiên ngay, cùng lý do với chỗ phụ huynh khoá: khoá mà phiên đang mở vẫn
  * dùng được thì việc khoá gần như vô nghĩa cho tới khi bé tự đăng xuất.
  *
- * HẠN CHẾ ĐÃ BIẾT: thao tác này KHÔNG được ghi vào `ModerationLog`, vì bảng đó bắt
- * buộc phải có `gameId` (khoá ngoại tới Game) mà khoá tài khoản thì không gắn với
- * game nào. Muốn có vết thì phải nới schema — xem ghi chú trong README.
+ * CÓ ghi `ModerationLog` với `childId` thay cho `gameId`. Đây là thao tác nặng nhất
+ * admin làm được — nó chặn một đứa trẻ đăng nhập, và người bị ảnh hưởng không phải
+ * người gây ra chuyện. Không có vết thì phụ huynh hỏi "sao con tôi không vào được"
+ * mà không ai trả lời nổi là ai khoá, lúc nào, vì sao.
+ *
+ * CHỈ log thao tác của ADMIN, không log khi phụ huynh khoá con mình
+ * (`setChildLocked` trong auth.ts). Đó là quyền của bố mẹ trong gia đình, không
+ * phải hành vi kiểm duyệt, và ghi nó vào cùng một bảng làm loãng đúng thứ mà bảng
+ * này tồn tại để trả lời: người ngoài đã làm gì với tài khoản của con tôi.
  */
-export async function adminSetChildLocked(childId: string, locked: boolean): Promise<void> {
+export async function adminSetChildLocked(
+  adminId: string,
+  childId: string,
+  locked: boolean,
+  note: string
+): Promise<void> {
   const child = await prisma.child.findUnique({ where: { id: childId }, select: { id: true } });
   if (!child) throw new AuthError('Không tìm thấy tài khoản của bé.');
 
-  await prisma.child.update({ where: { id: childId }, data: { isLocked: locked } });
+  await prisma.$transaction(async (tx) => {
+    await tx.child.update({ where: { id: childId }, data: { isLocked: locked } });
+    await tx.moderationLog.create({
+      data: {
+        childId,
+        actorId: adminId,
+        action: locked ? 'ADMIN_LOCK_CHILD' : 'ADMIN_UNLOCK_CHILD',
+        note,
+      },
+    });
+  });
+
+  // Ngoài transaction: thu hồi phiên là việc chỉ nên làm sau khi việc khoá đã
+  // chắc chắn được ghi. Ngược lại thì transaction rollback mà phiên đã mất rồi.
   if (locked) await revokeAllSessions({ childId });
 }

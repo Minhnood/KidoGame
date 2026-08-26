@@ -1,5 +1,9 @@
 node_modules/
 storage/
+# Bản sao lưu: chứa dump DB đầy đủ, tức là email phụ huynh và hash mật khẩu.
+# Lỡ commit một file ở đây là rò toàn bộ dữ liệu người dùng vào lịch sử git,
+# nơi xoá đi cũng không mất.
+backups/
 .env
 .env.local
 .next/

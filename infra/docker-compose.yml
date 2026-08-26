@@ -1,0 +1,145 @@
+# Docker Compose cho production (M5). Chạy từ trong thư mục infra/.
+#
+#   cp .env.example .env   # rồi sửa mật khẩu và domain
+#   docker compose up -d --build
+#   docker compose run --rm web pnpm --filter @kidogame/web db:push
+#
+# BỐN SERVICE: db, web, caddy, backup. KHÔNG có service nào chạy
+# player-server.mjs — file đó chỉ dùng khi dev trên máy local. Ở production chính
+# Caddy serve thư mục storage, đúng như infra/Caddyfile đã viết sẵn từ M0.
+#
+# HAI DOMAIN là yêu cầu bảo mật, không phải sở thích. Cookie phiên là host-only
+# trên app domain nên không lọt sang player domain — nhờ vậy một game độc hại
+# do người lạ upload không đọc được session của đứa trẻ đang đăng nhập. Cookie
+# KHÔNG phân biệt theo port, nên "hai port" không thay thế được "hai hostname".
+#
+# Domain khai MỘT LẦN trong .env: cả Caddy và app đều đọc từ đó. Đừng sửa
+# domain trực tiếp trong Caddyfile — lệch giữa hai chỗ thì frame-ancestors
+# không khớp app origin, iframe bị chặn, và triệu chứng là "game không boot"
+# hay "stage 0x0", nhìn y hệt lỗi đóng gói. Đây là cái bẫy đã vấp ở dev.
+
+name: kidogame
+
+services:
+  # ---------------------------------------------------------------------------
+  # Postgres. Không publish port ra ngoài: chỉ `web` trong network nội bộ nói
+  # chuyện với nó. Muốn vào bằng psql thì `docker compose exec db psql -U kidogame`.
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kidogame
+      POSTGRES_USER: kidogame
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thieu POSTGRES_PASSWORD trong infra/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `web` chờ cái này xanh mới khởi động, khỏi crash vòng đầu vì DB chưa lên.
+      test: ['CMD-SHELL', 'pg_isready -U kidogame -d kidogame']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # ---------------------------------------------------------------------------
+  # App Next.js. Cũng không publish port: Caddy là đường vào duy nhất.
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Mật khẩu đi vào URL nên chỉ dùng ký tự chữ và số — ký tự như @ : / ?
+      # phải percent-encode, và quên encode thì lỗi báo ra là "không kết nối
+      # được DB", không hề chỉ vào mật khẩu.
+      DATABASE_URL: postgresql://kidogame:${POSTGRES_PASSWORD}@db:5432/kidogame?schema=public
+      # Dùng để dựng link tuyệt đối trong email xác minh / đặt lại mật khẩu.
+      APP_ORIGIN: https://${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
+      # Vào cả CSP frame-src của app (next.config.ts) và URL file game.
+      PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # THIẾU KEY NÀY Ở PRODUCTION LÀ NÉM LỖI, cố ý — in mail chứa token ra log
+      # production chính là rò token. Xem src/lib/mail.ts.
+      RESEND_API_KEY: ${RESEND_API_KEY:?thieu RESEND_API_KEY trong infra/.env}
+      MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
+    volumes:
+      # Ghi được: đây là tiến trình nhận upload và đóng gói game.
+      - storage:/srv/storage
+    healthcheck:
+      # Trang chủ có truy vấn DB nên phép kiểm này cũng bắt được cả DB chết.
+      # Fetch trượt hoặc trả không-2xx -> promise reject -> node thoát khác 0.
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/').then(r => { if (!r.ok) throw new Error(String(r.status)) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Caddy: TLS tự động, reverse proxy cho app, và serve tĩnh cho player origin.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      # Cần 80 mở thật ra Internet: Let's Encrypt xác thực qua đó.
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      PLAYER_DOMAIN: ${PLAYER_DOMAIN}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kidogame.vn}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # CHỈ ĐỌC. Player origin không bao giờ được ghi vào storage — nó chỉ là
+      # nơi phát file, và mọi thứ nó phát ra là do `web` đã kiểm và đóng gói.
+      - storage:/srv/storage:ro
+      # Giữ chứng chỉ đã cấp. Mất volume này là mỗi lần dựng lại phải xin
+      # chứng chỉ mới, rất dễ chạm rate limit của Let's Encrypt.
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # ---------------------------------------------------------------------------
+  # Sao lưu hằng ngày: dump Postgres + đóng gói storage, giữ N bản gần nhất.
+  #
+  # Là một service trong stack chứ không phải cron trên host, cố ý: cron trên host
+  # là một bước cài đặt riêng, nằm ngoài repo, và là thứ người ta quên. Backup mà
+  # quên bật thì đúng bằng không có backup, nhưng lại cho cảm giác đã có.
+  # ---------------------------------------------------------------------------
+  backup:
+    # DÙNG LẠI ĐÚNG postgres:17 của service db. Không phải để tiết kiệm chỗ mà vì
+    # `pg_dump` lệch major với server là nó TỪ CHỐI chạy. Ghim chung một tag thì
+    # nâng Postgres là hai bên lên cùng lúc, không thể lệch.
+    image: postgres:17
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://kidogame:${POSTGRES_PASSWORD}@db:5432/kidogame
+      STORAGE_DIR: /srv/storage
+      BACKUP_DIR: /backups
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      # Chỉ đọc: việc của nó là sao chép ra, không bao giờ sửa file game.
+      - storage:/srv/storage:ro
+      # Bind mount ra host chứ không dùng named volume: bản sao lưu phải nhìn thấy
+      # và copy đi được từ ngoài mà không cần lệnh docker nào.
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    # Image postgres có entrypoint riêng lo việc khởi tạo cluster, phải ghi đè.
+    entrypoint: ['/bin/bash', '/backup.sh', 'loop']
+
+volumes:
+  # Hai volume dưới đây là TOÀN BỘ dữ liệu không sinh lại được. Sao lưu nghĩa là
+  # sao lưu đúng hai cái này.
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

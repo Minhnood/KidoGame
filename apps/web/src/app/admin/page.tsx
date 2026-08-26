@@ -33,6 +33,8 @@ const ACTION_LABEL: Record<string, string> = {
   ADMIN_REMOVE: 'Admin gỡ hẳn',
   ADMIN_RESTORE: 'Admin cho hiện lại',
   ADMIN_DISMISS_REPORTS: 'Admin bỏ qua báo cáo',
+  ADMIN_LOCK_CHILD: 'Admin khoá tài khoản của bé',
+  ADMIN_UNLOCK_CHILD: 'Admin mở khoá tài khoản của bé',
 };
 
 /**
@@ -100,6 +102,17 @@ export default async function AdminPage({
             username: true,
             isLocked: true,
             parent: { select: { email: true } },
+            /*
+             * Vết khoá/mở khoá TÀI KHOẢN, tách khỏi vết của từng game. Hai loại
+             * này phải hiện riêng: "admin gỡ một game" và "admin chặn đứa trẻ
+             * đăng nhập" là hai mức độ hoàn toàn khác nhau, trộn vào một danh
+             * sách là làm mờ đúng chỗ cần rõ nhất.
+             */
+            moderationLogs: {
+              orderBy: { createdAt: 'desc' },
+              take: 5,
+              select: { id: true, actorId: true, action: true, note: true, createdAt: true },
+            },
           },
         },
         reports: {
@@ -121,9 +134,13 @@ export default async function AdminPage({
    * huynh, id admin, hoặc chuỗi "system". Nên phải tự tra ngược ra email bằng một
    * truy vấn gộp, thay vì join. Không tra thì màn hình chỉ hiện cuid vô nghĩa.
    */
-  const actorIds = [...new Set(games.flatMap((g) => g.moderationLogs.map((l) => l.actorId)))].filter(
-    (id) => id !== 'system'
-  );
+  const actorIds = [
+    ...new Set(
+      games.flatMap((g) =>
+        [...g.moderationLogs, ...g.child.moderationLogs].map((l) => l.actorId)
+      )
+    ),
+  ].filter((id) => id !== 'system');
   const actorEmails = new Map(
     (
       await prisma.parent.findMany({
@@ -133,6 +150,35 @@ export default async function AdminPage({
     ).map((p) => [p.id, p.email])
   );
   const actorName = (id: string) => (id === 'system' ? 'hệ thống' : actorEmails.get(id) ?? id);
+
+  interface LogRow {
+    id: string;
+    actorId: string;
+    action: string;
+    note: string;
+    createdAt: Date;
+  }
+
+  /** Dùng chung cho vết của game và vết của tài khoản — hai danh sách, một cách hiển thị. */
+  const logList = (logs: LogRow[], label: string, testId: string) =>
+    logs.length > 0 ? (
+      <details className="mt-2 text-sm" data-testid={testId}>
+        <summary className="min-h-touch inline-flex cursor-pointer items-center font-semibold text-ink-soft">
+          {label} ({logs.length})
+        </summary>
+        <ul className="mt-1 list-none space-y-1 p-0 text-ink-soft">
+          {logs.map((log) => (
+            <li key={log.id}>
+              — {ACTION_LABEL[log.action] ?? log.action} · {actorName(log.actorId)} ·{' '}
+              <time dateTime={log.createdAt.toISOString()}>
+                {log.createdAt.toLocaleString('vi-VN')}
+              </time>
+              {log.note && ` · ${log.note}`}
+            </li>
+          ))}
+        </ul>
+      </details>
+    ) : null;
 
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const linkTo = (f: FilterKey, p: number) => `/admin?loc=${f}${p > 1 ? `&trang=${p}` : ''}`;
@@ -234,23 +280,11 @@ export default async function AdminPage({
                     </ul>
                   )}
 
-                  {game.moderationLogs.length > 0 && (
-                    <details className="mt-2 text-sm" data-testid="admin-log">
-                      <summary className="min-h-touch inline-flex cursor-pointer items-center font-semibold text-ink-soft">
-                        Lịch sử kiểm duyệt ({game.moderationLogs.length})
-                      </summary>
-                      <ul className="mt-1 list-none space-y-1 p-0 text-ink-soft">
-                        {game.moderationLogs.map((log) => (
-                          <li key={log.id}>
-                            — {ACTION_LABEL[log.action] ?? log.action} · {actorName(log.actorId)} ·{' '}
-                            <time dateTime={log.createdAt.toISOString()}>
-                              {log.createdAt.toLocaleString('vi-VN')}
-                            </time>
-                            {log.note && ` · ${log.note}`}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
+                  {logList(game.moderationLogs, 'Lịch sử kiểm duyệt', 'admin-log')}
+                  {logList(
+                    game.child.moderationLogs,
+                    'Lịch sử tài khoản của bé',
+                    'admin-child-log'
                   )}
                 </div>
               </div>

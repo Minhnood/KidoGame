@@ -1,0 +1,29 @@
+# Build context là gốc repo (xem `context: ..` trong infra/docker-compose.yml).
+
+# Cài lại trong image: node_modules của macOS có binary sai kiến trúc (sharp,
+# prisma engine) — copy vào là lỗi lúc chạy chứ không phải lúc build.
+node_modules
+**/node_modules
+
+.git
+.gitignore
+
+# Build lại trong image.
+.next
+**/.next
+dist
+**/dist
+*.tsbuildinfo
+
+# File game của người dùng và DB — thuộc volume, không thuộc image.
+storage
+
+# Bản sao lưu. Nhét dump DB vào image là mang dữ liệu người dùng đi phát tán.
+backups
+**/backups
+
+# KHÔNG đưa secret vào image. Production lấy env từ infra/.env qua compose.
+**/.env
+**/.env.local
+
+*.log

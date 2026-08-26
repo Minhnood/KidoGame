@@ -26,6 +26,15 @@ ALTER TABLE "Parent"
   ADD CONSTRAINT parent_email_lowercase
   CHECK ("email" = lower("email"));
 
+-- Một vết kiểm duyệt phải nhắm vào ĐÚNG MỘT đối tượng: một game, hoặc một tài
+-- khoản trẻ. Cùng khuôn với session_exactly_one_owner ở trên. Không có ràng buộc
+-- này thì bảng dễ sinh ra vết "mồ côi" (không gắn vào đâu, không ai tìm ra) hoặc
+-- vết gắn cả hai chỗ, mà lịch sử kiểm duyệt sai còn tệ hơn không có lịch sử.
+ALTER TABLE "ModerationLog" DROP CONSTRAINT IF EXISTS moderationlog_exactly_one_target;
+ALTER TABLE "ModerationLog"
+  ADD CONSTRAINT moderationlog_exactly_one_target
+  CHECK (("gameId" IS NOT NULL) <> ("childId" IS NOT NULL));
+
 -- Lượt chơi và lượt report không bao giờ âm.
 ALTER TABLE "Game" DROP CONSTRAINT IF EXISTS game_counts_non_negative;
 ALTER TABLE "Game"

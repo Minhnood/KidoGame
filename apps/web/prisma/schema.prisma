@@ -70,6 +70,9 @@ model Child {
   parent   Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
   games    Game[]
   sessions Session[]
+  /// Vết kiểm duyệt nhắm vào chính TÀI KHOẢN này (admin khoá/mở khoá), không
+  /// nhắm vào một game cụ thể.
+  moderationLogs ModerationLog[]
 
   @@index([parentId])
 }
@@ -191,18 +194,35 @@ model Report {
   @@index([status])
 }
 
+/// Vết của mọi thao tác kiểm duyệt.
+///
+/// Nhắm vào ĐÚNG MỘT đối tượng: một game, hoặc một tài khoản trẻ. Trước đây
+/// `gameId` là bắt buộc, nên việc admin khoá tài khoản một bé không để lại vết
+/// nào — mà đó lại là thao tác nặng nhất trong cả hệ thống. Hai cột nullable
+/// cộng một CHECK constraint là cách diễn đạt "một trong hai, không phải cả
+/// hai": giống hệt `Session.parentId`/`childId`.
+///
+/// Ràng buộc đúng-một nằm trong `prisma/constraints.sql`, Prisma không diễn đạt
+/// được. Chạy `pnpm db:constraints` sau mỗi `prisma db push`.
 model ModerationLog {
-  id      String @id @default(cuid())
-  gameId  String
+  id String @id @default(cuid())
+
+  /// Null khi thao tác nhắm vào tài khoản trẻ.
+  gameId String?
+  /// Null khi thao tác nhắm vào một game.
+  childId String?
+
   /// Ai thao tác: parent id, admin id, hoặc "system" khi tự động ẩn theo ngưỡng.
   actorId String
   action  String
   note    String @default("")
 
   createdAt DateTime @default(now())
-  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game      Game?    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  child     Child?   @relation(fields: [childId], references: [id], onDelete: Cascade)
 
   @@index([gameId])
+  @@index([childId])
 }
 
 model Tag {

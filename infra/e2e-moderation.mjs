@@ -275,6 +275,27 @@ const admin = await adminCtx.newPage();
   await c.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
   check('Admin khoá bé thì phiên đang mở của bé mất hiệu lực ngay', /be-dang-nhap/.test(c.url()), c.url());
   await c.close();
+
+  /*
+   * Khoá tài khoản là thao tác nặng nhất admin làm được, nên nó PHẢI để lại vết.
+   * Trước đây không có vết, vì ModerationLog bắt buộc phải gắn với một gameId.
+   *
+   * Vết của tài khoản nằm ở danh sách RIÊNG, không lẫn vào lịch sử của game:
+   * "gỡ một game" và "chặn một đứa trẻ đăng nhập" là hai mức độ khác nhau.
+   */
+  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  const afterLock = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
+  await afterLock.locator('[data-testid=admin-child-log] summary').click();
+  const childLog = await afterLock.locator('[data-testid=admin-child-log]').innerText();
+  check('Khoá tài khoản để lại vết trong lịch sử tài khoản', /khoá tài khoản của bé/i.test(childLog));
+  check('Vết khoá tài khoản ghi rõ admin nào làm', childLog.includes(ADMIN_EMAIL));
+
+  await afterLock.locator('[data-testid=admin-log] summary').click();
+  const gameLog = await afterLock.locator('[data-testid=admin-log]').innerText();
+  check(
+    'Vết khoá tài khoản KHÔNG lẫn vào lịch sử kiểm duyệt của game',
+    !/khoá tài khoản/i.test(gameLog)
+  );
 }
 
 // ---------- Admin cho hiện lại ----------

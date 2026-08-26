@@ -7,15 +7,21 @@
 # Điểm cốt lõi: HAI DOMAIN RIÊNG. File của người dùng không bao giờ được serve
 # từ app origin. Cookie phiên là host-only trên app domain nên không lọt sang
 # player domain.
+#
+# Domain đọc từ biến môi trường, KHÔNG viết cứng ở đây: docker compose truyền
+# APP_DOMAIN/PLAYER_DOMAIN từ infra/.env vào cả file này và app, nên hai bên
+# không thể lệch nhau. Lệch là frame-ancestors không khớp app origin, iframe bị
+# chặn, và triệu chứng lại là "game không boot" — nhìn y hệt lỗi đóng gói.
+# Giá trị sau dấu `:` là mặc định khi chạy Caddy tay, không qua compose.
 
 {
-	email admin@kidogame.vn
+	email {$ADMIN_EMAIL:admin@kidogame.vn}
 }
 
 # ---------------------------------------------------------------------------
 # App origin — Next.js. Là nơi DUY NHẤT có cookie phiên.
 # ---------------------------------------------------------------------------
-app.kidogame.vn {
+{$APP_DOMAIN:app.kidogame.vn} {
 	encode zstd gzip
 
 	reverse_proxy web:3000
@@ -34,7 +40,7 @@ app.kidogame.vn {
 # ---------------------------------------------------------------------------
 # Player origin — chỉ file tĩnh. KHÔNG có ứng dụng, KHÔNG có cookie.
 # ---------------------------------------------------------------------------
-play.kidogame.vn {
+{$PLAYER_DOMAIN:play.kidogame.vn} {
 	encode zstd gzip
 	root * /srv/storage
 
@@ -58,7 +64,7 @@ play.kidogame.vn {
 	@html path /html/*
 	header @html {
 		Content-Type "text/html; charset=utf-8"
-		Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; form-action 'none'; frame-ancestors https://app.kidogame.vn"
+		Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; form-action 'none'; frame-ancestors https://{$APP_DOMAIN:app.kidogame.vn}"
 	}
 
 	# --- File .sb3 gốc cho trẻ tải về ---------------------------------------

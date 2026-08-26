@@ -328,10 +328,13 @@ export async function adminSetChildLockedAction(
   form: FormData
 ): Promise<FormState> {
   const state = await run(async () => {
-    await requireAdmin();
+    const adminId = await requireAdmin();
+    const locked = String(form.get('locked')) === 'true';
     await adminSetChildLocked(
+      adminId,
       String(form.get('childId') ?? ''),
-      String(form.get('locked')) === 'true'
+      locked,
+      locked ? 'Admin khoá tài khoản từ trang kiểm duyệt' : 'Admin mở khoá tài khoản'
     );
   });
   revalidatePath('/admin');

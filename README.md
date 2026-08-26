@@ -214,6 +214,112 @@ Hai điều đã thử và bỏ, đừng làm lại:
 Trải nghiệm tốt nhất trên điện thoại vẫn là bấm nút toàn màn hình — khung nhúng
 chỉ cao khoảng 280px nên nút nào cũng chiếm chỗ.
 
+## Triển khai lên VPS (M5)
+
+> **Chưa `docker compose up` lần nào.** Cấu hình dưới đây viết trên máy chưa cài
+> Docker, nên phần Dockerfile/compose/Caddy chỉ được đọc kỹ, chưa được máy nào
+> xác nhận. Lần deploy đầu tiên hãy coi là buổi gỡ lỗi, đừng coi là buổi phát hành.
+>
+> Ngoại lệ: `infra/backup.sh` **đã kiểm thật** — chạy trên host với Postgres của
+> máy dev, và bản dump đã được phục hồi vào một DB tạm rồi đối chiếu số hàng, còn
+> bản tar đã giải nén ra so hash từng file. Phần chưa biết của nó chỉ là dây nối
+> trong container (mount, env, entrypoint), không phải logic sao lưu.
+
+Bốn service: `db` (Postgres 17), `web` (Next.js), `caddy` (TLS + reverse proxy +
+serve file tĩnh cho player origin), `backup` (dump hằng ngày).
+
+**Không có service nào chạy `player-server.mjs`.** File đó chỉ dùng khi dev trên
+máy local. Ở production chính Caddy serve thư mục `storage`, đúng như
+`infra/Caddyfile` đã viết từ M0.
+
+Trước khi bắt đầu: trỏ A/AAAA của **cả hai** domain về IP của VPS. Caddy xin
+chứng chỉ ngay lúc khởi động, DNS chưa trỏ là thất bại.
+
+```bash
+cd infra
+cp .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY
+docker compose up -d --build
+
+# Dựng schema. PHẢI chạy tay, không tự chạy lúc boot — tự migrate khi khởi động
+# là thứ đến một lúc nào đó sẽ tự đổi DB production vào giữa đêm.
+docker compose run --rm web pnpm --filter @kidogame/web db:push
+
+# Chỉ khi muốn có dữ liệu mẫu (tài khoản demo!). Bỏ qua nếu là VPS thật.
+docker compose run --rm web pnpm --filter @kidogame/web db:seed
+```
+
+**Domain khai đúng một chỗ: `infra/.env`.** Compose truyền `APP_DOMAIN` /
+`PLAYER_DOMAIN` vào cả Caddy và app, nên Caddyfile không còn viết cứng domain
+nữa. Đừng sửa domain trực tiếp trong Caddyfile: lệch giữa hai chỗ thì
+`frame-ancestors` không khớp app origin, iframe bị chặn, và triệu chứng là *"game
+không boot"* / *"stage 0x0"* — nhìn y hệt lỗi đóng gói. Đây đúng là cái bẫy đã
+vấp ở dev khi chạy e2e lệch cổng 3000.
+
+### Sao lưu
+
+Service `backup` chạy sẵn trong stack, mỗi ngày vào `BACKUP_HOUR` (mặc định 3
+giờ): dump Postgres + đóng gói `storage`, giữ `BACKUP_KEEP` bản gần nhất (mặc
+định 7), đổ vào `BACKUP_HOST_DIR` trên host (mặc định `infra/backups`).
+
+Là một service trong compose chứ không phải cron trên host, cố ý: cron trên host
+là một bước cài đặt riêng nằm ngoài repo, và là thứ người ta quên. Backup mà quên
+bật thì đúng bằng không có backup, nhưng lại cho cảm giác đã có.
+
+```bash
+docker compose exec backup /backup.sh once   # sao lưu ngay, không chờ tới 3 giờ
+docker compose logs backup                   # xem lần gần nhất chạy thế nào
+ls -lh infra/backups                         # xem có gì
+```
+
+**Thứ tự dump là có chủ đích: DB trước, file sau.** Hai việc không nằm trong cùng
+transaction nên phải chọn thứ tự sao cho bản sao lưu không tự mâu thuẫn. Lúc đăng
+game, file được ghi xuống đĩa TRƯỚC rồi mới tạo hàng trong DB, và file không bao
+giờ bị xoá (tên file là hash nội dung). Nên mọi hàng trong bản dump đều đã có file
+tương ứng từ trước, và file ấy chắc chắn còn nguyên khi `tar` chạy. Làm ngược lại
+thì bản dump có thể chứa game mà file chưa nằm trong tar — phục hồi ra một game
+bấm vào là 404.
+
+Script kiểm luôn bản vừa tạo (`pg_restore --list` và `tar tzf`) rồi mới coi là
+xong. Dump chạy hết lệnh không có nghĩa là dump đọc được, mà backup hỏng lặng lẽ
+còn tệ hơn không có backup.
+
+**Mặc định vẫn CHƯA phải backup thật.** `infra/backups` nằm cùng ổ đĩa với dữ
+liệu gốc: nó chống lỡ tay xoá, không chống ổ đĩa chết. Trỏ `BACKUP_HOST_DIR` sang
+ổ khác, hoặc `rsync` thư mục đó sang máy khác — bước đó chưa được tự động hoá.
+
+`backups/` đã nằm trong `.gitignore` và `.dockerignore`: bản dump chứa email phụ
+huynh và hash mật khẩu, lỡ commit một file là rò dữ liệu người dùng vào lịch sử
+git, nơi xoá đi cũng không mất.
+
+### Phục hồi
+
+```bash
+# 1. DB. Dừng app trước để không ai ghi vào giữa lúc phục hồi.
+docker compose stop web
+docker compose exec -T db psql -U kidogame -d postgres \
+  -c 'DROP DATABASE IF EXISTS kidogame;' -c 'CREATE DATABASE kidogame OWNER kidogame;'
+docker compose exec -T backup pg_restore -d "$DATABASE_URL" /backups/db-<stamp>.dump
+
+# 2. File game.
+docker compose run --rm -v ./backups:/backups:ro web \
+  tar xzf /backups/storage-<stamp>.tar.gz -C /srv/storage
+
+docker compose start web
+```
+
+CHECK constraint trong `prisma/constraints.sql` **có** đi theo bản dump — đã kiểm
+bằng cách phục hồi rồi soi `pg_constraint`. Nhưng nếu bạn phục hồi bằng cách nào
+khác (dump `--data-only`, hay dựng schema bằng `prisma db push` rồi nạp dữ liệu)
+thì phải chạy lại `pnpm db:constraints`, vì các ràng buộc đó không nằm trong
+Prisma schema.
+
+`caddy_data` mất thì chỉ phải xin lại chứng chỉ, không cần sao lưu.
+
+Image cố ý **không** dùng multi-stage, **không** dùng `output: 'standalone'` và
+**không** `prune --prod`. Lý do từng cái nằm trong comment đầu `infra/Dockerfile`
+— tóm gọn: node_modules của pnpm là một rừng symlink, và `prisma`/`tsx` là
+devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoảng 1.5GB.
+
 ## Cấu trúc
 
 | Thư mục | Vai trò |
@@ -221,7 +327,7 @@ chỉ cao khoảng 280px nên nút nào cũng chiếm chỗ.
 | `packages/sb3` | Kiểm tra, chuẩn hoá, đóng gói, thumbnail. **Toàn bộ phần bảo mật nằm ở đây.** |
 | `apps/web` | Next.js + Tailwind v4: giao diện, API, Prisma |
 | `apps/web/src/components` | Bộ component dùng chung (button, field, notice, card, file-picker) |
-| `infra` | Server tĩnh cho dev, Caddyfile cho production, script e2e |
+| `infra` | Server tĩnh cho dev, Caddyfile + Dockerfile + compose + backup.sh cho production, script e2e |
 | `storage` | File theo địa chỉ nội dung: `sb3/`, `html/`, `thumb/` |
 
 ## Vài điều dễ vấp
@@ -241,13 +347,29 @@ chỉ cao khoảng 280px nên nút nào cũng chiếm chỗ.
 - `prisma db push` không tạo được CHECK constraint. Chúng nằm trong
   `prisma/constraints.sql`, script `db:push` đã tự gọi — nhưng nếu bạn chạy
   `prisma db push` trực tiếp thì phải chạy `pnpm db:constraints` sau đó.
+- **Image `web` phải có `psql`.** Vì `db:push` gọi tiếp `db:constraints`, mà
+  script đó chạy `psql`. Thiếu nó thì migrate chết ở bước cuối — sau khi schema
+  đã push xong, tức DB ở trạng thái nửa vời. `infra/Dockerfile` đã cài
+  `postgresql-client` chính vì thế; đừng bỏ ra để image nhẹ hơn.
 
 ## Trạng thái
 
 Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ huynh/bé),
 M2.5 (xác minh email + quên mật khẩu), M3 (tìm kiếm + tag + lọc tuổi),
 M4 (báo cáo → tự ẩn ở ngưỡng 3 → trang kiểm duyệt của admin).
-Chưa làm: Docker Compose (M5).
+
+M5 (Deploy): cả ba phần của mốc này đã viết — Docker Compose + Caddy
+(`infra/Dockerfile`, `infra/docker-compose.yml`, `infra/.env.example`, Caddyfile
+đọc domain từ env), sao lưu Postgres + file, và cron dump (service `backup`).
+
+**Chưa `docker compose up` lần nào** vì máy dev chưa cài Docker, nên phần
+container còn nguyên rủi ro. Riêng `infra/backup.sh` đã được kiểm thật trên host,
+gồm cả phục hồi ngược lại để đối chiếu. Xem phần "Triển khai lên VPS".
+
+Còn thiếu để gọi là hoàn tất: chạy 4 bước kiểm tay cần Docker trong plan (dựng
+tài khoản → upload → game chạy trong iframe; `curl -I` soi header player origin;
+kiểm cookie không lọt sang player origin; thử đổi tên file HTML thành `.sb3`), và
+đưa bản sao lưu ra khỏi máy.
 
 ### M3 — Khám phá
 
