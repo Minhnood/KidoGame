@@ -20,13 +20,13 @@ export async function SiteNav() {
     <nav className="flex flex-wrap items-center gap-2 sm:gap-3">
       {actor?.kind === 'child' && (
         <>
-          <span className="hidden text-sm text-white/70 sm:inline">Xin chào {actor.displayName}</span>
+          <span className="hidden text-sm text-chrome-ink/70 sm:inline">Xin chào {actor.displayName}</span>
           <ButtonLink href="/upload">Đăng game</ButtonLink>
         </>
       )}
 
       {actor?.kind === 'parent' && (
-        <ButtonLink href="/phu-huynh" variant="ghost" className="!border-white/25 !text-white">
+        <ButtonLink href="/phu-huynh" variant="ghost" className="!border-chrome-ink/25 !text-chrome-ink">
           Trang của bố mẹ
         </ButtonLink>
       )}
@@ -35,7 +35,7 @@ export async function SiteNav() {
         <Link
           href="/admin"
           data-testid="nav-admin"
-          className="min-h-touch inline-flex items-center px-2 font-semibold text-white/80 no-underline hover:text-white"
+          className="min-h-touch inline-flex items-center px-2 font-semibold text-chrome-ink/80 no-underline hover:text-chrome-ink"
         >
           Kiểm duyệt
         </Link>
@@ -46,7 +46,7 @@ export async function SiteNav() {
           <button
             type="submit"
             data-testid="logout"
-            className="min-h-touch cursor-pointer rounded-full border-0 bg-transparent px-3 font-semibold text-white/80 hover:text-white"
+            className="min-h-touch cursor-pointer rounded-full border-0 bg-transparent px-3 font-semibold text-chrome-ink/80 hover:text-chrome-ink"
           >
             Đăng xuất
           </button>
@@ -55,7 +55,7 @@ export async function SiteNav() {
         <>
           <Link
             href="/dang-nhap"
-            className="min-h-touch inline-flex items-center px-2 font-semibold text-white/80 no-underline hover:text-white"
+            className="min-h-touch inline-flex items-center px-2 font-semibold text-chrome-ink/80 no-underline hover:text-chrome-ink"
           >
             Bố mẹ
           </Link>

@@ -316,7 +316,7 @@ export default async function AdminPage({
             className={[
               'min-h-touch inline-flex items-center rounded-full border px-4 font-semibold no-underline',
               f.key === filter
-                ? 'border-transparent bg-accent text-ink'
+                ? 'border-transparent bg-accent text-chrome'
                 : 'border-border bg-surface text-ink hover:bg-bg',
             ].join(' ')}
           >

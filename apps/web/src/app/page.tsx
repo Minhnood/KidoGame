@@ -81,7 +81,7 @@ export default async function HomePage({
     [
       'min-h-touch inline-flex items-center rounded-full border px-4 font-semibold no-underline',
       active
-        ? 'border-transparent bg-accent text-ink'
+        ? 'border-transparent bg-accent text-chrome'
         : 'border-border bg-surface text-ink hover:bg-bg',
     ].join(' ');
 

@@ -9,7 +9,10 @@
  * Đổi màu thương hiệu chỉ sửa ở đây.
  */
 @theme {
-  /* --- Màu --- */
+  /* --- Màu ---
+   * Đây là bảng SÁNG, và cũng là bảng mà Tailwind dùng để sinh utility. Bảng TỐI
+   * chỉ ghi đè lại chính những biến này ở cuối file — xem khối "Giao diện tối".
+   */
   --color-ink: #1b1b32;
   --color-ink-soft: #5a5a77;
   --color-ink-faint: #8b8ba7;
@@ -20,6 +23,21 @@
 
   --color-accent: #ff8c1a;
   --color-accent-dark: #e57200;
+
+  /* --- Hai màu CỐ ĐỊNH, không đảo theo giao diện ---
+   *
+   * `--color-ink` là màu CHỮ, nên ở giao diện tối nó sáng lên. Vì vậy mọi chỗ cần
+   * "một màu tối thật" không được dùng nó:
+   *
+   *  - Nền tối cố định: thanh điều hướng, khung chơi game, nền khi phóng to.
+   *  - Chữ tối trên một nền KHÔNG đảo màu: cam accent vẫn là cam ở cả hai giao
+   *    diện, nên chữ trên nó phải tối ở cả hai. Dùng `text-ink` ở đó thì bật giao
+   *    diện tối là chữ sáng trên nền cam — đọc không nổi.
+   *
+   * Hai vai đó chỉ cần đúng một cặp màu, nên gộp thành `chrome` / `chrome-ink`.
+   */
+  --color-chrome: #1b1b32;
+  --color-chrome-ink: #ffffff;
 
   /* Màu phụ để phân biệt các mục cho vui mắt, không mang ý nghĩa trạng thái. */
   --color-sky: #4aa8ff;
@@ -53,6 +71,119 @@
   --spacing-touch: 3rem;
 }
 
+/* ---------------------------------------------------------------------------
+ * Giao diện tối
+ *
+ * Ba điều đáng biết trước khi sửa khối này:
+ *
+ * 1. Giá trị màu tối khai báo MỘT LẦN (nhóm `--toi-*`), rồi được gán vào token
+ *    thật ở hai chỗ bên dưới. Phần gán phải viết hai lần vì CSS không cho gộp một
+ *    `@media` với một selector khác trong cùng một rule. Nhưng nhờ tách giá trị ra
+ *    riêng, sửa một màu chỉ phải sửa đúng một dòng — nếu để giá trị ngay trong hai
+ *    khối gán thì sớm muộn chúng lệch nhau, và cái lệch đó chỉ hiện ra ở đúng một
+ *    trong hai đường (theo máy / tự chọn), tức là nửa số người dùng không thấy.
+ *
+ * 2. `:root:not([data-theme='light'])` chứ không phải `:root`: người đã tự chọn
+ *    giao diện sáng thì cài đặt của họ phải thắng cài đặt của máy.
+ *
+ * 3. KHÔNG dùng `light-dark()` — nó gọn hơn hẳn khối này nhưng cần Safari 17.5+ /
+ *    Chrome 123+. Người dùng của KidoGame là trẻ em Việt Nam, phần lớn dùng máy bố
+ *    mẹ thải lại; trên máy cũ `light-dark()` làm biến màu thành không hợp lệ và cả
+ *    bảng màu sập, tức là trang không đọc được. Dài hơn nhưng không vỡ.
+ *
+ * Bảng tối KHÔNG phải bảng sáng đảo ngược: nền lấy tông xanh navy cho cùng họ với
+ * thương hiệu chứ không phải xám trung tính, và cam accent được nới sáng hơn một
+ * chút vì cam gốc trên nền tối trông đục.
+ * ------------------------------------------------------------------------- */
+:root {
+  --toi-ink: #ececf5;
+  --toi-ink-soft: #a9a9c2;
+  --toi-ink-faint: #7c7c96;
+
+  --toi-bg: #12121c;
+  --toi-surface: #1c1c2b;
+  --toi-border: #2f2f45;
+
+  --toi-accent: #ff9d3d;
+  /* Ở giao diện tối, "đậm hơn" khi hover là SÁNG hơn. Giữ nguyên tên biến vì nó
+     còn được dùng làm màu chữ cho link (`text-accent-dark`), và trên nền tối thì
+     cam sáng mới đủ tương phản. */
+  --toi-accent-dark: #ffb570;
+
+  --toi-chrome: #0d0d18;
+
+  --toi-sky: #6cb8ff;
+  --toi-grass: #59c288;
+  --toi-berry: #f2709c;
+  --toi-sun: #ffd83d;
+
+  --toi-warn-bg: #392b14;
+  --toi-warn-border: #6b4d1c;
+  --toi-warn-ink: #ffdca8;
+
+  --toi-danger: #ff8080;
+  --toi-danger-bg: #3a1e1e;
+  --toi-danger-border: #6b3030;
+}
+
+/* Máy đang ở chế độ tối, và người dùng chưa tự chọn giao diện sáng. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --color-ink: var(--toi-ink);
+    --color-ink-soft: var(--toi-ink-soft);
+    --color-ink-faint: var(--toi-ink-faint);
+    --color-bg: var(--toi-bg);
+    --color-surface: var(--toi-surface);
+    --color-border: var(--toi-border);
+    --color-accent: var(--toi-accent);
+    --color-accent-dark: var(--toi-accent-dark);
+    --color-chrome: var(--toi-chrome);
+    --color-sky: var(--toi-sky);
+    --color-grass: var(--toi-grass);
+    --color-berry: var(--toi-berry);
+    --color-sun: var(--toi-sun);
+    --color-warn-bg: var(--toi-warn-bg);
+    --color-warn-border: var(--toi-warn-border);
+    --color-warn-ink: var(--toi-warn-ink);
+    --color-danger: var(--toi-danger);
+    --color-danger-bg: var(--toi-danger-bg);
+    --color-danger-border: var(--toi-danger-border);
+  }
+}
+
+/* Người dùng tự chọn giao diện tối — thắng cài đặt của máy. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-ink: var(--toi-ink);
+  --color-ink-soft: var(--toi-ink-soft);
+  --color-ink-faint: var(--toi-ink-faint);
+  --color-bg: var(--toi-bg);
+  --color-surface: var(--toi-surface);
+  --color-border: var(--toi-border);
+  --color-accent: var(--toi-accent);
+  --color-accent-dark: var(--toi-accent-dark);
+  --color-chrome: var(--toi-chrome);
+  --color-sky: var(--toi-sky);
+  --color-grass: var(--toi-grass);
+  --color-berry: var(--toi-berry);
+  --color-sun: var(--toi-sun);
+  --color-warn-bg: var(--toi-warn-bg);
+  --color-warn-border: var(--toi-warn-border);
+  --color-warn-ink: var(--toi-warn-ink);
+  --color-danger: var(--toi-danger);
+  --color-danger-bg: var(--toi-danger-bg);
+  --color-danger-border: var(--toi-danger-border);
+}
+
+/* Người dùng tự chọn giao diện sáng. `color-scheme` cần nói rõ để ô nhập, thanh
+   cuộn và mọi widget do trình duyệt vẽ không bị tối theo cài đặt máy. */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
 /*
  * CSS viết tay — chỉ giữ những thứ nằm ngoài thang utility.
  */
@@ -78,7 +209,9 @@ body {
   display: block;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  background: var(--color-ink);
+  /* `chrome` chứ không phải `ink`: đây là nền, và nền khung game phải tối ở cả hai
+     giao diện. Dùng `ink` thì bật giao diện tối là khung game sáng trắng. */
+  background: var(--color-chrome);
 }
 
 /*

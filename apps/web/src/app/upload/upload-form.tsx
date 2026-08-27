@@ -108,7 +108,7 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
                     className={[
                       'min-h-touch inline-flex cursor-pointer items-center gap-2 rounded-full border px-4 font-semibold',
                       on
-                        ? 'border-transparent bg-accent text-ink'
+                        ? 'border-transparent bg-accent text-chrome'
                         : 'border-border bg-surface text-ink hover:bg-bg',
                       full ? 'cursor-not-allowed opacity-50' : '',
                     ].join(' ')}

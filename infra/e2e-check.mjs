@@ -359,6 +359,92 @@ if (FIXTURE) {
   );
 }
 
+/* ----------------------------------------------------------------------------
+ * Giao diện sáng / tối
+ *
+ * Dùng context RIÊNG cho mỗi chế độ vì `colorScheme` là thuộc tính của context,
+ * không đổi được giữa đường.
+ * -------------------------------------------------------------------------- */
+{
+  const doc = (p) =>
+    p.evaluate(() => ({
+      bg: getComputedStyle(document.body).backgroundColor,
+      ink: getComputedStyle(document.body).color,
+      theme: document.documentElement.dataset.theme ?? '',
+    }));
+
+  const mo = async (colorScheme) => {
+    const ctx = await browser.newContext({ colorScheme, viewport: { width: 1100, height: 900 } });
+    const p = await ctx.newPage();
+    /*
+     * Lệch hydration hiện ra ở console.error, KHÔNG phải `pageerror`. Đáng canh
+     * riêng vì chính chỗ này đã vấp thật hai lần khi làm giao diện tối: một lần do
+     * tự viết thẻ <head>, một lần do trình duyệt xoá thuộc tính `nonce` khỏi DOM.
+     * Cả hai lần trang vẫn hiện đúng — không có phép kiểm nào đỏ, chỉ có console.
+     */
+    const loi = [];
+    p.on('console', (m) => {
+      if (m.type() === 'error' && /hydrat/i.test(m.text())) loi.push(m.text().slice(0, 120));
+    });
+    await p.goto(APP, { waitUntil: 'networkidle' });
+    return { ctx, p, loi };
+  };
+
+  const sang = await mo('light');
+  const toi = await mo('dark');
+  const dSang = await doc(sang.p);
+  const dToi = await doc(toi.p);
+
+  check('Máy ở chế độ sáng: trang dùng bảng màu sáng', dSang.bg === 'rgb(246, 247, 251)', dSang.bg);
+  check('Máy ở chế độ tối: trang tự dùng bảng màu tối', dToi.bg === 'rgb(18, 18, 28)', dToi.bg);
+  /*
+   * Không chỉ kiểm nền: nếu chỉ nền đổi mà chữ không đổi thì trang thành chữ tối
+   * trên nền tối — vẫn "có giao diện tối", và vẫn không đọc được.
+   */
+  check('Giao diện tối cũng đảo màu CHỮ, không chỉ nền', dToi.ink !== dSang.ink, `${dSang.ink} -> ${dToi.ink}`);
+  check(
+    'Theo máy thì KHÔNG ghi data-theme (để máy đổi sáng/tối là trang đổi theo)',
+    dToi.theme === '' && dSang.theme === '',
+    `sáng="${dSang.theme}" tối="${dToi.theme}"`
+  );
+
+  // Nút đổi giao diện: ba trạng thái, và lựa chọn của người dùng thắng cài đặt máy.
+  const nut = toi.p.locator('[data-testid=theme-toggle]');
+  const vong = [];
+  for (let i = 0; i < 3; i++) {
+    await nut.click();
+    await toi.p.waitForTimeout(200);
+    vong.push(await nut.getAttribute('data-theme-choice'));
+  }
+  check('Nút đổi giao diện xoay đủ ba trạng thái rồi về chỗ cũ', vong.join('>') === 'sang>toi>may', vong.join(' > '));
+
+  await nut.click(); // -> sáng, trong khi máy đang ở chế độ tối
+  await toi.p.waitForTimeout(200);
+  const chonSang = await doc(toi.p);
+  check(
+    'Người dùng chọn sáng thì thắng cài đặt tối của máy',
+    chonSang.theme === 'light' && chonSang.bg === 'rgb(246, 247, 251)',
+    `${chonSang.theme} / ${chonSang.bg}`
+  );
+
+  await toi.p.reload({ waitUntil: 'networkidle' });
+  const sauTaiLai = await doc(toi.p);
+  check(
+    'Tải lại vẫn giữ lựa chọn giao diện',
+    sauTaiLai.theme === 'light' && sauTaiLai.bg === 'rgb(246, 247, 251)',
+    `${sauTaiLai.theme} / ${sauTaiLai.bg}`
+  );
+
+  check(
+    'Không có lệch hydration nào (script đặt data-theme trước khi React chạy)',
+    sang.loi.length === 0 && toi.loi.length === 0,
+    [...sang.loi, ...toi.loi].join(' | ') || 'sạch'
+  );
+
+  await sang.ctx.close();
+  await toi.ctx.close();
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

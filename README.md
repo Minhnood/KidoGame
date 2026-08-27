@@ -39,7 +39,7 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 34 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 42 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 21 kiểm tra
 # e2e-moderation BẮT BUỘC có MAIL_LOG: chỉ báo cáo của phụ huynh đã xác minh email mới
 # tính vào ngưỡng, và đường duy nhất để xác minh là bấm link trong mail.
@@ -227,6 +227,43 @@ Vài lựa chọn có chủ đích cho đối tượng trẻ em:
 - Ô chọn file là component tự làm (`file-picker.tsx`), không dùng
   `<input type="file">` trần — trình duyệt tự vẽ chữ "Choose File" bằng tiếng Anh
   và CSS không đổi được.
+
+### Giao diện sáng / tối
+
+Mặc định **chạy theo cài đặt của máy** bằng CSS thuần, không cần một dòng JS nào. Nút
+trong thanh điều hướng cho tự chọn, ba trạng thái: Theo máy → Sáng → Tối → Theo máy.
+"Theo máy" phải quay lại được, vì điện thoại thường tự chuyển tối vào buổi tối và một
+cái nút hai trạng thái sẽ khoá người dùng ra khỏi hành vi đó ngay lần đầu họ bấm thử.
+
+Lựa chọn lưu ở `localStorage` chứ không phải cookie: đây là sở thích của từng MÁY chứ
+không của tài khoản (bé dùng máy bố mẹ buổi tối là chuyện thường), và cookie thì bị gửi
+kèm mọi request rồi ép server render khác nhau cho hai giao diện.
+
+**Hai màu KHÔNG đảo theo giao diện: `chrome` và `chrome-ink`.** `--color-ink` là màu
+CHỮ nên ở giao diện tối nó sáng lên — vì vậy mọi chỗ cần "một màu tối thật" phải dùng
+`chrome`: nền thanh điều hướng, nền khung chơi game, và **chữ trên nền cam accent**
+(cam vẫn là cam ở cả hai giao diện, nên chữ trên nó phải tối ở cả hai). Dùng `text-ink`
+trên nền cam là bật giao diện tối thành chữ sáng trên nền cam, đọc không nổi.
+
+**Ba cái bẫy đã vấp thật khi làm phần này** — đều thuộc loại trang vẫn hiện đúng, không
+phép kiểm nào đỏ, chỉ có console biết:
+
+1. **Tự viết thẻ `<head>` trong layout gốc gây lệch hydration.** App Router tự quản lý
+   `<head>`. Script chống loé vì vậy nằm ở đầu `<body>` — vẫn kịp, vì CSS trong
+   `<head>` đã tải xong và trình duyệt chưa có nội dung nào để vẽ.
+2. **Trình duyệt XOÁ thuộc tính `nonce` khỏi DOM sau khi parse** (để script bị chèn vào
+   không đọc được nonce mà tự cấp phép). React so `nonce` nó render với `nonce=""` trong
+   DOM rồi báo lệch. Không sửa được từ phía ta — hành vi xoá đó chính là lớp bảo vệ —
+   nên thẻ script mang `suppressHydrationWarning`. Cùng lý do này làm mọi phép kiểm
+   kiểu "HTML có nonce không" đọc bằng `page.content()` đều sai: phải đọc bằng `curl`.
+3. **`light-dark()` gọn hơn hẳn khối CSS hiện tại nhưng đã bị loại.** Nó cần Safari
+   17.5+ / Chrome 123+; trên máy cũ hơn thì biến màu thành không hợp lệ và **cả bảng
+   màu sập**. Người dùng ở đây là trẻ em dùng máy bố mẹ thải lại, nên chọn dài dòng mà
+   không vỡ.
+
+`e2e-check` canh 8 phép kiểm cho phần này, gồm cả "giao diện tối có đảo màu CHỮ không"
+(chỉ đảo nền là được chữ tối trên nền tối — vẫn "có giao diện tối" và vẫn không đọc
+được) và "không có lệch hydration nào".
 
 ## Tài khoản và phân quyền
 

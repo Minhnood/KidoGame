@@ -14,9 +14,16 @@ const base =
   'disabled:opacity-55 disabled:cursor-not-allowed';
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-accent text-ink hover:bg-accent-dark border-0',
+  primary: 'bg-accent text-chrome hover:bg-accent-dark border-0',
   ghost: 'bg-transparent text-ink border border-border hover:bg-surface',
-  danger: 'bg-danger-bg text-danger border border-danger-border hover:bg-danger hover:text-white',
+  /*
+   * `hover:text-surface` chứ không phải `hover:text-white`: khi hover, nền thành
+   * `danger` — đỏ ĐẬM ở giao diện sáng nhưng đỏ NHẠT ở giao diện tối. Chữ trắng cố
+   * định sẽ chìm hẳn trên nền đỏ nhạt. `surface` là màu đối của chữ (trắng ở giao
+   * diện sáng, tối ở giao diện tối) nên nó tự lật đúng chiều.
+   */
+  danger:
+    'bg-danger-bg text-danger border border-danger-border hover:bg-danger hover:text-surface',
 };
 
 const sizes: Record<Size, string> = {

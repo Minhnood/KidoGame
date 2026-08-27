@@ -40,7 +40,7 @@ export function StageFrame({ src, title }: { src: string; title: string }) {
 
   return (
     <>
-      <div className={expanded ? 'fixed inset-0 z-50 bg-ink' : undefined}>
+      <div className={expanded ? 'fixed inset-0 z-50 bg-chrome' : undefined}>
         {/*
           Game chạy trên origin RIÊNG, trong iframe sandbox.
           - Origin riêng: cookie phiên của app không bao giờ tới được trang này.
@@ -71,7 +71,7 @@ export function StageFrame({ src, title }: { src: string; title: string }) {
             type="button"
             onClick={() => setExpanded(false)}
             data-testid="stage-shrink"
-            className="min-h-touch fixed left-1/2 top-2 z-10 -translate-x-1/2 cursor-pointer rounded-full border-0 bg-white/85 px-5 font-bold text-ink shadow"
+            className="min-h-touch fixed left-1/2 top-2 z-10 -translate-x-1/2 cursor-pointer rounded-full border-0 bg-white/85 px-5 font-bold text-chrome shadow"
           >
             Thu nhỏ
           </button>
@@ -86,7 +86,7 @@ export function StageFrame({ src, title }: { src: string; title: string }) {
             type="button"
             onClick={() => setExpanded(true)}
             data-testid="stage-expand"
-            className="min-h-touch inline-flex cursor-pointer items-center justify-center rounded-full border-0 bg-accent px-6 font-bold text-ink"
+            className="min-h-touch inline-flex cursor-pointer items-center justify-center rounded-full border-0 bg-accent px-6 font-bold text-chrome"
           >
             Chơi to hơn
           </button>

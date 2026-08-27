@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { Nunito } from 'next/font/google';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Wrap } from '@/components/page';
 import './globals.css';
 
@@ -23,17 +25,83 @@ export const metadata: Metadata = {
   description: 'Nơi các bé đăng tải và chia sẻ game Scratch tự làm.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/*
+ * Đặt `data-theme` TRƯỚC khung hình đầu tiên.
+ *
+ * Bảng màu tối đã tự chạy theo `prefers-color-scheme` mà không cần một dòng JS nào,
+ * nên khối này chỉ phục vụ những người đã TỰ CHỌN khác cài đặt của máy. Với họ, nếu
+ * để React đặt thuộc tính sau khi hydrate thì trang loé lên giao diện của máy rồi mới
+ * đổi — trên trang tối, cú loé trắng ban đêm là thứ khó chịu thật sự, không phải
+ * chuyện thẩm mỹ.
+ *
+ * Phải là script CHẶN, đặt trong <head>, đúng một dòng đọc localStorage. Chuyển sang
+ * bất kỳ cách bất đồng bộ nào cũng làm mất tác dụng.
+ *
+ * Gói trong try/catch vì `localStorage` NÉM ở một số ngữ cảnh (trình duyệt chặn site
+ * data, cửa sổ riêng tư trên vài phiên bản Safari). Ném ở đây là chặn cả trang.
+ */
+const SCRIPT_GIAO_DIEN = `try{var t=localStorage.getItem('kidogame-theme');if(t==='sang'||t==='toi')document.documentElement.dataset.theme=t==='sang'?'light':'dark'}catch(e){}`;
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  /*
+   * Nonce do `src/middleware.ts` đặt vào request header. Script inline BẮT BUỘC phải
+   * mang nonce, vì CSP của app không còn `script-src 'unsafe-inline'`.
+   *
+   * `headers()` làm route render động — nhưng ở đây không mất gì thêm: `SiteNav` trong
+   * chính layout này gọi `getActor()`, tức đọc cookie, nên layout gốc đã động ở mọi
+   * route từ trước.
+   *
+   * Thiếu nonce (route nào không qua middleware) thì BỎ script thay vì gửi một thẻ
+   * script chắc chắn bị CSP chặn: giao diện vẫn đúng theo cài đặt của máy, chỉ mất
+   * phần chống loé cho người đã tự chọn.
+   */
+  const nonce = (await headers()).get('x-nonce');
+
   return (
-    <html lang="vi" className={nunito.variable}>
+    /*
+     * `suppressHydrationWarning` ở ĐÚNG thẻ <html> này là bắt buộc, không phải để
+     * cho im tiếng: script bên dưới đặt `data-theme` lên chính thẻ này trước khi
+     * React chạy, nên HTML của server (không có thuộc tính đó) và DOM lúc client
+     * hydrate (có) chắc chắn khác nhau với người đã tự chọn giao diện.
+     *
+     * An toàn vì cờ này chỉ có tác dụng MỘT CẤP — riêng thẻ <html> — nên nó không
+     * che được lệch hydration ở bất cứ đâu khác trong cây.
+     */
+    <html lang="vi" className={nunito.variable} suppressHydrationWarning>
       {/* flex-col + min-h-screen: giữ chân trang ở đáy màn hình cả trên trang ngắn. */}
       <body className="flex min-h-screen flex-col font-[family-name:var(--font-nunito)] antialiased">
-        <header className="bg-ink py-3 text-white">
+        {/*
+          Đặt ở đầu <body> chứ KHÔNG bọc trong một thẻ <head> tự viết. App Router tự
+          quản lý <head>; thêm một thẻ <head> của mình vào cây làm lệch hydration ngay
+          ở ranh giới html/head — đã thử và thấy cảnh báo thật.
+
+          Ở đây vẫn kịp: CSS trong <head> đã tải xong, và trình duyệt chưa vẽ khung
+          hình nào vì chưa có nội dung nào để vẽ.
+        */}
+        {nonce && (
+          /*
+           * `suppressHydrationWarning` ở đây là vì TRÌNH DUYỆT, không phải vì code:
+           * sau khi parse xong, trình duyệt XOÁ thuộc tính `nonce` khỏi DOM (để một
+           * script bị chèn vào không đọc được nonce mà tự cấp phép cho mình). React
+           * so `nonce` nó vừa render với `nonce=""` đang có trong DOM và báo lệch
+           * hydration. Không có cách nào sửa được từ phía ta, vì hành vi xoá đó
+           * chính là lớp bảo vệ.
+           */
+          <script
+            nonce={nonce}
+            suppressHydrationWarning
+            dangerouslySetInnerHTML={{ __html: SCRIPT_GIAO_DIEN }}
+          />
+        )}
+        <header className="bg-chrome py-3 text-chrome-ink">
           <Wrap className="flex items-center justify-between gap-4">
             <Link href="/" className="text-xl font-extrabold tracking-tight no-underline">
               Kido<span className="text-accent">Game</span>
             </Link>
-            <SiteNav />
+            <div className="flex items-center gap-1 sm:gap-2">
+              <SiteNav />
+              <ThemeToggle />
+            </div>
           </Wrap>
         </header>
         <main className="flex-1">
