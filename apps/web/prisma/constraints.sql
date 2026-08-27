@@ -35,6 +35,14 @@ ALTER TABLE "ModerationLog"
   ADD CONSTRAINT moderationlog_exactly_one_target
   CHECK (("gameId" IS NOT NULL) <> ("childId" IS NOT NULL));
 
+-- Một yêu cầu gỡ bản quyền đã xử lý thì PHẢI có mốc thời gian xử lý, và một yêu cầu
+-- còn mở thì KHÔNG được có. Hai cột này là thứ duy nhất chứng minh đã trả lời đúng
+-- hạn đã hứa công khai trên trang điều khoản; lệch nhau là mất khả năng chứng minh.
+ALTER TABLE "TakedownRequest" DROP CONSTRAINT IF EXISTS takedown_resolved_matches_status;
+ALTER TABLE "TakedownRequest"
+  ADD CONSTRAINT takedown_resolved_matches_status
+  CHECK (("status" = 'OPEN') = ("resolvedAt" IS NULL));
+
 -- Lượt chơi và lượt report không bao giờ âm.
 ALTER TABLE "Game" DROP CONSTRAINT IF EXISTS game_counts_non_negative;
 ALTER TABLE "Game"

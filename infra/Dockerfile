@@ -50,6 +50,26 @@ RUN pnpm install --frozen-lockfile
 COPY apps/web ./apps/web
 COPY infra ./infra
 
+# ---------------------------------------------------------------------------
+# CSP của app được TÍNH LÚC BUILD, không phải lúc chạy.
+#
+# `headers()` trong next.config.ts được Next đánh giá trong `next build` rồi nướng
+# thẳng vào .next/routes-manifest.json. Nghĩa là `frame-src` lấy giá trị PLAYER_ORIGIN
+# tại thời điểm BUILD. Đặt PLAYER_ORIGIN ở compose environment là QUÁ MUỘN — nó chỉ
+# sửa được URL do `objectUrl()` sinh ra (hàm đó đọc env lúc gọi), còn CSP vẫn giữ
+# giá trị mặc định của dev là http://127.0.0.1:3001.
+#
+# Hậu quả nếu quên: iframe trỏ đúng player domain nhưng CSP chặn nó, và triệu chứng
+# là "game không boot" / "stage 0x0" — nhìn y hệt lỗi đóng gói. Đã vấp thật khi
+# `docker compose up` lần đầu.
+#
+# BUILT_PLAYER_ORIGIN được giữ lại trong image để `src/instrumentation.ts` đối chiếu
+# lúc khởi động: lệch là chết ngay với thông báo rõ ràng, thay vì im lặng hỏng.
+# ---------------------------------------------------------------------------
+ARG PLAYER_ORIGIN=http://127.0.0.1:3001
+ENV PLAYER_ORIGIN=${PLAYER_ORIGIN} \
+    BUILT_PLAYER_ORIGIN=${PLAYER_ORIGIN}
+
 # `pnpm install` ở trên đã chạy `prepare` của packages/sb3 nên dist/ thường có
 # rồi; gọi build tường minh ở đây là lưới an toàn, vì dist/ KHÔNG được track
 # trong git và nếu prepare bị bỏ qua thì Next sẽ không tìm thấy @kidogame/sb3

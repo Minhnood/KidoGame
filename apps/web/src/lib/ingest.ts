@@ -7,9 +7,11 @@ import {
 } from '@kidogame/sb3';
 import type { Prisma } from '@prisma/client';
 import { prisma } from './db';
+import { appOrigin, sendMail } from './mail';
 import { putObject } from './storage';
 import { PROFANITY_CONTENT, PROFANITY_TEXT } from './profanity';
 import { buildTitleSearch } from './search';
+import { sanitizeText } from './text';
 
 /** Số game một bé được đăng trong 24h. Chặn spam làm ngập trang chủ. */
 export const UPLOADS_PER_CHILD_PER_DAY = 10;
@@ -24,20 +26,6 @@ export const MAX_TAGS_PER_GAME = 2;
 
 export const MAX_TITLE_LENGTH = 80;
 export const MAX_DESCRIPTION_LENGTH = 500;
-
-/**
- * Làm sạch text do trẻ nhập: bỏ ký tự điều khiển, gộp khoảng trắng, cắt độ dài.
- * Không escape HTML ở đây — React tự escape khi render, và packager tự escape
- * khi nhúng vào <title>. Escape hai lần sẽ hiện ra `&amp;` trên giao diện.
- */
-export function sanitizeText(input: string, maxLength: number): string {
-  return input
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x00-\x1f\x7f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, maxLength);
-}
 
 /** Chỉ dùng cho tiêu đề/mô tả — nội dung .sb3 do `validateAndNormalize` lo, với danh sách khác. */
 function containsProfanity(text: string): boolean {
@@ -156,11 +144,75 @@ export async function ingestGame(input: IngestInput): Promise<IngestResult> {
     }
   }
 
+  /*
+   * Báo cho bố mẹ. Gửi trượt KHÔNG được huỷ việc đăng game — game đã đóng gói,
+   * đã ghi đĩa, đã vào DB rồi; ném lỗi ở đây chỉ khiến bé thấy "đăng thất bại"
+   * trong khi game vẫn nằm công khai trên trang chủ. Trạng thái tệ nhất có thể.
+   */
+  try {
+    await notifyParentOfNewGame(game.id);
+  } catch (e) {
+    console.error('[ingest] không gửi được mail báo phụ huynh:', e);
+  }
+
   return {
     gameId: game.id,
     warnings: normalized.warnings.map((w) => ({ code: w.code, message: w.message })),
     bytesWritten: writes.filter(Boolean).length,
   };
+}
+
+/**
+ * Mail báo bố mẹ mỗi khi con đăng một game mới.
+ *
+ * Đây KHÔNG phải tính năng phụ. Cả sản phẩm chọn "public ngay, không duyệt trước",
+ * và bù lại bằng hậu kiểm — mà con mắt đầu tiên của hậu kiểm chính là phụ huynh
+ * biết con vừa đăng cái gì. Không có lá thư này thì lớp hậu kiểm chỉ còn lại người
+ * lạ bấm nút báo cáo, tức là phải có người lạ nhìn thấy nội dung xấu trước đã.
+ *
+ * Nằm TRONG `ingestGame` chứ không nằm ở route upload, cố ý: sau này có thêm đường
+ * đăng game nào khác (import hàng loạt, API cho lớp học) thì nó vẫn tự chạy theo.
+ * Đặt ở tầng route là để quên.
+ *
+ * Gửi cho MỌI game mới, kể cả khi bé đăng mười cái một ngày. Gộp lại thành một thư
+ * cuối ngày thì tiết kiệm hòm thư nhưng làm hỏng đúng thứ cần: biết SỚM.
+ */
+async function notifyParentOfNewGame(gameId: string): Promise<void> {
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      child: { select: { displayName: true, parent: { select: { email: true } } } },
+    },
+  });
+  if (!game) return;
+
+  const origin = appOrigin();
+  await sendMail({
+    to: game.child.parent.email,
+    subject: `Bé ${game.child.displayName} vừa đăng game "${game.title}"`,
+    text: [
+      'Chào bạn,',
+      '',
+      `Bé ${game.child.displayName} vừa đăng một game mới lên KidoGame:`,
+      '',
+      `  ${game.title}`,
+      ...(game.description ? [`  ${game.description}`] : []),
+      `  ${origin}/game/${game.id}`,
+      '',
+      'Game đã hiện công khai ngay. KidoGame không duyệt trước, nên lá thư này là',
+      'cách để bạn biết và xem lại.',
+      '',
+      'Nếu có gì chưa ổn, bạn ẩn game của con bất cứ lúc nào ở trang quản lý —',
+      'không cần chờ ai duyệt:',
+      '',
+      `  ${origin}/phu-huynh`,
+      '',
+      `Điều khoản và cách chúng tôi xử lý nội dung: ${origin}/dieu-khoan`,
+    ].join('\n'),
+  });
 }
 
 async function sha256(buf: Buffer): Promise<string> {

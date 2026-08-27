@@ -2,7 +2,15 @@
 #
 #   cp .env.example .env   # rồi sửa mật khẩu và domain
 #   docker compose up -d --build
-#   docker compose run --rm web pnpm --filter @kidogame/web db:push
+#   docker compose run --rm web pnpm --filter @kidogame/web db:deploy
+#
+# `db:deploy` chứ KHÔNG phải `db:push`: chỉ khác ở `--skip-generate`. Prisma client
+# đã được sinh lúc build image; `prisma generate` chạy lại trong container sẽ cố ghi
+# vào /app/node_modules do root sở hữu, trong khi tiến trình chạy bằng user `node` —
+# kết quả là một lỗi EACCES to đùng ngay giữa bước migrate. Nó KHÔNG làm hỏng gì
+# (schema đã push xong, constraints vẫn chạy tiếp), nhưng một bước deploy bình thường
+# mà in ra lỗi quyền là thứ khiến người ta hoặc hoảng, hoặc quen mắt rồi bỏ qua cả
+# những lỗi thật sau này.
 #
 # BỐN SERVICE: db, web, caddy, backup. KHÔNG có service nào chạy
 # player-server.mjs — file đó chỉ dùng khi dev trên máy local. Ở production chính
@@ -48,6 +56,15 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile
+      args:
+        # PHẢI truyền lúc BUILD, không chỉ đặt ở `environment` bên dưới: CSP
+        # `frame-src` của app được Next nướng vào bundle trong `next build`.
+        # Xem khối giải thích dài trong infra/Dockerfile.
+        #
+        # Hệ quả cần nhớ: ĐỔI PLAYER_DOMAIN THÌ PHẢI BUILD LẠI. Chạy
+        # `docker compose up -d` mà không có `--build` là image cũ giữ nguyên CSP
+        # cũ. App sẽ từ chối khởi động và nói rõ lý do, chứ không hỏng im lặng.
+        PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
     restart: unless-stopped
     depends_on:
       db:
@@ -65,6 +82,11 @@ services:
       # production chính là rò token. Xem src/lib/mail.ts.
       RESEND_API_KEY: ${RESEND_API_KEY:?thieu RESEND_API_KEY trong infra/.env}
       MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
+      # Hiện trên /dieu-khoan và nhận mail yêu cầu gỡ bản quyền. KHÔNG dùng `:?`
+      # như hai biến trên: thiếu tên đơn vị vận hành chỉ làm trang điều khoản kém
+      # đầy đủ, còn `:?` sẽ chặn cả stack không khởi động được vì một dòng chữ.
+      OPERATOR_NAME: ${OPERATOR_NAME:-}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
     volumes:
       # Ghi được: đây là tiến trình nhận upload và đóng gói game.
       - storage:/srv/storage
@@ -126,6 +148,10 @@ services:
       BACKUP_DIR: /backups
       BACKUP_KEEP: ${BACKUP_KEEP:-7}
       BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      # Không có dòng này thì container chạy UTC, và BACKUP_HOUR=3 nghĩa là 3 giờ
+      # sáng UTC — tức 10 GIỜ SÁNG giờ Việt Nam, đúng quãng trẻ hay chơi. Con số 3
+      # đọc lên ai cũng hiểu là 3 giờ sáng, nên phải làm cho nó đúng là 3 giờ sáng.
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     volumes:
       - ./backup.sh:/backup.sh:ro
       # Chỉ đọc: việc của nó là sao chép ra, không bao giờ sửa file game.

@@ -16,6 +16,8 @@ import fs from 'node:fs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const MAIL_LOG = process.env.MAIL_LOG;
+/** Có thì kiểm thêm mail báo phụ huynh khi con đăng game. Không có thì bỏ qua phần đó. */
+const FIXTURE = process.env.SB3_FIXTURE ?? '';
 
 if (!MAIL_LOG || !fs.existsSync(MAIL_LOG)) {
   console.error(`Thiếu MAIL_LOG hoặc file không tồn tại: ${MAIL_LOG}`);
@@ -40,6 +42,31 @@ function latestLink(path) {
   const re = new RegExp(`https?://[^\\s│]+${path}\\?token=[A-Za-z0-9_-]+`, 'g');
   const all = log.match(re);
   return all ? all[all.length - 1] : null;
+}
+
+/**
+ * Chờ một lá mail GỬI TỚI `to` mà nội dung khớp `re`.
+ *
+ * Cắt log theo từng khối mail rồi mới đối chiếu, chứ không grep cả file: grep cả
+ * file thì "có email này ở đâu đó" và "có email này trong CÙNG lá thư đó" là một,
+ * nên phép kiểm sẽ xanh cả khi mail gửi nhầm cho người khác.
+ */
+async function waitForMailTo(to, re, timeoutMs = 20000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const log = fs.readFileSync(MAIL_LOG, 'utf8');
+    const found = log
+      .split('┌─ MAIL')
+      .slice(1)
+      .some((block) => {
+        const body = block.split('└─')[0] ?? '';
+        const toLine = body.split('\n').find((line) => line.includes('tới:')) ?? '';
+        return toLine.includes(to) && re.test(body);
+      });
+    if (found) return true;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return false;
 }
 
 /** Log được ghi bất đồng bộ, nên chờ link xuất hiện thay vì đọc một phát. */
@@ -114,6 +141,70 @@ if (verifyLink) {
     strangerText.replace(/\n+/g, ' ').slice(0, 80)
   );
   await stranger.close();
+}
+
+// ---------- Con đăng game -> bố mẹ nhận mail ----------
+/*
+ * Phải chạy TRƯỚC phần đặt lại mật khẩu: việc đó thu hồi mọi phiên của phụ huynh,
+ * nên `parentCtx` sau đó không tạo được tài khoản con nữa.
+ *
+ * Đây là lớp hậu kiểm ĐẦU TIÊN của cả sản phẩm. Game public ngay khi đăng, không
+ * duyệt trước; nếu bố mẹ không được báo thì người phát hiện nội dung xấu đầu tiên
+ * bắt buộc phải là một người lạ đã trót nhìn thấy nó.
+ */
+if (FIXTURE) {
+  const CHILD_USER = `email${suffix}`;
+  const CHILD_PASS = 'be1234';
+  const GAME_TITLE = `Game bao bo me ${suffix}`;
+
+  const p = await parentCtx.newPage();
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  await p.fill('#displayName', 'Bé Báo Tin');
+  await p.fill('#username', CHILD_USER);
+  await p.fill('#password', CHILD_PASS);
+  await p.click('[data-testid=auth-form] button[type=submit]');
+  await p.waitForTimeout(2500);
+  await p.close();
+
+  const childCtx = await newSession();
+  const c = await childCtx.newPage();
+  await c.goto(`${APP}/be-dang-nhap`, { waitUntil: 'networkidle' });
+  await c.fill('#username', CHILD_USER);
+  await c.fill('#password', CHILD_PASS);
+  await c.click('[data-testid=auth-form] button[type=submit]');
+  await c.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
+
+  await c.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
+  await c.fill('#title', GAME_TITLE);
+  await c.fill('#description', 'Do infra/e2e-email.mjs tạo ra.');
+  await c.setInputFiles('#file', FIXTURE);
+  await c.click('[data-testid=upload-form] button[type=submit]');
+  await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
+  const gameUrl = c.url();
+  check('Bé đăng được game', /\/game\//.test(gameUrl), gameUrl);
+  await c.close();
+  await childCtx.close();
+
+  check(
+    'Con đăng game thì bố mẹ nhận được mail báo',
+    await waitForMailTo(EMAIL, new RegExp(GAME_TITLE))
+  );
+  check(
+    'Mail báo có link tới đúng game vừa đăng',
+    await waitForMailTo(EMAIL, new RegExp(gameUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))),
+    gameUrl
+  );
+  /*
+   * Lá thư phải chỉ ra LỐI ĐI, không chỉ đưa tin. Bố mẹ đọc xong mà thấy có gì
+   * chưa ổn thì việc kế tiếp là ẩn game — nếu thư không nói ẩn ở đâu thì lớp hậu
+   * kiểm dừng lại ngay ở chỗ nó vừa bắt đầu.
+   */
+  check(
+    'Mail báo chỉ chỗ để bố mẹ tự ẩn game',
+    await waitForMailTo(EMAIL, /\/phu-huynh/)
+  );
+} else {
+  console.log('⏭  Bỏ qua phần mail báo phụ huynh (không có SB3_FIXTURE)');
 }
 
 // ---------- Quên mật khẩu: không được lộ email có tồn tại hay không ----------

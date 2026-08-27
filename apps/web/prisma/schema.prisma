@@ -159,10 +159,11 @@ model Game {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  child          Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
-  reports        Report[]
-  moderationLogs ModerationLog[]
-  tags           GameTag[]
+  child            Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
+  reports          Report[]
+  moderationLogs   ModerationLog[]
+  tags             GameTag[]
+  takedownRequests TakedownRequest[]
 
   @@index([childId])
   @@index([status, createdAt])
@@ -192,6 +193,70 @@ model Report {
   /// Một người chỉ report một game một lần.
   @@unique([gameId, reporterIpHash])
   @@index([status])
+}
+
+enum TakedownStatus {
+  OPEN
+  /// Khiếu nại đúng — game đã bị gỡ hẳn.
+  ACCEPTED
+  /// Khiếu nại không đúng — game được cho hiện lại (nếu chính nó gây ra việc ẩn).
+  REJECTED
+}
+
+/// Yêu cầu gỡ game vì vi phạm bản quyền.
+///
+/// TÁCH KHỎI `Report` một cách có chủ đích, dù `Report` đã có lý do `CHEP_BAI`.
+/// Hai thứ khác nhau ở người gửi và ở cái cần thu thập:
+///
+///  - `Report` là của người dùng trong nhà — thường là trẻ hoặc phụ huynh đi ngang
+///    qua. Nó cố tình KHÔNG có ô nhập tự do, và chỉ cần đếm tới ngưỡng.
+///  - Yêu cầu gỡ là của người NGOÀI, thường là tác giả bản gốc, không có tài khoản
+///    ở đây. Cái cần là danh tính người khiếu nại và căn cứ sở hữu — chính hai thứ
+///    mà form báo cáo cố tình không hỏi.
+///
+/// Không lưu cột "đã cam đoan trung thực": `submitTakedownRequest` từ chối mọi yêu
+/// cầu chưa cam đoan, nên mọi hàng trong bảng đều đã cam đoan. Một cột luôn luôn
+/// `true` không nói lên gì.
+model TakedownRequest {
+  id     String @id @default(cuid())
+  gameId String
+
+  /// Người khiếu nại tự khai. KHÔNG xác minh được — đó chính là lý do phải có
+  /// bước admin xem lại, chứ không gỡ hẳn ngay khi nhận.
+  claimantName  String
+  claimantEmail String
+  /// Căn cứ: quan hệ với bản gốc, link tới bản gốc, ngày đăng...
+  evidence String
+
+  status TakedownStatus @default(OPEN)
+
+  /// CHÍNH yêu cầu này có phải là thứ đã chuyển game sang HIDDEN hay không.
+  ///
+  /// Cần để hoàn tác cho đúng. Game có thể đã bị ẩn từ trước vì lý do khác (phụ
+  /// huynh tự ẩn, hoặc đủ ngưỡng báo cáo); bác bỏ khiếu nại mà cứ thế cho hiện
+  /// lại thì sẽ lật luôn quyết định của người khác, vì một việc chẳng liên quan.
+  didHide Boolean @default(false)
+
+  /// Hash của IP người gửi. CHỈ dùng để đếm hạn mức chống spam — KHÔNG dùng làm
+  /// danh tính. Khác hẳn `Report.reporterIpHash`, cột đó vừa chống spam vừa là khoá
+  /// chống trùng, và ở đây làm vậy là sai: hai người khác nhau cùng một mạng công ty
+  /// cùng khiếu nại thì người thứ hai bị nuốt yêu cầu trong im lặng.
+  ipHash String
+
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  /// Id của admin đã xử lý. Chuỗi thường, không phải khoá ngoại — giống `ModerationLog.actorId`.
+  resolvedBy     String?
+  resolutionNote String    @default("")
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  /// Chống trùng theo EMAIL người khiếu nại, không theo IP: người khiếu nại tự khai
+  /// danh tính, và chính danh tính đó mới là thứ "cùng một người" nghĩa là gì ở đây.
+  /// Gửi lại thì im lặng coi như đã nhận, đúng cách `reportGame` xử lý báo cáo trùng.
+  @@unique([gameId, claimantEmail])
+  @@index([status, createdAt])
+  @@index([ipHash, createdAt])
 }
 
 /// Vết của mọi thao tác kiểm duyệt.

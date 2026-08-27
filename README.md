@@ -36,16 +36,25 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 ## Kiểm thử
 
 ```bash
-pnpm --filter @kidogame/sb3 test           # 48 unit test, gồm fixture độc hại
+pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 14 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 30 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 19 kiểm tra
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 29 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 32 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-takedown.mjs     # 40 kiểm tra
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 12 kiểm tra
 MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs                  # 13 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-discovery.mjs    # 14 kiểm tra
 ```
+
+Hai file có số kiểm tra thay đổi theo biến môi trường bạn truyền vào:
+
+- `e2e-takedown.mjs` — 40, thành **42** khi có `MAIL_LOG` (kiểm thêm mail báo phụ huynh
+  lúc game bị tạm ẩn, và mail báo kết quả cho người khiếu nại). Nó dựng HAI game vì "gỡ
+  hẳn" không quay lui được: một game cho nhánh chấp nhận, một cho nhánh bác bỏ.
+- `e2e-email.mjs` — 13, thành **17** khi có thêm `SB3_FIXTURE` (kiểm mail báo phụ huynh
+  mỗi lần con đăng game).
 
 `e2e-email.mjs` cần server được khởi động với stdout đổ vào file, vì nó moi link
 xác minh / đặt lại mật khẩu **từ log server**:
@@ -100,6 +109,26 @@ lưu cookie qua `http://`** trên LAN — đăng nhập trên điện thoại s�
 trỏ đúng player origin, có sandbox, cookie phiên không rò sang player origin, và
 file HTML đổi tên `.sb3` bị từ chối.
 
+**Nó cũng soi thẳng header của player origin bằng `fetch`, không qua trình duyệt.** Đây
+là phần không có gì khác bắt được: nếu ai sửa cấu hình làm `.sb3` trả về `text/html`,
+mọi phép kiểm còn lại vẫn xanh — game vẫn chạy, thumbnail vẫn hiện — trong khi vừa mở
+một lỗ thực thi mã trên chính origin đang phát HTML game. Các tính chất được khẳng định:
+
+| Tính chất | Vì sao |
+|---|---|
+| `.sb3` **không** phải `text/html`, mà là `application/octet-stream` | File do người lạ upload không bao giờ được trình duyệt hiểu là trang web |
+| `.sb3` có `Content-Disposition: attachment` | Tải về, không mở |
+| Cả ba loại file có `X-Content-Type-Options: nosniff` | Thiếu nó thì trình duyệt tự đoán kiểu file, và mọi khẳng định về `Content-Type` thành vô nghĩa |
+| `.sb3` và thumbnail có `Access-Control-Allow-Origin: *` | scratch-vm fetch `.sb3` cross-origin; thiếu là game không tải được project |
+| HTML có CSP từ **header**, `frame-ancestors` khớp đúng app origin | Bắt thẳng cái bẫy lệch cổng, thay vì để nó hiện ra thành "game không boot" |
+| CSP có `connect-src 'self'` | Game không gửi được dữ liệu ra host khác |
+| Ba dạng đường dẫn sai đều 404 | Chỉ khuôn địa chỉ-hoá-theo-nội-dung mới được phát |
+
+Các phép kiểm này viết theo **tính chất** chứ không theo cấu hình, để soi production
+bằng `curl -I` là dùng lại được nguyên si. Cần thế vì `infra/player-server.mjs` (dev) và
+`infra/Caddyfile` (production) là hai file phải giữ **cùng một bộ header**, mà không gì
+buộc chúng khớp nhau ngoài việc có người nhớ — và bộ e2e chỉ chạm được bản dev.
+
 ### Tài khoản test
 
 **Tài khoản cố định, do `pnpm db:seed` tạo:**
@@ -120,6 +149,8 @@ ngẫu nhiên — cố ý như vậy để chạy lại nhiều lần mà không
 |---|---|---|---|---|
 | `e2e-auth.mjs` | `e2e-<hex>@kidogame.test` | `matkhau-dai-1234` | `e2e<hex>` | `be1234` |
 | `e2e-moderation.mjs` | `e2e-mod-<hex>@kidogame.test` | `matkhau-dai-1234` | `emod<hex>` | `be1234` |
+| `e2e-takedown.mjs` | `e2e-td-<hex>@kidogame.test` | `matkhau-dai-1234` | `etd<hex>` | `be1234` |
+| `e2e-email.mjs` | `e2e-mail-<hex>@kidogame.test` | đổi thành `matkhau-moi-5678` | `email<hex>` (chỉ khi có `SB3_FIXTURE`) | `be1234` |
 
 Hai điều dễ làm bạn bối rối khi nhìn vào DB:
 
@@ -132,8 +163,13 @@ Hai điều dễ làm bạn bối rối khi nhìn vào DB:
   `UPLOADS_PER_CHILD_PER_DAY`, và test sẽ đổ vì lý do chẳng liên quan gì tới thứ nó
   định kiểm. Thấy vậy thì dọn game của `beminh` chứ đừng đi sửa test.
 
-`e2e-moderation.mjs` cần seed đã chạy vì nó đăng nhập bằng tài khoản admin demo. Đổi
-được bằng biến môi trường `ADMIN_EMAIL` / `ADMIN_PASS` nếu bạn dùng admin khác.
+`e2e-moderation.mjs` và `e2e-takedown.mjs` cần seed đã chạy vì chúng đăng nhập bằng tài
+khoản admin demo. Đổi được bằng biến môi trường `ADMIN_EMAIL` / `ADMIN_PASS` nếu bạn
+dùng admin khác.
+
+`e2e-takedown.mjs` để lại một game ở trạng thái **đã gỡ hẳn** (`REMOVED`) — đó là kết
+quả của nhánh "khiếu nại đúng", không phải rác hỏng. Xoá phụ huynh `e2e-td-*` là nó đi
+theo.
 
 `e2e-check.mjs` đổi được tài khoản bé qua `CHILD_USERNAME` / `CHILD_PASSWORD` nếu bạn
 không muốn nó dùng `beminh`.
@@ -237,12 +273,20 @@ chứng chỉ ngay lúc khởi động, DNS chưa trỏ là thất bại.
 
 ```bash
 cd infra
-cp .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY
+cp .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY,
+                          # OPERATOR_NAME, OPERATOR_EMAIL
 docker compose up -d --build
 
 # Dựng schema. PHẢI chạy tay, không tự chạy lúc boot — tự migrate khi khởi động
 # là thứ đến một lúc nào đó sẽ tự đổi DB production vào giữa đêm.
-docker compose run --rm web pnpm --filter @kidogame/web db:push
+#
+# `db:deploy` chứ không phải `db:push` — khác đúng một cờ `--skip-generate`.
+# Prisma client đã sinh lúc build image; generate lại trong container sẽ cố ghi vào
+# /app/node_modules do root sở hữu trong khi tiến trình chạy bằng user `node`, và
+# in ra một lỗi EACCES giữa bước migrate. Nó không làm hỏng gì, nhưng một bước
+# deploy bình thường mà in lỗi quyền thì hoặc làm người ta hoảng, hoặc làm người ta
+# quen mắt bỏ qua cả những lỗi thật về sau.
+docker compose run --rm web pnpm --filter @kidogame/web db:deploy
 
 # Chỉ khi muốn có dữ liệu mẫu (tài khoản demo!). Bỏ qua nếu là VPS thật.
 docker compose run --rm web pnpm --filter @kidogame/web db:seed
@@ -255,11 +299,80 @@ nữa. Đừng sửa domain trực tiếp trong Caddyfile: lệch giữa hai ch�
 không boot"* / *"stage 0x0"* — nhìn y hệt lỗi đóng gói. Đây đúng là cái bẫy đã
 vấp ở dev khi chạy e2e lệch cổng 3000.
 
+#### Đổi `PLAYER_DOMAIN` thì PHẢI build lại image
+
+Cùng một cái bẫy, nhưng đi từ hướng ngược lại, và nó **đã xảy ra thật** ngay lần
+`docker compose up` đầu tiên.
+
+CSP `frame-src` của app được **tính lúc BUILD**: `headers()` trong `next.config.ts`
+được Next đánh giá trong `next build` rồi nướng vào `.next/routes-manifest.json`.
+Còn `objectUrl()` trong `src/lib/storage.ts` đọc `PLAYER_ORIGIN` **lúc gọi**. Hai
+thời điểm khác nhau cho cùng một giá trị.
+
+Nên nếu chỉ đặt `PLAYER_ORIGIN` ở `environment` của compose thì: iframe trỏ đúng
+player domain (URL sinh lúc chạy), nhưng CSP vẫn chỉ cho phép `http://127.0.0.1:3001`
+(mặc định lúc build) → trình duyệt chặn iframe → **"game không boot", "stage 0x0"**.
+Không có lỗi CSP nào hiện ra ở nơi bạn đang nhìn.
+
+Vì vậy compose truyền `PLAYER_ORIGIN` **qua `build.args`**, và image ghi lại giá trị
+đó thành `BUILT_PLAYER_ORIGIN`. `src/instrumentation.ts` đối chiếu hai giá trị lúc
+server khởi động; lệch là **ném lỗi ngay**, app trả 500 cho mọi request kèm log nói
+thẳng phải chạy `docker compose up -d --build`. Container không phục vụ được còn hơn
+container phục vụ mà mọi game đều là màn hình đen.
+
+```bash
+# ĐÚNG khi đổi domain
+docker compose up -d --build
+
+# SAI: image cũ giữ nguyên CSP cũ. App sẽ từ chối chạy và nói rõ vì sao.
+docker compose up -d
+```
+
+#### Thử toàn bộ stack trên máy trước khi lên VPS
+
+Chạy y nguyên cấu hình production trên laptop sẽ hỏng: Caddy thấy domain thật là đi
+xin chứng chỉ Let's Encrypt, mà domain đó không trỏ về máy bạn. Dùng domain kết thúc
+bằng `.localhost` — Caddy coi chúng là nội bộ nên cấp chứng chỉ bằng CA riêng, không
+đụng ACME. macOS phân giải sẵn `*.localhost` về 127.0.0.1, không cần sửa `/etc/hosts`.
+
+```bash
+cd infra
+cp .env.example .env
+# rồi sửa trong .env:
+#   APP_DOMAIN=app.localhost
+#   PLAYER_DOMAIN=play.localhost
+#   POSTGRES_PASSWORD=$(openssl rand -hex 24)
+#   RESEND_API_KEY=re_dummy_local   # BẮT BUỘC có giá trị, compose khai dạng `:?`
+
+docker compose up -d --build
+docker compose run --rm web pnpm --filter @kidogame/web db:deploy
+```
+
+Mở `https://app.localhost` và chấp nhận cảnh báo chứng chỉ. **Phải vào
+`https://play.localhost` một lần và chấp nhận riêng cho origin đó nữa** — không làm
+thì iframe bị chặn vì lỗi chứng chỉ, và triệu chứng lại đúng là *"game không boot"*.
+Cùng một triệu chứng, nguyên nhân thứ ba.
+
+Soi header player origin bằng `curl -k` (`-k` vì chứng chỉ tự ký):
+
+```bash
+curl -skI https://play.localhost/sb3/<xx>/<sha>.sb3
+```
+
+Đối chiếu với bảng tính chất ở mục [Kiểm thử](#kiểm-thử). `infra/e2e-check.mjs` đã tự
+động hoá đúng bộ đó cho bản dev; bước tay ở đây là để xác nhận Caddy khớp với
+`player-server.mjs`.
+
 ### Sao lưu
 
 Service `backup` chạy sẵn trong stack, mỗi ngày vào `BACKUP_HOUR` (mặc định 3
 giờ): dump Postgres + đóng gói `storage`, giữ `BACKUP_KEEP` bản gần nhất (mặc
 định 7), đổ vào `BACKUP_HOST_DIR` trên host (mặc định `infra/backups`).
+
+**3 giờ đó là giờ Việt Nam**, vì compose đặt `TZ=Asia/Ho_Chi_Minh` cho service này.
+Không có dòng TZ thì container chạy UTC và `BACKUP_HOUR=3` sẽ là **10 giờ sáng giờ
+ta** — đúng quãng trẻ hay chơi. Con số 3 đọc lên ai cũng hiểu là 3 giờ sáng, nên nó
+phải đúng là 3 giờ sáng. Vận hành ở múi giờ khác thì đổi `TZ` trong `infra/.env`.
 
 Là một service trong compose chứ không phải cron trên host, cố ý: cron trên host
 là một bước cài đặt riêng nằm ngoài repo, và là thứ người ta quên. Backup mà quên
@@ -442,6 +555,19 @@ Ba quyết định có chủ đích:
   Việc đặt lại cũng tự đánh dấu email đã xác minh, vì bấm được link trong mail đã
   chứng minh đúng điều mà xác minh cần chứng minh.
 
+**Con đăng game thì bố mẹ nhận mail ngay.** Đây không phải tính năng phụ mà là lớp hậu
+kiểm ĐẦU TIÊN: cả sản phẩm chọn "public ngay, không duyệt trước", nên nếu bố mẹ không
+được báo thì người phát hiện nội dung xấu đầu tiên bắt buộc phải là một người lạ đã trót
+nhìn thấy nó. Thư có tên game, mô tả, link chơi, và link `/phu-huynh` để tự ẩn.
+
+Mail này gửi từ `notifyParentOfNewGame` **bên trong `ingestGame`**, không phải ở route
+upload — sau này có thêm đường đăng game nào khác thì nó vẫn tự chạy theo; đặt ở tầng
+route là để quên. Gửi trượt **không** huỷ việc đăng: game đã đóng gói, đã ghi đĩa, đã
+vào DB rồi, ném lỗi ở đó chỉ khiến bé thấy "đăng thất bại" trong khi game vẫn nằm công
+khai — trạng thái tệ nhất có thể. Gửi cho MỌI game mới, kể cả khi bé đăng mười cái một
+ngày: gộp thành một thư cuối ngày thì tiết kiệm hòm thư nhưng hỏng đúng thứ cần là biết
+sớm.
+
 Kiểm duyệt hoạt động thế nào: ai cũng báo cáo được, kể cả khách chưa đăng nhập. Đủ
 `REPORT_AUTO_HIDE_THRESHOLD` (= 3, trong `src/lib/moderation.ts`) báo cáo thì game tự
 chuyển sang `HIDDEN` và ghi `ModerationLog` với `actorId = "system"`. Admin
@@ -467,9 +593,79 @@ nó thì admin phải quyết định gỡ hay giữ mà không nhìn thấy n�
 từ `/admin` cũng nhận 404. Ở chế độ này trang hiện banner cảnh báo, **không đếm lượt
 chơi**, và ẩn nút báo cáo.
 
-**Hạn chế đã biết:** admin khoá tài khoản bé thì thao tác đó KHÔNG được ghi vào
-`ModerationLog`, vì bảng ấy bắt buộc có `gameId` (khoá ngoại tới `Game`) mà khoá tài
-khoản không gắn với game nào. Muốn có vết kiểm toán đầy đủ thì phải nới schema — cho
-`gameId` nullable, hoặc tách một bảng log riêng cho thao tác lên tài khoản.
+`ModerationLog` nhắm vào **đúng một** đối tượng: một game, hoặc một tài khoản trẻ. Hai
+cột `gameId`/`childId` đều nullable, và `CHECK` constraint
+`moderationlog_exactly_one_target` trong `prisma/constraints.sql` buộc đúng một trong
+hai. Nhờ vậy việc admin khoá tài khoản một bé — thao tác nặng nhất trong hệ thống — cũng
+để lại vết. Trang `/admin` hiện hai danh sách RIÊNG: lịch sử của game, và lịch sử của
+tài khoản. Trộn chung là làm mờ đúng chỗ cần rõ nhất.
+
+**Chỉ log thao tác của ADMIN.** Phụ huynh khoá con mình (`setChildLocked` trong
+`auth.ts`) KHÔNG ghi log: đó là quyền của bố mẹ trong gia đình, không phải hành vi kiểm
+duyệt, và ghi nó vào cùng bảng sẽ làm loãng đúng câu hỏi mà bảng này tồn tại để trả lời
+— *người ngoài đã làm gì với tài khoản của con tôi*.
 
 Tài khoản đăng nhập thử: xem mục [Tài khoản test](#tài-khoản-test).
+
+### Điều khoản và luồng gỡ bản quyền
+
+Hai trang công khai, ai cũng vào được, có link ở chân trang mọi trang:
+
+- `/dieu-khoan` — điều khoản sử dụng.
+- `/bao-cao-ban-quyen` — biểu mẫu yêu cầu gỡ, **không cần đăng nhập**.
+
+Lý do có luồng này: trẻ hay đăng lại game của người khác. Người làm ra bản gốc gần như
+chắc chắn không có tài khoản ở đây, nên bắt đăng ký trước khi khiếu nại là dựng đúng bức
+tường trước đúng người cần đi qua.
+
+**Tách khỏi nút báo cáo, dù `Report` đã có lý do `CHEP_BAI`.** Hai thứ khác nhau ở người
+gửi và ở cái cần thu thập. Báo cáo là của người trong nhà, cố ý KHÔNG có ô nhập tự do, và
+chỉ cần đếm tới ngưỡng. Yêu cầu gỡ cần danh tính người khiếu nại và căn cứ sở hữu — đúng
+hai thứ form báo cáo cố tình không hỏi. Trong hộp báo cáo có một dòng trỏ sang đây.
+
+Chính sách, **do chủ dự án chốt**: ẩn ngay khi tiếp nhận, xác minh sau, sai thì khôi phục.
+
+1. Nhận là chuyển game sang `HIDDEN` ngay, trước khi có ai kịp đọc.
+2. Mail cho đơn vị vận hành (`OPERATOR_EMAIL`) và cho phụ huynh của bé.
+3. Admin phán xử ở `/admin`, hàng đợi nằm trên cùng, cũ nhất lên trước.
+4. Mail báo kết quả cho cả hai phía.
+
+Chấp nhận thì game sang `REMOVED` (gỡ hẳn, phụ huynh không tự bật lại được). Bác bỏ thì
+game hiện lại — **nhưng chỉ khi chính yêu cầu đó là thứ đã ẩn nó** (cột
+`TakedownRequest.didHide`), và chỉ khi lúc đó không còn yêu cầu nào khác đang mở, cũng
+như `reportCount` chưa chạm ngưỡng. Không có ba điều kiện ấy thì kết luận của một vụ sẽ
+lật quyết định của một vụ khác.
+
+**Không nói cho phụ huynh biết người khiếu nại là ai.** Người đó để lại tên và email thật
+cho chúng ta, không phải cho phụ huynh. Chuyển tiếp danh tính đó là mở đường cho hai bên
+đôi co trực tiếp, mà một bên đang bênh con mình. Cần đối chất thì admin đứng giữa.
+
+Chống trùng khoá theo **email người khiếu nại**, không theo IP — khác hẳn `Report`. Ở đây
+người gửi tự khai danh tính, và IP là danh tính tồi: hai người khác nhau cùng một mạng
+công ty cùng khiếu nại thì người thứ hai bị nuốt yêu cầu trong im lặng. IP chỉ dùng để
+đếm hạn mức (`TAKEDOWNS_PER_IP_PER_DAY` = 5).
+
+Ô cam đoan trung thực **không có cột trong DB**: `submitTakedownRequest` từ chối mọi yêu
+cầu chưa cam đoan, nên mọi hàng đều đã cam đoan, và một cột luôn `true` không nói lên gì.
+Server kiểm lại chứ không tin `required` của HTML — hàng rào đó đi vòng qua trong một giây.
+
+Tên và email đơn vị vận hành đọc từ biến môi trường, **không viết vào code**: repo công
+khai, mà đây là thông tin thật của một con người.
+
+```bash
+OPERATOR_NAME="Tên bạn hoặc tên tổ chức"
+OPERATOR_EMAIL="lienhe@kidogame.vn"
+```
+
+Thiếu hai biến này KHÔNG làm sập web (khác `RESEND_API_KEY`) — `/dieu-khoan` chỉ hiện một
+dòng cảnh báo chưa cấu hình. Nhưng mail yêu cầu gỡ sẽ bay vào một hộp thư không ai đọc.
+
+**`/dieu-khoan` phải là `force-dynamic`.** Nó in ra giá trị của hai biến trên, mà chúng
+chỉ có lúc chạy. Image Docker build một lần rồi chạy nhiều nơi; để Next render sẵn lúc
+build là đóng băng giá trị của máy build vào trang. Cùng lý do, chân trang cố ý CHỈ có
+link — in tên đơn vị vận hành ở layout gốc là ép cả web phải render động.
+
+Hạn trả lời tính bằng **ngày làm việc** (`slaDueAt` trong `src/lib/operator.ts`), bỏ thứ
+bảy và chủ nhật, để một yêu cầu đến chiều thứ sáu không bị báo trễ vào thứ hai. Không trừ
+ngày lễ: lịch nghỉ Việt Nam đổi theo năm và phải cập nhật tay, mà một bảng lịch lỡ quên
+cập nhật thì sai một cách âm thầm.

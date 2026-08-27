@@ -64,6 +64,9 @@ const thumbOk = await page.locator('[data-testid=game-card] img').first().evalua
 });
 check('Thumbnail tải được từ player origin', thumbOk);
 
+// Giữ lại để lát nữa soi header. Trang game không có thumbnail nên phải lấy ở đây.
+const thumbUrl = await page.locator('[data-testid=game-card] img').first().getAttribute('src');
+
 // ---------- Trang chơi game ----------
 await page.locator('[data-testid=game-card]').first().click();
 await page.waitForLoadState('networkidle');
@@ -109,6 +112,135 @@ check(
 );
 check('Thanh điều khiển hiện đủ nút', stage.greenFlag);
 check('Không có lỗi JS trên trang', pageErrors.length === 0, pageErrors.join('; '));
+
+// ---------- Header của player origin ----------
+/*
+ * Soi thẳng bằng fetch, không qua trình duyệt.
+ *
+ * Đây là phần bảo mật KHÔNG có gì khác bắt được. Toàn bộ mô hình an toàn của
+ * KidoGame dựa trên một câu: file do người lạ upload được phát từ một origin khác,
+ * và KHÔNG BAO GIỜ được trình duyệt hiểu là HTML để chạy trên đó. Nếu ai sửa cấu
+ * hình làm `.sb3` trả về `text/html`, mọi phép kiểm còn lại trong bộ này vẫn xanh —
+ * game vẫn chạy, thumbnail vẫn hiện — trong khi vừa mở ra một lỗ thực thi mã.
+ *
+ * Đọc header chứ không tin file cấu hình: `infra/player-server.mjs` (dev) và
+ * `infra/Caddyfile` (production) là HAI file phải giữ cùng một bộ header, và không
+ * gì buộc chúng khớp nhau ngoài việc có người nhớ. Bộ e2e chỉ chạm được bản dev,
+ * nên khi sửa một bên thì phải sửa cả bên kia — chính vì thế các phép kiểm dưới đây
+ * viết theo TÍNH CHẤT cần có, để copy sang soi production bằng `curl -I` là xong.
+ */
+{
+  const sb3Url = await page.locator('a[download]').first().getAttribute('href');
+
+  /** Lấy header bằng HEAD — không cần tải cả file .sb3 về chỉ để đọc vài dòng. */
+  const head = async (url) => {
+    const res = await fetch(url, { method: 'HEAD' });
+    const h = {};
+    res.headers.forEach((v, k) => {
+      h[k] = v;
+    });
+    return { status: res.status, h };
+  };
+
+  const sb3 = await head(sb3Url);
+  const html = await head(frameSrc);
+  const thumb = await head(thumbUrl);
+
+  check('Ba loại file trên player origin đều phát được', [sb3, html, thumb].every((r) => r.status === 200), `sb3 ${sb3.status} · html ${html.status} · thumb ${thumb.status}`);
+
+  /*
+   * Phép kiểm QUAN TRỌNG NHẤT của cả bộ này.
+   * .sb3 là file do người lạ upload. Trả về text/html là biến nó thành trang web
+   * chạy được trên player origin — nơi đang phát HTML game thật, tức cùng origin
+   * với chúng, tức đọc được mọi thứ của chúng.
+   */
+  check(
+    '.sb3 KHÔNG được trả về dạng HTML',
+    !/text\/html/i.test(sb3.h['content-type'] ?? ''),
+    sb3.h['content-type'] ?? '(thiếu content-type)'
+  );
+  check(
+    '.sb3 trả về application/octet-stream',
+    /application\/octet-stream/i.test(sb3.h['content-type'] ?? ''),
+    sb3.h['content-type'] ?? '(thiếu)'
+  );
+  check(
+    '.sb3 có Content-Disposition attachment (tải về chứ không mở)',
+    /attachment/i.test(sb3.h['content-disposition'] ?? ''),
+    sb3.h['content-disposition'] ?? '(thiếu)'
+  );
+
+  // nosniff: thiếu nó thì trình duyệt tự đoán kiểu file theo nội dung, và mọi
+  // khẳng định về Content-Type ở trên trở thành vô nghĩa.
+  for (const [name, res] of [['.sb3', sb3], ['HTML game', html], ['thumbnail', thumb]]) {
+    check(
+      `${name} có X-Content-Type-Options: nosniff`,
+      (res.h['x-content-type-options'] ?? '').toLowerCase() === 'nosniff',
+      res.h['x-content-type-options'] ?? '(thiếu)'
+    );
+  }
+
+  // scratch-vm fetch .sb3 cross-origin từ trong iframe. Thiếu CORS là game không
+  // tải được project, và triệu chứng không hề chỉ vào header.
+  check(
+    '.sb3 có Access-Control-Allow-Origin (scratch-vm fetch cross-origin)',
+    sb3.h['access-control-allow-origin'] === '*',
+    sb3.h['access-control-allow-origin'] ?? '(thiếu)'
+  );
+  check(
+    'thumbnail có Access-Control-Allow-Origin',
+    thumb.h['access-control-allow-origin'] === '*',
+    thumb.h['access-control-allow-origin'] ?? '(thiếu)'
+  );
+  check(
+    'thumbnail trả về image/webp',
+    /image\/webp/i.test(thumb.h['content-type'] ?? ''),
+    thumb.h['content-type'] ?? '(thiếu)'
+  );
+
+  /*
+   * frame-ancestors phải khớp ĐÚNG app origin.
+   *
+   * Đây là cái bẫy đã vấp nhiều lần: chạy e2e ở cổng khác 3000 mà quên đổi player
+   * server thì iframe bị chặn, và triệu chứng là "game không boot" / "stage 0x0" —
+   * nhìn y hệt lỗi đóng gói, dẫn người ta đi lục packages/sb3 hàng giờ. Phép kiểm
+   * này biến cả chuỗi đó thành một dòng đỏ nói thẳng chỗ sai.
+   */
+  const csp = html.h['content-security-policy'] ?? '';
+  check(
+    'HTML game có Content-Security-Policy từ header',
+    csp.length > 0,
+    csp ? `${csp.slice(0, 60)}…` : '(thiếu)'
+  );
+  check(
+    `CSP frame-ancestors khớp app origin (${APP})`,
+    new RegExp(`frame-ancestors\\s+${APP.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|;|$)`).test(csp),
+    csp.match(/frame-ancestors[^;]*/)?.[0] ?? '(không có frame-ancestors)'
+  );
+  check(
+    "CSP khoá connect-src để game không gửi dữ liệu ra ngoài",
+    /connect-src 'self'/.test(csp),
+    csp.match(/connect-src[^;]*/)?.[0] ?? '(không có connect-src)'
+  );
+
+  /*
+   * Player origin chỉ được phát đúng dạng `/<bucket>/<2 ký tự đầu>/<sha256><ext>`.
+   * Mọi thứ khác phải 404, kể cả khi file có thật ở đó. Ba dạng dưới đây thử đúng
+   * ba mắt xích của bộ lọc: tên bucket, khuôn tên file, và phần mở rộng.
+   */
+  const sha = sb3Url.match(/([0-9a-f]{64})/)?.[1] ?? '0'.repeat(64);
+  const badPaths = [
+    ['ngoài mọi bucket', `${PLAYER}/package.json`],
+    ['tên file không phải sha256', `${PLAYER}/html/aa/khong-phai-hash.html`],
+    // Cùng một file có thật, chỉ đổi phần mở rộng: nếu lọt thì .sb3 phát ra dưới
+    // dạng .html, đúng cái kịch bản mà toàn bộ mục này tồn tại để chặn.
+    ['đúng hash nhưng sai phần mở rộng', `${PLAYER}/sb3/${sha.slice(0, 2)}/${sha}.html`],
+  ];
+  for (const [label, url] of badPaths) {
+    const code = await fetch(url).then((r) => r.status).catch(() => 0);
+    check(`Đường dẫn ${label} bị 404`, code === 404, `HTTP ${code}`);
+  }
+}
 
 // ---------- Cách ly cookie ----------
 check(

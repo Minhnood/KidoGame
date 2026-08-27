@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/button';
 import { Notice } from '@/components/notice';
 import { reportGameAction, type FormState } from '@/lib/actions';
@@ -63,6 +64,24 @@ export function ReportForm({ gameId }: { gameId: string }) {
             {pending ? 'Đang gửi…' : 'Gửi báo cáo'}
           </Button>
         </fieldset>
+
+        {/*
+          Lối riêng cho người làm ra bản gốc.
+          Nằm TRONG hộp báo cáo chứ không thành một nút thứ hai cạnh nút chơi: đây là
+          trang cho trẻ con, và người cần đường này là người lớn đã chủ động đi tìm.
+          Nhưng vẫn phải có, vì lý do "Game này chép của người khác" ở trên chỉ đếm
+          báo cáo — nó không hỏi bạn là ai và bản gốc ở đâu, nên không xử lý được.
+        */}
+        <p className="mt-3 text-sm text-ink-soft">
+          Bạn là người làm ra game gốc?{' '}
+          <Link
+            href={`/bao-cao-ban-quyen?game=${encodeURIComponent(gameId)}`}
+            data-testid="report-takedown-link"
+            className="font-semibold underline"
+          >
+            Gửi yêu cầu gỡ bản quyền
+          </Link>
+        </p>
 
         {state && 'error' in state && (
           <Notice tone="error" role="alert">

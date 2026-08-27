@@ -24,6 +24,7 @@ import {
   adminSetChildLocked,
   reportGame,
 } from './moderation';
+import { adminResolveTakedown, submitTakedownRequest } from './takedown';
 import { clientFingerprint, destroySession, getActor } from './session';
 import { prisma } from './db';
 
@@ -274,6 +275,28 @@ export async function reportGameAction(_prev: FormState, form: FormData): Promis
    */
 }
 
+// --- Gỡ nội dung vi phạm bản quyền -------------------------------------------
+
+/**
+ * Người ngoài gửi yêu cầu gỡ. KHÔNG cần đăng nhập, và đó là điều kiện tiên quyết:
+ * người làm ra bản gốc gần như chắc chắn không có tài khoản trên KidoGame, nên bắt
+ * đăng ký trước khi khiếu nại là dựng đúng bức tường trước đúng người cần đi qua.
+ */
+export async function submitTakedownAction(_prev: FormState, form: FormData): Promise<FormState> {
+  return run(async () => {
+    await submitTakedownRequest({
+      gameRef: String(form.get('gameRef') ?? ''),
+      claimantName: String(form.get('claimantName') ?? ''),
+      claimantEmail: String(form.get('claimantEmail') ?? ''),
+      evidence: String(form.get('evidence') ?? ''),
+      // Checkbox không được tick thì FormData KHÔNG có khoá này chứ không phải có
+      // với giá trị rỗng — nên phải hỏi "có mặt hay không", đừng so với 'true'.
+      attested: form.get('attest') !== null,
+      ip: await clientIp(),
+    });
+  });
+}
+
 // --- Admin -------------------------------------------------------------------
 
 /** Bảo đảm người gọi là phụ huynh CÓ cờ isAdmin. */
@@ -317,6 +340,30 @@ export async function adminDismissReportsAction(
       adminId,
       String(form.get('gameId') ?? ''),
       'Admin xác nhận báo cáo không đúng'
+    );
+  });
+  revalidatePath('/admin');
+  return state;
+}
+
+/**
+ * Admin phán xử một yêu cầu gỡ bản quyền.
+ *
+ * `revalidatePath('/admin')` là bắt buộc ở đây chứ không tuỳ chọn: hàng yêu cầu vừa
+ * xử lý phải biến khỏi hàng đợi ngay. Còn đọng lại thì admin dễ bấm lần hai, và lần
+ * hai sẽ báo lỗi "đã xử lý rồi" — trông như hệ thống hỏng.
+ */
+export async function adminResolveTakedownAction(
+  _prev: FormState,
+  form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    const adminId = await requireAdmin();
+    await adminResolveTakedown(
+      adminId,
+      String(form.get('requestId') ?? ''),
+      String(form.get('accept')) === 'true',
+      String(form.get('note') ?? '').trim()
     );
   });
   revalidatePath('/admin');

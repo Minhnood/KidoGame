@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Nunito } from 'next/font/google';
 import Link from 'next/link';
 import { SiteNav } from '@/components/site-nav';
+import { SiteFooter } from '@/components/site-footer';
 import { Wrap } from '@/components/page';
 import './globals.css';
 
@@ -25,7 +26,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={nunito.variable}>
-      <body className="font-[family-name:var(--font-nunito)] antialiased">
+      {/* flex-col + min-h-screen: giữ chân trang ở đáy màn hình cả trên trang ngắn. */}
+      <body className="flex min-h-screen flex-col font-[family-name:var(--font-nunito)] antialiased">
         <header className="bg-ink py-3 text-white">
           <Wrap className="flex items-center justify-between gap-4">
             <Link href="/" className="text-xl font-extrabold tracking-tight no-underline">
@@ -34,9 +36,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <SiteNav />
           </Wrap>
         </header>
-        <main>
+        <main className="flex-1">
           <Wrap>{children}</Wrap>
         </main>
+        <SiteFooter />
       </body>
     </html>
   );

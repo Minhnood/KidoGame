@@ -8,12 +8,14 @@ import { reasonLabel } from '@/lib/report-reasons';
 import { objectUrl } from '@/lib/storage';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
+import { slaDueAt } from '@/lib/operator';
 import {
   ChildLockButton,
   DismissReportsButton,
   RemoveGameButton,
   RestoreGameButton,
 } from './admin-controls';
+import { TakedownControls } from './takedown-controls';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +37,9 @@ const ACTION_LABEL: Record<string, string> = {
   ADMIN_DISMISS_REPORTS: 'Admin bỏ qua báo cáo',
   ADMIN_LOCK_CHILD: 'Admin khoá tài khoản của bé',
   ADMIN_UNLOCK_CHILD: 'Admin mở khoá tài khoản của bé',
+  TAKEDOWN_HIDE: 'Tạm ẩn vì có yêu cầu gỡ bản quyền',
+  TAKEDOWN_ACCEPT: 'Admin chấp nhận yêu cầu gỡ bản quyền',
+  TAKEDOWN_REJECT: 'Admin bác bỏ yêu cầu gỡ bản quyền',
 };
 
 /**
@@ -87,7 +92,7 @@ export default async function AdminPage({
   const page = Math.max(1, Number(sp.trang ?? '1') || 1);
   const where = whereFor(filter);
 
-  const [total, games] = await Promise.all([
+  const [total, games, takedowns] = await Promise.all([
     prisma.game.count({ where }),
     prisma.game.findMany({
       where,
@@ -124,6 +129,29 @@ export default async function AdminPage({
           orderBy: { createdAt: 'desc' },
           take: 5,
           select: { id: true, actorId: true, action: true, note: true, createdAt: true },
+        },
+      },
+    }),
+
+    /*
+     * Hàng đợi yêu cầu gỡ bản quyền — KHÔNG lọc theo `filter`, KHÔNG phân trang.
+     *
+     * Cố ý nằm ngoài mọi bộ lọc của danh sách game bên dưới: đây là thứ duy nhất
+     * trên trang này có hạn chót đã hứa công khai với người ngoài, nên nó không được
+     * phép biến mất chỉ vì admin đang xem một tab khác. Cũ nhất lên trước, vì cái cũ
+     * nhất là cái sắp trễ hạn.
+     */
+    prisma.takedownRequest.findMany({
+      where: { status: 'OPEN' },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        game: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            child: { select: { displayName: true, username: true } },
+          },
         },
       },
     }),
@@ -189,6 +217,76 @@ export default async function AdminPage({
         title="Kiểm duyệt"
         lead={`${actor.email} · game tự ẩn khi đủ ${REPORT_AUTO_HIDE_THRESHOLD} báo cáo`}
       />
+
+      {takedowns.length > 0 && (
+        <section className="mb-7" data-testid="admin-takedowns">
+          <h2 className="text-xl font-extrabold tracking-tight">
+            Yêu cầu gỡ bản quyền ({takedowns.length})
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft">
+            Game đã tạm ẩn khi nhận. Cả hai lựa chọn dưới đây đều gửi email cho người khiếu nại và
+            cho phụ huynh của bé.
+          </p>
+
+          <ul className="mt-3 list-none space-y-4 p-0">
+            {takedowns.map((req) => {
+              const due = slaDueAt(req.createdAt);
+              const overdue = due.getTime() < Date.now();
+              return (
+                <li
+                  key={req.id}
+                  data-testid="admin-takedown"
+                  data-request-id={req.id}
+                  className="rounded-card border border-warn-border bg-warn-bg p-5"
+                >
+                  <p className="text-lg font-bold">
+                    <Link href={`/game/${req.game.id}`}>{req.game.title}</Link>{' '}
+                    <span className="align-middle text-sm font-semibold text-ink-soft">
+                      ({STATUS_LABEL[req.game.status] ?? req.game.status})
+                    </span>
+                  </p>
+                  <p className="text-sm text-ink-soft">
+                    Của bé {req.game.child.displayName} ({req.game.child.username})
+                  </p>
+
+                  <p className="mt-2 text-sm">
+                    <span className="font-semibold">Người khiếu nại:</span> {req.claimantName}{' '}
+                    &lt;{req.claimantEmail}&gt;
+                  </p>
+                  <p className="text-sm" data-testid="admin-takedown-due">
+                    <span className="font-semibold">Nhận lúc:</span>{' '}
+                    <time dateTime={req.createdAt.toISOString()}>
+                      {req.createdAt.toLocaleString('vi-VN')}
+                    </time>{' '}
+                    ·{' '}
+                    <span className={overdue ? 'font-bold text-danger' : ''}>
+                      hạn trả lời {due.toLocaleDateString('vi-VN')}
+                      {overdue && ' — ĐÃ TRỄ'}
+                    </span>
+                  </p>
+
+                  {/*
+                    `whitespace-pre-wrap` chứ không để React gộp dòng: người khiếu nại
+                    hay dán vào đây mỗi link một dòng, và `sanitizeMultiline` đã cố ý
+                    giữ nguyên xuống dòng để đọc được đúng như họ viết.
+                  */}
+                  <div className="mt-3 rounded-field border border-warn-border bg-surface p-3.5">
+                    <p className="text-sm font-semibold">Căn cứ họ nêu</p>
+                    <p
+                      className="mt-1 whitespace-pre-wrap text-[0.95rem]"
+                      data-testid="admin-takedown-evidence"
+                    >
+                      {req.evidence}
+                    </p>
+                  </div>
+
+                  <TakedownControls requestId={req.id} />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <nav className="mb-5 flex flex-wrap gap-2" data-testid="admin-filters">
         {FILTERS.map((f) => (
