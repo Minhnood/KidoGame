@@ -100,6 +100,21 @@ Không tự chạy hai server bằng tay được, vì phải khớp ĐỒNG TH�
 Sai bất kỳ cái nào là iframe bị chặn, mà triệu chứng nhìn **y hệt lỗi đóng gói**:
 "game không boot", "stage 0x0". Đừng đi tìm bug trong `packages/sb3` khi gặp cảnh đó.
 
+Hai chỗ vướng thật khi làm việc này:
+
+- **Máy có VPN thì phải truyền `LAN_IP` tường minh.** Script lấy địa chỉ IPv4
+  không-loopback **đầu tiên** nó gặp, và trên máy có VPN thì đó có thể là địa chỉ của
+  VPN chứ không phải Wi-Fi — điện thoại sẽ không bao giờ tới được. Xem `ifconfig` tìm
+  IP của `en0` rồi `LAN_IP=192.168.1.2 node infra/dev-lan.mjs`.
+- **Phải chọn game CÓ dùng phím**, không thì chẳng có nút nào để bấm và bạn sẽ tưởng
+  chức năng hỏng. `buildTouchControls` trả về rỗng khi `detectTouchKeys` không thấy
+  phím nào, nên HTML của game đó không có bộ nút. Tìm game có nút:
+
+  ```bash
+  grep -rl 'kg-touch' storage/html            # html nào có bộ nút
+  grep -o '"actions":\[[^]]*\]' storage/html/7a/<sha>.html   # xem nút nào
+  ```
+
 Script cố ý dùng `next dev` chứ không `next start`: `next start` đặt
 `NODE_ENV=production`, khi đó cookie phiên bật `secure: true` nên trình duyệt **từ chối
 lưu cookie qua `http://`** trên LAN — đăng nhập trên điện thoại sẽ im lặng không vào
