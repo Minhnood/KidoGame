@@ -142,7 +142,38 @@ export interface CreateChildInput {
   birthYear?: number | null;
 }
 
+/**
+ * Tạo tài khoản cho con — CHỈ khi email của phụ huynh đã xác minh.
+ *
+ * Vì sao chặn ĐÚNG ở đây, chứ không phải ở lúc đăng nhập:
+ *
+ *  - Chính hành động này là cơ chế đồng ý của người đại diện (Nghị định 13/2023,
+ *    COPPA). Một sự đồng ý gắn với hòm thư chưa ai chứng minh là đọc được thì gần
+ *    như không có giá trị: bất kỳ ai cũng gõ được email của người khác vào form đăng
+ *    ký rồi tạo tài khoản cho một đứa trẻ.
+ *  - Nó cũng là chỗ duy nhất chặn được mà KHÔNG khoá ai ra khỏi thứ gì. Chặn ở lúc
+ *    đăng nhập thì một lá mail rơi vào thư rác là cả gia đình mất quyền vào tài
+ *    khoản; chặn ở các thao tác an toàn (khoá tài khoản con, ẩn game của con) thì tệ
+ *    hơn nữa — đó là những việc phải làm được NGAY, không đợi hòm thư.
+ *  - Và nó làm lớp tự động của phần kiểm duyệt sống lại: ngưỡng báo cáo chỉ đếm phụ
+ *    huynh đã xác minh, nên nếu không có cổng này thì gần như không ai xác minh và
+ *    ngưỡng đó gần như không bao giờ nổ.
+ *
+ * Kiểm ở tầng lib, không ở route: đường nào sau này tạo tài khoản con (nhập theo
+ * lớp học, API cho trường) cũng tự thừa hưởng. Đặt ở tầng route là để quên.
+ */
 export async function createChild(input: CreateChildInput): Promise<string> {
+  const parent = await prisma.parent.findUnique({
+    where: { id: input.parentId },
+    select: { emailVerifiedAt: true },
+  });
+  if (!parent) throw new AuthError('Không tìm thấy tài khoản phụ huynh.');
+  if (!parent.emailVerifiedAt) {
+    throw new AuthError(
+      'Bạn cần xác minh email trước khi tạo tài khoản cho con. Kiểm tra hòm thư của bạn, hoặc bấm "Gửi lại thư xác minh" ở trên.'
+    );
+  }
+
   const username = normalizeUsername(input.username);
   const displayName = input.displayName.trim().replace(/\s+/g, ' ');
 

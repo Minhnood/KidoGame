@@ -9,8 +9,14 @@
  */
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
+import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
+/*
+ * Cần MAIL_LOG dù bài này chẳng kiểm gì về mail: nó phải tạo tài khoản cho bé, mà
+ * `createChild` đòi phụ huynh đã xác minh email, và link xác minh chỉ có trong thư.
+ */
+const MAIL_LOG = batBuocMailLog('e2e-discovery');
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
 
 const suffix = randomBytes(4).toString('hex');
@@ -40,6 +46,7 @@ if (!FIXTURE) {
 }
 
 const browser = await chromium.launch({ channel: 'chrome' });
+const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1000 } });
 
 const anon = await newSession();
@@ -67,6 +74,8 @@ let gameId = '';
   await p.fill('#password', PARENT_PASS);
   await p.click('[data-testid=auth-form] button[type=submit]');
   await p.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
+
+  check('Xác minh được email phụ huynh', await bamLinkXacMinh(p));
 
   await p.fill('#displayName', 'Bé Khám Phá');
   await p.fill('#username', CHILD_USER);

@@ -28,11 +28,11 @@
  */
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
-import fs from 'node:fs';
+import { batBuocMailLog, choMailToi, taoBoBamLink, taoBoXacMinh } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
-const MAIL_LOG = process.env.MAIL_LOG ?? '';
+const MAIL_LOG = batBuocMailLog('e2e-moderation');
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'demo@kidogame.local';
 const ADMIN_PASS = process.env.ADMIN_PASS ?? 'demo1234ab';
@@ -55,13 +55,6 @@ if (!FIXTURE) {
   console.error('Cần SB3_FIXTURE=<đường dẫn .sb3> để bé có game mà báo cáo.');
   process.exit(1);
 }
-if (!MAIL_LOG || !fs.existsSync(MAIL_LOG)) {
-  console.error(`Thiếu MAIL_LOG hoặc file không tồn tại: ${MAIL_LOG || '(chưa đặt)'}`);
-  console.error('Khởi động app server với stdout đổ vào file rồi trỏ MAIL_LOG vào đó.');
-  console.error('Không có nó thì không dựng được phụ huynh đã xác minh email — xem khối');
-  console.error('giải thích ở đầu file.');
-  process.exit(1);
-}
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1000 } });
@@ -76,69 +69,24 @@ async function registerParent(ctx, email) {
   return p;
 }
 
-/**
- * Chờ một lá mail GỬI TỚI `to` mà nội dung khớp `re`.
+/*
+ * Hai bộ tiện ích, cùng đọc link xác minh từ log server nhưng khác điểm vào:
+ *  - `taoPhuHuynhDaXacMinh(ctx, email)` tự đăng ký rồi tự xác minh. Dùng cho những
+ *    phụ huynh mà bài test chỉ cần họ tồn tại để bấm nút báo cáo.
+ *  - `bamLinkXacMinh(page)` dùng cho phụ huynh mà bài test đã tự đăng ký (chủ của bé),
+ *    vì trang của người đó còn phải làm nhiều việc khác sau đó.
  *
- * Cắt log theo từng khối mail rồi mới đối chiếu, chứ không grep cả file: grep cả file
- * thì "có chuỗi này ở đâu đó" và "có chuỗi này trong CÙNG lá thư gửi tới người đó" là
- * một, nên phép kiểm sẽ xanh cả khi mail gửi nhầm người.
+ * Cả hai nằm trong `./e2e-mail.mjs` — trước đây bản sao của logic này nằm ngay trong
+ * file và chỉ file này có phần chống bẫy thời gian của log.
  */
-async function waitForMailTo(to, re, timeoutMs = 20000) {
-  const den = Date.now() + timeoutMs;
-  while (Date.now() < den) {
-    const log = fs.readFileSync(MAIL_LOG, 'utf8');
-    const found = log
-      .split('┌─ MAIL')
-      .slice(1)
-      .some((block) => {
-        const body = block.split('└─')[0] ?? '';
-        const toLine = body.split('\n').find((line) => line.includes('tới:')) ?? '';
-        return toLine.includes(to) && re.test(body);
-      });
-    if (found) return true;
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  return false;
-}
+const taoPhuHuynhDaXacMinh = taoBoXacMinh(MAIL_LOG, { appOrigin: APP, matKhau: PARENT_PASS });
+const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 
-/** Link xác minh MỚI NHẤT trong log server, hoặc null. */
-function latestVerifyLink() {
-  const log = fs.readFileSync(MAIL_LOG, 'utf8');
-  const all = log.match(/https?:\/\/[^\s│]+\/xac-minh-email\?token=[A-Za-z0-9_-]+/g);
-  return all ? all[all.length - 1] : null;
-}
-
-/**
- * Dựng một phụ huynh ĐÃ XÁC MINH EMAIL — tức một người báo cáo được tính vào ngưỡng.
- *
- * So link với link trước đó thay vì chỉ lấy cái mới nhất: log ghi bất đồng bộ, nên
- * đọc ngay sau khi đăng ký có thể trúng link của phụ huynh TRƯỚC. Lúc đó bài test sẽ
- * xác minh lại một tài khoản đã xác minh rồi, và số người "đáng tin" thiếu đi một mà
- * không có phép kiểm nào đổ ở chỗ gây ra lỗi.
- */
-let verifyLinkTruoc = latestVerifyLink();
+/** Dựng một phụ huynh đã xác minh trong context riêng. */
 async function createVerifiedParent(email) {
   const ctx = await newSession();
-  await registerParent(ctx, email);
-
-  let link = null;
-  const den = Date.now() + 20000;
-  while (Date.now() < den) {
-    const moi = latestVerifyLink();
-    if (moi && moi !== verifyLinkTruoc) {
-      link = moi;
-      break;
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  if (!link) return { ctx, verified: false };
-  verifyLinkTruoc = link;
-
-  const p = await ctx.newPage();
-  await p.goto(link, { waitUntil: 'networkidle' });
-  const text = await p.locator('body').innerText();
-  await p.close();
-  return { ctx, verified: /đã được xác minh/i.test(text) };
+  const { verified } = await taoPhuHuynhDaXacMinh(ctx, email);
+  return { ctx, verified };
 }
 
 /** Số báo cáo đã xác minh mà trang admin đang hiện cho một game. */
@@ -209,6 +157,14 @@ let gameId = '';
 
 {
   const p = await registerParent(parentCtx, OWNER_EMAIL);
+
+  /*
+   * Phải xác minh email TRƯỚC khi tạo tài khoản cho bé: `createChild` từ chối phụ
+   * huynh chưa xác minh. Chủ của bé cũng cần xác minh vì lát nữa bài test còn đọc mail
+   * gửi cho người này.
+   */
+  check('Xác minh được email của phụ huynh chủ bé', await bamLinkXacMinh(p));
+
   await p.fill('#displayName', 'Bé Kiểm Duyệt');
   await p.fill('#username', CHILD_USER);
   await p.fill('#password', CHILD_PASS);
@@ -385,7 +341,7 @@ const verifiedCtxs = [];
 
   check(
     'Phụ huynh nhận được mail báo game bị siết',
-    await waitForMailTo(OWNER_EMAIL, /tạm không hiện trên trang chủ/i)
+    await choMailToi(MAIL_LOG, OWNER_EMAIL, /tạm không hiện trên trang chủ/i)
   );
 }
 
@@ -432,7 +388,7 @@ const verifiedCtxs = [];
   check('Đủ 6 báo cáo đã xác minh: link trực tiếp trả 404', (await status(anonCtx, gameUrl)) === 404);
   check(
     'Phụ huynh nhận được mail báo game bị ẩn hẳn',
-    await waitForMailTo(OWNER_EMAIL, /đã bị ẩn/i)
+    await choMailToi(MAIL_LOG, OWNER_EMAIL, /đã bị ẩn/i)
   );
 }
 

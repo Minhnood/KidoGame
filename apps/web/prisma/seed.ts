@@ -14,13 +14,25 @@ const prisma = new PrismaClient();
 async function main() {
   const parent = await prisma.parent.upsert({
     where: { email: 'demo@kidogame.local' },
-    // isAdmin cũng nằm ở nhánh update: seed chạy lại trên DB cũ vẫn phải ra admin,
-    // nếu không thì trang /admin trả 404 mà không hiểu vì sao.
-    update: { passwordHash: await hashPassword('demo1234ab'), isAdmin: true },
+    /*
+     * `isAdmin` và `emailVerifiedAt` cùng nằm ở CẢ hai nhánh: seed chạy lại trên DB cũ
+     * vẫn phải ra một tài khoản dùng được.
+     *
+     * `emailVerifiedAt` là bắt buộc từ khi `createChild` đòi email đã xác minh. Thiếu
+     * nó thì tài khoản demo không tạo được tài khoản cho bé, mà hòm thư
+     * `demo@kidogame.local` không tồn tại nên cũng chẳng có link nào để bấm — người
+     * mới clone repo sẽ tắc ngay ở bước đầu tiên.
+     */
+    update: {
+      passwordHash: await hashPassword('demo1234ab'),
+      isAdmin: true,
+      emailVerifiedAt: new Date(),
+    },
     create: {
       email: 'demo@kidogame.local',
       passwordHash: await hashPassword('demo1234ab'),
       isAdmin: true,
+      emailVerifiedAt: new Date(),
     },
   });
 

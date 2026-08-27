@@ -35,41 +35,43 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 
 ## Kiểm thử
 
+Hai bộ không cần server:
+
 ```bash
 pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
-node infra/contrast-check.mjs              # 38 cặp màu, không cần server
-
-# End-to-end, cần cả hai server ở trên đang chạy + Chrome
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 44 kiểm tra
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 21 kiểm tra
-# e2e-moderation BẮT BUỘC có MAIL_LOG: chỉ báo cáo của phụ huynh đã xác minh email mới
-# tính vào ngưỡng, và đường duy nhất để xác minh là bấm link trong mail.
-SB3_FIXTURE=/…/game.sb3 MAIL_LOG=/tmp/kg-mail.log node infra/e2e-moderation.mjs  # 57 kiểm tra
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-takedown.mjs     # 40 kiểm tra
-GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 12 kiểm tra
-MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs                  # 13 kiểm tra
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-discovery.mjs    # 14 kiểm tra
+node infra/contrast-check.mjs              # 38 cặp màu, cả hai giao diện
 ```
 
-Hai file có số kiểm tra thay đổi theo biến môi trường bạn truyền vào:
-
-- `e2e-takedown.mjs` — 40, thành **42** khi có `MAIL_LOG` (kiểm thêm mail báo phụ huynh
-  lúc game bị tạm ẩn, và mail báo kết quả cho người khiếu nại). Nó dựng HAI game vì "gỡ
-  hẳn" không quay lui được: một game cho nhánh chấp nhận, một cho nhánh bác bỏ.
-- `e2e-email.mjs` — 13, thành **17** khi có thêm `SB3_FIXTURE` (kiểm mail báo phụ huynh
-  mỗi lần con đăng game).
-
-`e2e-email.mjs` và `e2e-moderation.mjs` cần server được khởi động với stdout đổ vào
-file, vì chúng moi link xác minh / đặt lại mật khẩu **từ log server**:
+Còn lại cần **cả hai server đang chạy + Chrome**, và server phải được khởi động với
+**stdout đổ vào file** vì bốn bộ phải đọc link xác minh email từ log:
 
 ```bash
-pnpm --filter @kidogame/web exec next dev -p 3000 > /tmp/kg-mail.log 2>&1 &
-MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs
+pnpm --filter @kidogame/web dev > /tmp/kg-mail.log 2>&1 &
+node infra/player-server.mjs &
+
+export SB3=/đường/dẫn/tới/game.sb3
+export MAIL_LOG=/tmp/kg-mail.log
+
+SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                     # 44 kiểm tra
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 58
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 43
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 17
+GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 12, chạy riêng
 ```
 
-Với `e2e-moderation.mjs` thì `MAIL_LOG` không phải tuỳ chọn mà là điều kiện chạy: nó
-phải dựng **sáu** phụ huynh đã xác minh email (ba để chạm ngưỡng ẩn mềm, ba nữa để chạm
-ngưỡng ẩn hẳn), và cách duy nhất để xác minh một tài khoản là bấm link trong mail.
+**Vì sao gần như bộ nào cũng cần `MAIL_LOG`:** `createChild` từ chối tạo tài khoản cho
+bé khi email phụ huynh chưa xác minh, mà đường duy nhất để xác minh là bấm link trong
+thư. Logic đọc link nằm ở `infra/e2e-mail.mjs` dùng chung — và nó có một điều kiện dùng:
+phải khởi tạo bộ đọc **trước** khi đăng ký phụ huynh, xem chú thích trong file.
+
+`e2e-check.mjs` không cần `MAIL_LOG` vì nó dùng bé `beminh` do seed tạo sẵn.
+
+`e2e-takedown.mjs` dựng HAI game vì "gỡ hẳn" không quay lui được: một game cho nhánh
+chấp nhận, một cho nhánh bác bỏ. `e2e-email.mjs` cần thêm `SB3_FIXTURE` để kiểm mail báo
+phụ huynh mỗi lần con đăng game (13 → 17 kiểm tra). `e2e-moderation.mjs` phải dựng **sáu**
+phụ huynh đã xác minh email — ba để chạm ngưỡng ẩn mềm, ba nữa để chạm ngưỡng ẩn hẳn.
 
 **Chạy e2e ở cổng khác 3000 là hỏng.** Player server gửi header
 `frame-ancestors <APP_ORIGIN>`, mặc định là `http://localhost:3000`. Đổi cổng app mà
@@ -263,9 +265,6 @@ khác; link inline có **gạch chân** chứ không chỉ đổi màu. Đáng c
 cam nâu (`accent-text`) chỉ chênh nhau 1.04:1 về độ sáng — mất cảm nhận màu là hai thứ
 đó gần như giống nhau, nên dấu hiệu phi-màu là phần duy nhất còn lại.
 
-Bốn màu phụ `sky` / `grass` / `berry` / `sun` hiện **không được dùng ở đâu cả**. Để lại
-vì chúng vô hại, nhưng đừng tưởng chúng đang có tác dụng gì.
-
 Vài lựa chọn có chủ đích cho đối tượng trẻ em:
 
 - Vùng chạm tối thiểu 48px (`--spacing-touch`), không phải 44px như web người lớn.
@@ -332,6 +331,33 @@ bên lệch định dạng là hash không verify được mà không ai báo l�
 
 Chống dò mật khẩu khoá theo danh tính (email/username), **không theo IP**: cả một
 lớp học hay một gia đình thường dùng chung IP.
+
+### Xác minh email chặn đúng MỘT việc
+
+Phụ huynh chưa xác minh email thì **không tạo được tài khoản cho con**. Ngoài việc đó,
+không chặn gì cả.
+
+Ba lý do chọn đúng chỗ này, và không chọn chỗ khác:
+
+- **Tạo tài khoản cho con chính là cơ chế đồng ý của người đại diện** (Nghị định
+  13/2023, COPPA). Một sự đồng ý gắn với hòm thư chưa ai chứng minh là đọc được thì gần
+  như không có giá trị — bất kỳ ai cũng gõ được email người khác vào form đăng ký.
+- **Đây là chỗ duy nhất chặn được mà không khoá ai ra khỏi thứ gì.** Chặn ở lúc đăng
+  nhập thì một lá thư rơi vào thư rác là cả gia đình mất quyền vào tài khoản. Chặn ở các
+  thao tác an toàn (khoá tài khoản con, ẩn game của con) thì tệ hơn nữa — đó là những
+  việc phải làm được NGAY.
+- **Nó làm lớp tự động của phần kiểm duyệt sống lại.** Ngưỡng báo cáo chỉ đếm phụ huynh
+  đã xác minh; không có cổng này thì gần như không ai xác minh, và ngưỡng đó gần như
+  không bao giờ nổ.
+
+Chặn ở **tầng lib** (`createChild` trong `src/lib/auth.ts`), không ở route: đường nào sau
+này tạo tài khoản con (nhập theo lớp học, API cho trường) cũng tự thừa hưởng. Trang
+`/phu-huynh` không render form khi chưa xác minh — nhưng đó là trải nghiệm, không phải
+lớp bảo vệ, và `e2e-auth` kiểm riêng việc server tự từ chối: nó gỡ cờ xác minh trong DB
+trong khi form hợp lệ đang mở, rồi bấm gửi.
+
+Tài khoản seed `demo@kidogame.local` được đánh dấu đã xác minh ngay trong seed, vì hòm
+thư đó không tồn tại nên không có link nào để bấm.
 
 ## Báo cáo, và bốn trạng thái của một game
 

@@ -72,12 +72,6 @@
      giao diện tối, tức không mất gì về tương phản. */
   --color-chrome-ink: #f4f4fa;
 
-  /* Màu phụ để phân biệt các mục cho vui mắt, không mang ý nghĩa trạng thái. */
-  --color-sky: #4aa8ff;
-  --color-grass: #3aa76d;
-  --color-berry: #e5487d;
-  --color-sun: #ffcc00;
-
   --color-warn-bg: #fff6e8;
   --color-warn-border: #ffd9a8;
   --color-warn-ink: #8a5200;
@@ -154,11 +148,6 @@
 
   --toi-chrome: #0d0d18;
 
-  --toi-sky: #6cb8ff;
-  --toi-grass: #59c288;
-  --toi-berry: #f2709c;
-  --toi-sun: #ffd83d;
-
   --toi-warn-bg: #392b14;
   --toi-warn-border: #6b4d1c;
   --toi-warn-ink: #ffdca8;
@@ -185,10 +174,6 @@
     --color-accent-text: var(--toi-accent-text);
     --color-focus: var(--toi-focus);
     --color-chrome: var(--toi-chrome);
-    --color-sky: var(--toi-sky);
-    --color-grass: var(--toi-grass);
-    --color-berry: var(--toi-berry);
-    --color-sun: var(--toi-sun);
     --color-warn-bg: var(--toi-warn-bg);
     --color-warn-border: var(--toi-warn-border);
     --color-warn-ink: var(--toi-warn-ink);
@@ -214,10 +199,6 @@
   --color-accent-text: var(--toi-accent-text);
   --color-focus: var(--toi-focus);
   --color-chrome: var(--toi-chrome);
-  --color-sky: var(--toi-sky);
-  --color-grass: var(--toi-grass);
-  --color-berry: var(--toi-berry);
-  --color-sun: var(--toi-sun);
   --color-warn-bg: var(--toi-warn-bg);
   --color-warn-border: var(--toi-warn-border);
   --color-warn-ink: var(--toi-warn-ink);

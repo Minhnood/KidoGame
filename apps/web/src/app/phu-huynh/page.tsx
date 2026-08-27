@@ -45,15 +45,23 @@ export default async function ParentDashboard() {
       </Notice>
 
       {/*
-        Chưa xác minh email KHÔNG chặn gì cả — chỉ nhắc. Chặn thì đứa trẻ phải ngồi
-        chờ bố mẹ mở hòm thư mới có tài khoản để đăng game. Nhưng phải nhắc, vì email
-        chưa xác minh là email không lấy lại được mật khẩu.
+        Chưa xác minh email thì CHẶN đúng một việc: tạo tài khoản cho con. Không chặn
+        đăng nhập, và tuyệt đối không chặn các thao tác an toàn (khoá tài khoản con, ẩn
+        game của con) — những việc đó phải làm được ngay, không đợi hòm thư.
+
+        Lý do đầy đủ nằm ở `createChild` trong src/lib/auth.ts. Server tự kiểm lại, nên
+        khối này chỉ là để người dùng biết vì sao, chứ không phải lớp bảo vệ.
       */}
       {!me?.emailVerifiedAt && (
         <div data-testid="email-unverified">
           <Notice tone="warn">
-            Email của bạn chưa được xác minh. Chưa xác minh thì nếu quên mật khẩu sẽ không lấy
-            lại được tài khoản.
+            <p className="font-semibold">Bạn cần xác minh email trước khi tạo tài khoản cho con.</p>
+            <p className="mt-1">
+              Chúng tôi đã gửi một lá thư tới <strong>{actor.email}</strong>. Bấm link trong thư là
+              xong. Việc này cần thiết vì tạo tài khoản cho con chính là lúc bạn thay con đồng ý
+              với điều khoản — nên chúng tôi phải biết chắc hòm thư này là của bạn. Nó cũng là
+              cách duy nhất để lấy lại mật khẩu nếu bạn quên.
+            </p>
             <VerifyEmailButton />
           </Notice>
         </div>
@@ -134,6 +142,21 @@ export default async function ParentDashboard() {
 
       <h2 className="mb-3 mt-9 text-xl font-bold">Tạo tài khoản cho bé</h2>
 
+      {/*
+        Chưa xác minh thì KHÔNG render form, thay bằng lời giải thích.
+
+        Cố ý không render một form vô hiệu hoá: bố mẹ sẽ gõ hết ba ô rồi mới biết là
+        không gửi được. Nói trước, và nói ở đúng chỗ họ đang định gõ.
+      */}
+      {!me?.emailVerifiedAt ? (
+        <div data-testid="create-child-blocked" className="mb-12">
+          <Notice tone="warn" role="status">
+            Xác minh email xong là khung tạo tài khoản hiện ra ngay ở đây. Thư đã gửi tới{' '}
+            <strong>{actor.email}</strong> — nếu không thấy, xem thử thư rác, hoặc bấm{' '}
+            <strong>Gửi lại thư xác minh</strong> ở phía trên.
+          </Notice>
+        </div>
+      ) : (
       <AuthForm
         action={createChildAction}
         submitLabel="Tạo tài khoản"
@@ -179,6 +202,7 @@ export default async function ParentDashboard() {
           />
         </Field>
       </AuthForm>
+      )}
     </>
   );
 }

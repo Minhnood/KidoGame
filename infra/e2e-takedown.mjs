@@ -21,10 +21,16 @@
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
-const MAIL_LOG = process.env.MAIL_LOG ?? '';
+/*
+ * MAIL_LOG giờ BẮT BUỘC (trước đây chỉ để mở thêm hai phép kiểm mail): bài này phải
+ * tạo tài khoản cho bé, mà `createChild` đòi phụ huynh đã xác minh email — và link xác
+ * minh chỉ có trong thư.
+ */
+const MAIL_LOG = batBuocMailLog('e2e-takedown');
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'demo@kidogame.local';
 const ADMIN_PASS = process.env.ADMIN_PASS ?? 'demo1234ab';
@@ -48,6 +54,7 @@ if (!FIXTURE) {
 }
 
 const browser = await chromium.launch({ channel: 'chrome' });
+const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1000 } });
 
 const status = async (ctx, url) => {
@@ -96,6 +103,9 @@ const games = [];
   await p.fill('#password', PARENT_PASS);
   await p.click('[data-testid=auth-form] button[type=submit]');
   await p.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
+
+  // Xác minh email trước, không thì `createChild` từ chối.
+  check('Xác minh được email phụ huynh', await bamLinkXacMinh(p));
 
   await p.fill('#displayName', 'Bé Bản Quyền');
   await p.fill('#username', CHILD_USER);

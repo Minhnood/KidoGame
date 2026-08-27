@@ -9,9 +9,31 @@
  */
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
+const MAIL_LOG = batBuocMailLog('e2e-auth');
+
+/**
+ * Đổi cờ xác minh email THẲNG trong DB.
+ *
+ * Dùng để kiểm rằng lớp bảo vệ nằm ở SERVER, không phải ở việc form bị ẩn: gỡ cờ
+ * trong khi form hợp lệ đang mở trên trang, rồi bấm gửi.
+ *
+ * Cắt query string khỏi DATABASE_URL trước khi gọi psql — `?schema=public` là tham số
+ * của Prisma, libpq không hiểu và sẽ báo lỗi. Đây là cái bẫy đã vấp ở script backup.
+ */
+function datXacMinh(email, daXacMinh) {
+  const envPath = path.join(import.meta.dirname, '..', 'apps', 'web', '.env');
+  const raw = fs.readFileSync(envPath, 'utf8').match(/DATABASE_URL="([^"]+)"/)?.[1] ?? '';
+  const url = raw.split('?')[0];
+  const gia = daXacMinh ? 'now()' : 'null';
+  execFileSync('psql', [url, '-q', '-c', `update "Parent" set "emailVerifiedAt" = ${gia} where email = '${email}'`]);
+}
 
 const suffix = randomBytes(4).toString('hex');
 const PARENT_EMAIL = `e2e-${suffix}@kidogame.test`;
@@ -34,6 +56,8 @@ const browser = await chromium.launch({ channel: 'chrome' });
 
 /** Mỗi context là một "trình duyệt" riêng -> phiên không lẫn vào nhau. */
 const newSession = () => browser.newContext({ viewport: { width: 1100, height: 950 } });
+
+const xacMinhEmailCuaTrangHienTai = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 
 // ---------- Chưa đăng nhập thì không vào được trang cần quyền ----------
 {
@@ -69,6 +93,52 @@ const parentCtx = await newSession();
   await p.click('[data-testid=auth-form] button[type=submit]');
   await p.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
   check('Phụ huynh đăng ký xong vào được trang quản lý', /phu-huynh/.test(p.url()), p.url());
+
+  /*
+   * Chưa xác minh email thì chưa được tạo tài khoản cho con — tạo tài khoản cho con
+   * chính là lúc phụ huynh thay con đồng ý với điều khoản, nên hòm thư phải được
+   * chứng minh là của họ trước.
+   */
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  check(
+    'Chưa xác minh email: KHÔNG có khung tạo tài khoản cho bé',
+    (await p.locator('[data-testid=create-child-blocked]').count()) > 0 &&
+      (await p.locator('#username').count()) === 0
+  );
+
+  // Bấm link xác minh trong thư.
+  const daXacMinh = await xacMinhEmailCuaTrangHienTai(p);
+  check('Bấm link trong thư thì xác minh được email', daXacMinh);
+
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  check(
+    'Xác minh xong thì khung tạo tài khoản hiện ra',
+    (await p.locator('#username').count()) > 0 &&
+      (await p.locator('[data-testid=create-child-blocked]').count()) === 0
+  );
+
+  /*
+   * Và server phải TỰ kiểm, không dựa vào việc form đã bị ẩn.
+   *
+   * Cách kiểm: form đang hiện hợp lệ trên trang, nhưng ta gỡ dấu xác minh trong DB
+   * TRƯỚC khi bấm gửi. Phiên vẫn thật, action vẫn thật — chỉ có điều kiện trong DB
+   * đã đổi. Đó đúng là tình huống của một người tự dựng request để lách form.
+   *
+   * Ẩn form là trải nghiệm; lớp bảo vệ nằm ở `createChild` trong src/lib/auth.ts.
+   */
+  await datXacMinh(PARENT_EMAIL, false);
+  await p.fill('#displayName', 'Bé Test');
+  await p.fill('#username', `${CHILD_USER}x`);
+  await p.fill('#password', CHILD_PASS);
+  await p.click('[data-testid=auth-form] button[type=submit]');
+  await p.waitForSelector('[data-testid=auth-form] [role=alert]', { timeout: 15000 }).catch(() => {});
+  const loiServer = await p.locator('[data-testid=auth-form] [role=alert]').innerText().catch(() => '');
+  check(
+    'Server tự từ chối khi email chưa xác minh, không chỉ ẩn form',
+    /xác minh email/i.test(loiServer),
+    loiServer.replace(/\n/g, ' ')
+  );
+  await datXacMinh(PARENT_EMAIL, true);
 
   // Mật khẩu quá ngắn phải bị từ chối.
   await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
