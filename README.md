@@ -40,7 +40,7 @@ pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc 
 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 34 kiểm tra
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 19 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 21 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 32 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-takedown.mjs     # 40 kiểm tra
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 12 kiểm tra
@@ -495,6 +495,15 @@ không bắt được, phải nghe `console` riêng.
 - **Click submit trong e2e phải khoanh vào đúng form.** Thanh điều hướng có nút
   "Đăng xuất" cũng là `<button type="submit">`, nên `click('button[type=submit]')`
   sẽ đăng xuất giữa bài test và làm test đổ ở chỗ khác hẳn.
+- **Form nào dùng `<form action={serverAction}>` thì React 19 RESET nó sau khi
+  action chạy xong, kể cả khi action trả về lỗi.** Không xử lý thì người dùng bị
+  báo "điền sai" trên một cái form trắng trơn. Dự án chữa theo hai cách, tuỳ chỗ:
+  `takedown-form.tsx` dùng input controlled (ô "căn cứ" dài 2000 ký tự, mất là
+  người ta bỏ luôn), còn `AuthForm` ghi lại giá trị theo từng lần gõ rồi trả vào
+  DOM sau khi React reset — vì nó nhận ô nhập qua `children` từ sáu trang, và vì
+  bọc `formAction` lại để chụp FormData sẽ làm mất khả năng submit khi chưa có JS.
+  Cả hai chỗ đều CỐ Ý không giữ mật khẩu và ô cam đoan. Form upload không bị lỗi
+  này: nó dùng `onSubmit` + `fetch`, không phải server action.
 - `prisma db push` không tạo được CHECK constraint. Chúng nằm trong
   `prisma/constraints.sql`, script `db:push` đã tự gọi — nhưng nếu bạn chạy
   `prisma db push` trực tiếp thì phải chạy `pnpm db:constraints` sau đó.

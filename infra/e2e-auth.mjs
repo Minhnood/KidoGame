@@ -119,6 +119,23 @@ let gameUrl = '';
   const wrongMsg = await p.locator('form [role=alert]').first().innerText().catch(() => '');
   check('Sai mật khẩu bị từ chối, không tiết lộ tài khoản có tồn tại', /không đúng/i.test(wrongMsg), wrongMsg.replace(/\n/g, ' '));
 
+  /*
+   * Form đang ở đúng trạng thái cần soi: vừa báo sai mật khẩu. React 19 reset form
+   * sau khi action chạy xong KỂ CẢ khi action trả lỗi, nên nếu AuthForm không trả
+   * lại giá trị thì tên đăng nhập bé vừa gõ đã biến mất.
+   *
+   * Đáng canh thường trực vì đây là loại lỗi không ai báo: form vẫn hiện, thông báo
+   * lỗi vẫn đúng, chỉ có chữ đã gõ lặng lẽ mất. Trên trang đăng nhập của TRẺ, gõ lại
+   * là chỗ bỏ cuộc.
+   */
+  const keptUser = await p.inputValue('#username').catch(() => '');
+  check('Báo lỗi xong vẫn giữ tên đăng nhập vừa gõ', keptUser === CHILD_USER, JSON.stringify(keptUser));
+
+  // Mật khẩu thì CỐ Ý không giữ: trình quản lý mật khẩu điền hộ, còn để một mật
+  // khẩu sai nằm lại trong DOM thì không được gì.
+  const keptPass = await p.inputValue('#password').catch(() => 'không đọc được');
+  check('Báo lỗi xong thì xoá ô mật khẩu', keptPass === '', JSON.stringify(keptPass));
+
   // Đúng mật khẩu.
   await p.goto(`${APP}/be-dang-nhap`, { waitUntil: 'networkidle' });
   await p.fill('#username', CHILD_USER);
