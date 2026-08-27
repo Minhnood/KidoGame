@@ -2,12 +2,18 @@
  * Kiểm tra end-to-end phần báo cáo + tự ẩn + trang admin (M4).
  *
  * Cần:
- *   - app server đang chạy
+ *   - app server đang chạy, VỚI STDOUT ĐỔ VÀO FILE (xem MAIL_LOG bên dưới)
  *   - đã chạy `pnpm db:seed` (bài test dùng tài khoản admin demo)
  *   - một file .sb3 hợp lệ để bé đăng game
  *
  * Chạy:
- *   SB3_FIXTURE=/tmp/meo-phieu-luu.sb3 node infra/e2e-moderation.mjs
+ *   SB3_FIXTURE=/tmp/meo.sb3 MAIL_LOG=/tmp/kg-mail.log node infra/e2e-moderation.mjs
+ *
+ * VÌ SAO MAIL_LOG LÀ BẮT BUỘC Ở ĐÂY (khác e2e-takedown, nơi nó chỉ thêm vài phép
+ * kiểm): chỉ báo cáo của phụ huynh ĐÃ XÁC MINH EMAIL mới tính vào ngưỡng tự động,
+ * và đường duy nhất để xác minh là bấm link trong mail. Không có log thì không dựng
+ * được một người báo cáo "đáng tin" nào, tức là không kiểm được đúng cái cơ chế mà
+ * bài test này tồn tại để kiểm.
  *
  * LƯU Ý VỀ NGƯỜI BÁO CÁO TRÙNG: khoá chống trùng tính theo DANH TÍNH nếu đã đăng
  * nhập, chỉ khách vãng lai mới tính theo IP. Ở máy dev không có header
@@ -17,19 +23,25 @@
  *
  * Cũng vì khoá đó tính cả báo cáo đã bị bác bỏ (ràng buộc unique không phân biệt
  * `status`), một người đã báo cáo thì không báo lại được nữa dù admin đã bỏ qua
- * báo cáo cũ. Nên vòng hai của bài test phải dùng ba danh tính KHÁC vòng một.
+ * báo cáo cũ. Nên mỗi vòng của bài test phải dùng danh tính MỚI — đó là lý do bài
+ * này dựng tới sáu phụ huynh đã xác minh, không phải ba.
  */
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
+const MAIL_LOG = process.env.MAIL_LOG ?? '';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'demo@kidogame.local';
 const ADMIN_PASS = process.env.ADMIN_PASS ?? 'demo1234ab';
 
 const suffix = randomBytes(4).toString('hex');
 const PARENT_PASS = 'matkhau-dai-1234';
+/** Phụ huynh của bé làm ra game — người nhận mail khi game bị siết. */
+const OWNER_EMAIL = `e2e-mod-${suffix}@kidogame.test`;
+const GAME_TITLE = `Game kiểm duyệt ${suffix}`;
 const CHILD_USER = `emod${suffix}`;
 const CHILD_PASS = 'be1234';
 
@@ -41,6 +53,13 @@ const check = (name, ok, detail = '') => {
 
 if (!FIXTURE) {
   console.error('Cần SB3_FIXTURE=<đường dẫn .sb3> để bé có game mà báo cáo.');
+  process.exit(1);
+}
+if (!MAIL_LOG || !fs.existsSync(MAIL_LOG)) {
+  console.error(`Thiếu MAIL_LOG hoặc file không tồn tại: ${MAIL_LOG || '(chưa đặt)'}`);
+  console.error('Khởi động app server với stdout đổ vào file rồi trỏ MAIL_LOG vào đó.');
+  console.error('Không có nó thì không dựng được phụ huynh đã xác minh email — xem khối');
+  console.error('giải thích ở đầu file.');
   process.exit(1);
 }
 
@@ -55,6 +74,97 @@ async function registerParent(ctx, email) {
   await p.click('[data-testid=auth-form] button[type=submit]');
   await p.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
   return p;
+}
+
+/**
+ * Chờ một lá mail GỬI TỚI `to` mà nội dung khớp `re`.
+ *
+ * Cắt log theo từng khối mail rồi mới đối chiếu, chứ không grep cả file: grep cả file
+ * thì "có chuỗi này ở đâu đó" và "có chuỗi này trong CÙNG lá thư gửi tới người đó" là
+ * một, nên phép kiểm sẽ xanh cả khi mail gửi nhầm người.
+ */
+async function waitForMailTo(to, re, timeoutMs = 20000) {
+  const den = Date.now() + timeoutMs;
+  while (Date.now() < den) {
+    const log = fs.readFileSync(MAIL_LOG, 'utf8');
+    const found = log
+      .split('┌─ MAIL')
+      .slice(1)
+      .some((block) => {
+        const body = block.split('└─')[0] ?? '';
+        const toLine = body.split('\n').find((line) => line.includes('tới:')) ?? '';
+        return toLine.includes(to) && re.test(body);
+      });
+    if (found) return true;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return false;
+}
+
+/** Link xác minh MỚI NHẤT trong log server, hoặc null. */
+function latestVerifyLink() {
+  const log = fs.readFileSync(MAIL_LOG, 'utf8');
+  const all = log.match(/https?:\/\/[^\s│]+\/xac-minh-email\?token=[A-Za-z0-9_-]+/g);
+  return all ? all[all.length - 1] : null;
+}
+
+/**
+ * Dựng một phụ huynh ĐÃ XÁC MINH EMAIL — tức một người báo cáo được tính vào ngưỡng.
+ *
+ * So link với link trước đó thay vì chỉ lấy cái mới nhất: log ghi bất đồng bộ, nên
+ * đọc ngay sau khi đăng ký có thể trúng link của phụ huynh TRƯỚC. Lúc đó bài test sẽ
+ * xác minh lại một tài khoản đã xác minh rồi, và số người "đáng tin" thiếu đi một mà
+ * không có phép kiểm nào đổ ở chỗ gây ra lỗi.
+ */
+let verifyLinkTruoc = latestVerifyLink();
+async function createVerifiedParent(email) {
+  const ctx = await newSession();
+  await registerParent(ctx, email);
+
+  let link = null;
+  const den = Date.now() + 20000;
+  while (Date.now() < den) {
+    const moi = latestVerifyLink();
+    if (moi && moi !== verifyLinkTruoc) {
+      link = moi;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  if (!link) return { ctx, verified: false };
+  verifyLinkTruoc = link;
+
+  const p = await ctx.newPage();
+  await p.goto(link, { waitUntil: 'networkidle' });
+  const text = await p.locator('body').innerText();
+  await p.close();
+  return { ctx, verified: /đã được xác minh/i.test(text) };
+}
+
+/** Số báo cáo đã xác minh mà trang admin đang hiện cho một game. */
+async function trustedCountOf(adminPage, id) {
+  await adminPage.goto(`${APP}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
+  const row = adminPage.locator(`[data-testid=admin-game][data-game-id="${id}"]`);
+  const text = await row.locator('[data-testid=admin-report-count]').innerText();
+  return Number(text.match(/\((\d+) đã xác minh\)/)?.[1] ?? -1);
+}
+
+/**
+ * Game có xuất hiện trong danh sách trên trang chủ khi tìm theo tên?
+ *
+ * `game-card` CHÍNH LÀ thẻ <a>, không phải hộp bọc quanh một thẻ <a>. Bản đầu tiên
+ * của hàm này tìm `querySelector('a')` bên trong nên luôn trả về rỗng — tức là câu
+ * "game đã bị rút khỏi danh sách" xanh cả khi game vẫn còn nguyên trên trang chủ.
+ * Vì vậy đọc href của chính phần tử, và chỉ dò xuống con khi phần tử không có href.
+ */
+async function hienTrongDanhSach(ctx, title, id) {
+  const p = await ctx.newPage();
+  await p.goto(`${APP}/?q=${encodeURIComponent(title)}`, { waitUntil: 'networkidle' });
+  const hrefs = await p.locator('[data-testid=game-card]').evaluateAll((els) =>
+    els.map((e) => e.getAttribute('href') ?? e.querySelector('a')?.getAttribute('href') ?? '')
+  );
+  await p.close();
+  return hrefs.some((h) => h.includes(id));
 }
 
 /**
@@ -98,7 +208,7 @@ let gameUrl = '';
 let gameId = '';
 
 {
-  const p = await registerParent(parentCtx, `e2e-mod-${suffix}@kidogame.test`);
+  const p = await registerParent(parentCtx, OWNER_EMAIL);
   await p.fill('#displayName', 'Bé Kiểm Duyệt');
   await p.fill('#username', CHILD_USER);
   await p.fill('#password', CHILD_PASS);
@@ -115,7 +225,7 @@ let gameId = '';
   await c.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
 
   await c.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
-  await c.fill('#title', `Game kiểm duyệt ${suffix}`);
+  await c.fill('#title', GAME_TITLE);
   await c.setInputFiles('#file', FIXTURE);
   await c.click('[data-testid=upload-form] button[type=submit]');
   await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
@@ -189,21 +299,141 @@ const admin = await adminCtx.newPage();
   check('Bỏ qua báo cáo xong khách vẫn xem được game', (await status(anonCtx, gameUrl)) === 200);
 }
 
-// ---------- Vòng 2: đủ ba báo cáo thì tự ẩn ----------
+/* ----------------------------------------------------------------------------
+ * Vòng 2: BA BÁO CÁO KHÔNG ĐÁNG TIN thì KHÔNG được làm gì game cả.
+ *
+ * Đây là phép kiểm quan trọng nhất trong file. Trước đây đúng ba báo cáo bất kỳ là
+ * ẩn được game, và vì khách vãng lai khoá trùng theo hash IP nên một người đổi mạng
+ * vài lần là tự đủ ngưỡng. Ba báo cáo dưới đây là đúng kịch bản tấn công đó: một
+ * tài khoản bé, một khách, một phụ huynh CHƯA xác minh email.
+ * -------------------------------------------------------------------------- */
 {
   const c = await childCtx.newPage();
-  check('Báo cáo mới #1 (tài khoản bé)', (await submitReport(c, gameUrl, 'DANG_SO')) === 'cam-on');
+  check('Báo cáo của bé được ghi nhận', (await submitReport(c, gameUrl, 'DANG_SO')) === 'cam-on');
   await c.close();
 
   const g = await anonCtx.newPage();
-  check('Báo cáo mới #2 (khách vãng lai)', (await submitReport(g, gameUrl, 'NOI_XAU')) === 'cam-on');
+  check('Báo cáo của khách vãng lai được ghi nhận', (await submitReport(g, gameUrl, 'NOI_XAU')) === 'cam-on');
   await g.close();
 
   const b = await parentBCtx.newPage();
-  check('Báo cáo mới #3 (phụ huynh khác)', (await submitReport(b, gameUrl, 'CHEP_BAI')) === 'cam-on');
+  check(
+    'Báo cáo của phụ huynh chưa xác minh email được ghi nhận',
+    (await submitReport(b, gameUrl, 'CHEP_BAI')) === 'cam-on'
+  );
   await b.close();
 
-  check('Đủ 3 báo cáo thì game tự ẩn, khách vào trả 404', (await status(anonCtx, gameUrl)) === 404);
+  check(
+    'Ba báo cáo KHÔNG xác minh thì game vẫn hiện bình thường',
+    (await status(anonCtx, gameUrl)) === 200
+  );
+  check(
+    'Ba báo cáo không xác minh thì game vẫn nằm trong danh sách trang chủ',
+    await hienTrongDanhSach(anonCtx, GAME_TITLE, gameId)
+  );
+  check('Trang admin đếm 0 báo cáo đã xác minh', (await trustedCountOf(admin, gameId)) === 0);
+
+  // Dọn để vòng sau đếm từ 0, đồng thời kiểm luôn việc bác bỏ xoá cả hai bộ đếm.
+  await admin.goto(`${APP}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
+  await confirmClick(admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`), 'admin-dismiss');
+}
+
+/* ----------------------------------------------------------------------------
+ * Vòng 3: đủ ba báo cáo ĐÃ XÁC MINH thì ẩn mềm.
+ *
+ * Ẩn mềm = rút khỏi trang chủ và tìm kiếm, nhưng link trực tiếp vẫn chơi được. Hai
+ * nửa đó phải kiểm RIÊNG: chỉ kiểm "khách vào link được" thì một lỗi làm game vẫn
+ * nằm trên trang chủ sẽ xanh, mà đó lại chính là thứ ẩn mềm phải chặn.
+ * -------------------------------------------------------------------------- */
+const verifiedCtxs = [];
+{
+  for (let i = 1; i <= 3; i++) {
+    const { ctx, verified } = await createVerifiedParent(`e2e-mod-v${i}-${suffix}@kidogame.test`);
+    verifiedCtxs.push(ctx);
+    check(`Dựng được phụ huynh đã xác minh email #${i}`, verified);
+    const p = await ctx.newPage();
+    check(`Báo cáo đã xác minh #${i} được ghi nhận`, (await submitReport(p, gameUrl)) === 'cam-on');
+    await p.close();
+  }
+
+  check('Trang admin đếm đúng 3 báo cáo đã xác minh', (await trustedCountOf(admin, gameId)) === 3);
+  check('Đủ 3 báo cáo đã xác minh: link trực tiếp VẪN chơi được', (await status(anonCtx, gameUrl)) === 200);
+  check(
+    'Đủ 3 báo cáo đã xác minh: game bị rút khỏi danh sách trang chủ',
+    (await hienTrongDanhSach(anonCtx, GAME_TITLE, gameId)) === false
+  );
+
+  const g = await anonCtx.newPage();
+  await g.goto(gameUrl, { waitUntil: 'networkidle' });
+  check(
+    'Game ẩn mềm vẫn còn nút báo cáo (để còn leo được lên mức ẩn hẳn)',
+    (await g.locator('[data-testid=report-box]').count()) > 0
+  );
+  check(
+    'Người xem thường KHÔNG thấy dòng nào nói game đang bị báo cáo',
+    (await g.locator('[data-testid=admin-limited-banner]').count()) === 0
+  );
+  await g.close();
+
+  const own = await parentCtx.newPage();
+  await own.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  check(
+    'Trang phụ huynh nói rõ game tạm không hiện trên trang chủ',
+    /tạm không hiện trên trang chủ/.test(await own.locator('body').innerText())
+  );
+  await own.close();
+
+  check(
+    'Phụ huynh nhận được mail báo game bị siết',
+    await waitForMailTo(OWNER_EMAIL, /tạm không hiện trên trang chủ/i)
+  );
+}
+
+/* ----------------------------------------------------------------------------
+ * Vòng 4: phụ huynh KHÔNG lật được quyết định của cộng đồng.
+ *
+ * Phụ huynh vẫn ẩn được game của con bất cứ lúc nào — đó là lớp bảo vệ mạnh nhất
+ * của họ. Nhưng bấm "cho hiện lại" thì chỉ hiện tới mức cộng đồng đang cho phép,
+ * chứ không về PUBLISHED. Không có ràng buộc này thì toàn bộ việc đếm báo cáo là vô
+ * nghĩa: bấm một cái là xong, và bấm lại được mãi.
+ * -------------------------------------------------------------------------- */
+{
+  const own = await parentCtx.newPage();
+  await own.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  await own.locator('[data-testid=game-visibility] button[type=submit]').first().click();
+  await own.waitForTimeout(2500);
+  check('Phụ huynh ẩn được game của con', (await status(anonCtx, gameUrl)) === 404);
+
+  await own.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  await own.locator('[data-testid=game-visibility] button[type=submit]').first().click();
+  await own.waitForTimeout(2500);
+  await own.close();
+
+  check(
+    'Phụ huynh cho hiện lại: chỉ về mức ẩn mềm, KHÔNG về trang chủ',
+    (await status(anonCtx, gameUrl)) === 200 &&
+      (await hienTrongDanhSach(anonCtx, GAME_TITLE, gameId)) === false
+  );
+}
+
+/* ----------------------------------------------------------------------------
+ * Vòng 5: đủ ngưỡng gấp đôi thì ẩn hẳn, link trực tiếp cũng chết.
+ * -------------------------------------------------------------------------- */
+{
+  for (let i = 4; i <= 6; i++) {
+    const { ctx, verified } = await createVerifiedParent(`e2e-mod-v${i}-${suffix}@kidogame.test`);
+    verifiedCtxs.push(ctx);
+    check(`Dựng được phụ huynh đã xác minh email #${i}`, verified);
+    const p = await ctx.newPage();
+    check(`Báo cáo đã xác minh #${i} được ghi nhận`, (await submitReport(p, gameUrl)) === 'cam-on');
+    await p.close();
+  }
+
+  check('Đủ 6 báo cáo đã xác minh: link trực tiếp trả 404', (await status(anonCtx, gameUrl)) === 404);
+  check(
+    'Phụ huynh nhận được mail báo game bị ẩn hẳn',
+    await waitForMailTo(OWNER_EMAIL, /đã bị ẩn/i)
+  );
 }
 
 // ---------- Admin xem được game đã ẩn để còn phán xử ----------
@@ -247,15 +477,16 @@ const admin = await adminCtx.newPage();
   const canXem = await totalOf('can-xem');
   const tatCa = await totalOf('tat-ca');
   const dangHien = await totalOf('dang-hien');
+  const anMem = await totalOf('an-mem');
   const daAn = await totalOf('da-an');
   const daGo = await totalOf('da-go');
 
   check('Tab đang chọn được đánh dấu aria-current', tatCa.activeTab === 'Tất cả', tatCa.activeTab);
   // Bất biến thật: ba trạng thái rời nhau phải cộng lại đúng bằng tổng.
   check(
-    'Ba bộ lọc theo trạng thái cộng lại đúng bằng "Tất cả"',
-    dangHien.total + daAn.total + daGo.total === tatCa.total && tatCa.total > 0,
-    `${dangHien.total} hiện + ${daAn.total} ẩn + ${daGo.total} gỡ = ${tatCa.total}`
+    'Bốn bộ lọc theo trạng thái cộng lại đúng bằng "Tất cả"',
+    dangHien.total + anMem.total + daAn.total + daGo.total === tatCa.total && tatCa.total > 0,
+    `${dangHien.total} hiện + ${anMem.total} ẩn mềm + ${daAn.total} ẩn + ${daGo.total} gỡ = ${tatCa.total}`
   );
   check(
     '"Cần xem" là tập con thực sự của "Tất cả"',

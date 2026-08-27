@@ -118,6 +118,21 @@ model LoginAttempt {
 
 enum GameStatus {
   PUBLISHED
+
+  /// Ẩn MỀM: rút khỏi trang chủ, tìm kiếm và mọi danh sách, nhưng link trực tiếp
+  /// vẫn chơi được.
+  ///
+  /// Đây là hành động tự động khi đủ ngưỡng báo cáo, thay cho việc ẩn hẳn. Lý do:
+  /// nội dung xấu bị chặn đúng thứ cần chặn là ĐƯỜNG LAN TRUYỀN — không ai còn tình
+  /// cờ gặp nó nữa — trong khi một game bị vùi oan không biến mất trước mặt những
+  /// người bạn mà bé đã gửi link cho. Hai loại thiệt hại không đối xứng: bỏ sót nội
+  /// dung xấu vài giờ là tệ, nhưng xoá công của một đứa trẻ vì ba người lạ bấm nút
+  /// cũng là tệ, và cái sau thì chính đứa trẻ đó phải chịu.
+  ///
+  /// Đủ ngưỡng gấp đôi thì mới lên HIDDEN. Xem `communityStatus` trong
+  /// `src/lib/moderation.ts`.
+  LIMITED
+
   HIDDEN
   REMOVED
 }
@@ -139,7 +154,23 @@ model Game {
   status GameStatus @default(PUBLISHED)
 
   playCount   Int @default(0)
+
+  /// MỌI báo cáo, kể cả của khách vãng lai. Dùng để admin thấy mức độ ồn ào.
   reportCount Int @default(0)
+
+  /// Chỉ báo cáo của phụ huynh ĐÃ XÁC MINH EMAIL. Đây là con số duy nhất được phép
+  /// tự động thay đổi trạng thái game.
+  ///
+  /// Vì sao phải là cột riêng chứ không dùng `reportCount`: khách vãng lai bị khoá
+  /// trùng theo hash IP, nên một người có Wi-Fi + 4G + VPN là tự đủ ba báo cáo mà
+  /// không cần rủ ai. Đếm kiểu đó thì "ngưỡng 3" thực chất chỉ đắt bằng ba địa chỉ
+  /// IP. Đòi email đã xác minh biến giá đó thành ba hòm thư thật, khác hẳn về bậc.
+  ///
+  /// Trẻ và khách vẫn báo cáo được, vẫn vào hàng đợi admin — chỉ không tự kích hoạt.
+  /// ĐÁNH ĐỔI ĐÃ BIẾT: hiện không có gì bắt phụ huynh xác minh email ngoài một
+  /// banner nhắc, nên lớp tự động sẽ nổ ít hơn trước. Bù lại nó không còn bị lách
+  /// bằng vài phút đổi mạng.
+  trustedReportCount Int @default(0)
 
   /// Tên + mô tả đã bỏ dấu và về chữ thường, để tìm kiếm không dấu.
   ///

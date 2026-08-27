@@ -105,10 +105,24 @@ export default async function ParentDashboard() {
                         </Link>
                         <span className="ml-2 text-sm text-ink-soft">
                           {game.playCount} lượt chơi
-                          {game.status !== 'PUBLISHED' && ' · đang ẩn'}
+                          {game.status === 'LIMITED' && ' · tạm không hiện trên trang chủ'}
+                          {game.status === 'HIDDEN' && ' · đang ẩn'}
+                          {game.status === 'REMOVED' && ' · đã bị gỡ'}
                         </span>
                       </span>
-                      <GameVisibilityToggle gameId={game.id} hidden={game.status !== 'PUBLISHED'} />
+                      {/*
+                        `hidden` là "phụ huynh có đang ẩn game này không", KHÔNG phải
+                        "game có hiện trên trang chủ không". Game LIMITED vẫn chơi được
+                        bằng link nên nút phải ở trạng thái "Ẩn game" — hiện "Cho hiện
+                        lại" thì bấm vào chẳng thay đổi gì (server tính lại vẫn ra
+                        LIMITED) và người ta sẽ tưởng nút bị hỏng.
+
+                        REMOVED thì không có nút: đó là phán quyết của admin, phụ huynh
+                        không tự lật được, và server cũng từ chối.
+                      */}
+                      {game.status !== 'REMOVED' && (
+                        <GameVisibilityToggle gameId={game.id} hidden={game.status === 'HIDDEN'} />
+                      )}
                     </li>
                   ))}
                 </ul>

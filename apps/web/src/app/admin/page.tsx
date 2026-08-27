@@ -3,7 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
-import { REPORT_AUTO_HIDE_THRESHOLD } from '@/lib/moderation';
+import { REPORT_AUTO_HIDE_THRESHOLD, REPORT_HARD_HIDE_THRESHOLD } from '@/lib/moderation';
 import { reasonLabel } from '@/lib/report-reasons';
 import { objectUrl } from '@/lib/storage';
 import { EmptyState, PageTitle } from '@/components/page';
@@ -23,12 +23,14 @@ const PAGE_SIZE = 20;
 
 const STATUS_LABEL: Record<string, string> = {
   PUBLISHED: 'đang hiện',
+  LIMITED: 'ẩn mềm — chỉ vào được bằng link',
   HIDDEN: 'đang ẩn',
   REMOVED: 'đã gỡ hẳn',
 };
 
 /** Nhãn cho `ModerationLog.action`. Mã lạ thì hiện nguyên mã chứ không vỡ trang. */
 const ACTION_LABEL: Record<string, string> = {
+  AUTO_LIMIT: 'Hệ thống tự ẩn khỏi danh sách (đủ ngưỡng báo cáo)',
   AUTO_HIDE: 'Hệ thống tự ẩn (đủ ngưỡng báo cáo)',
   PARENT_HIDE: 'Phụ huynh ẩn game',
   PARENT_UNHIDE: 'Phụ huynh cho hiện lại',
@@ -50,18 +52,27 @@ const FILTERS = [
   { key: 'can-xem', label: 'Cần xem' },
   { key: 'tat-ca', label: 'Tất cả' },
   { key: 'dang-hien', label: 'Đang hiện' },
+  { key: 'an-mem', label: 'Ẩn mềm' },
   { key: 'da-an', label: 'Đang ẩn' },
   { key: 'da-go', label: 'Đã gỡ' },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]['key'];
 
+/*
+ * Bốn bộ lọc theo trạng thái phải RỜI NHAU và phủ hết, tức cộng lại đúng bằng
+ * "Tất cả". Thêm LIMITED mà quên thêm tab cho nó thì có một nhóm game không bộ lọc
+ * nào nhìn thấy — và đó lại đúng là nhóm đang chờ người xem. e2e-moderation canh
+ * bất biến này bằng phép cộng.
+ */
 function whereFor(filter: FilterKey): Prisma.GameWhereInput {
   switch (filter) {
     case 'tat-ca':
       return {};
     case 'dang-hien':
       return { status: 'PUBLISHED' };
+    case 'an-mem':
+      return { status: 'LIMITED' };
     case 'da-an':
       return { status: 'HIDDEN' };
     case 'da-go':
@@ -96,7 +107,14 @@ export default async function AdminPage({
     prisma.game.count({ where }),
     prisma.game.findMany({
       where,
-      orderBy: [{ reportCount: 'desc' }, { updatedAt: 'desc' }],
+      /*
+       * `trustedReportCount` lên trước `reportCount`: game mà HỆ THỐNG đã tự siết
+       * là game đang bị hạn chế ngay lúc này mà chưa người nào xem nội dung, nên nó
+       * phải nằm trên một game mới chỉ ồn ào vì nhiều khách vãng lai bấm nút. Xếp
+       * theo tổng số báo cáo thôi thì một game bị vùi oan có thể trôi xuống dưới
+       * hàng chục game chưa ai làm gì cả.
+       */
+      orderBy: [{ trustedReportCount: 'desc' }, { reportCount: 'desc' }, { updatedAt: 'desc' }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
@@ -215,7 +233,7 @@ export default async function AdminPage({
     <>
       <PageTitle
         title="Kiểm duyệt"
-        lead={`${actor.email} · game tự ẩn khi đủ ${REPORT_AUTO_HIDE_THRESHOLD} báo cáo`}
+        lead={`${actor.email} · ${REPORT_AUTO_HIDE_THRESHOLD} báo cáo đã xác minh thì ẩn mềm, ${REPORT_HARD_HIDE_THRESHOLD} thì ẩn hẳn`}
       />
 
       {takedowns.length > 0 && (
@@ -359,8 +377,16 @@ export default async function AdminPage({
                     )}{' '}
                     · bố mẹ: {game.child.parent.email}
                   </p>
+                  {/*
+                    Hiện cả hai con số, vì chỉ một mình `reportCount` thì gây hiểu sai
+                    theo đúng hướng nguy hiểm: admin thấy "5 báo cáo" mà game vẫn đang
+                    hiện sẽ tưởng cơ chế tự động bị hỏng, trong khi thật ra cả 5 đều
+                    của khách vãng lai nên không cái nào tính vào ngưỡng. Số trong
+                    ngoặc mới là số quyết định trạng thái.
+                  */}
                   <p className="text-sm text-ink-soft" data-testid="admin-report-count">
-                    {game.reportCount} báo cáo · {game.playCount} lượt chơi
+                    {game.reportCount} báo cáo ({game.trustedReportCount} đã xác minh) ·{' '}
+                    {game.playCount} lượt chơi
                   </p>
 
                   {game.reports.length > 0 && (

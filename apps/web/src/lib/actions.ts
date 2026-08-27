@@ -22,6 +22,7 @@ import {
   adminRemoveGame,
   adminRestoreGame,
   adminSetChildLocked,
+  communityStatus,
   reportGame,
 } from './moderation';
 import { adminResolveTakedown, submitTakedownRequest } from './takedown';
@@ -224,14 +225,36 @@ export async function setGameHiddenAction(_prev: FormState, form: FormData): Pro
     // Chỉ cho phép tác động lên game của con MÌNH.
     const game = await prisma.game.findFirst({
       where: { id: gameId, child: { parentId } },
-      select: { id: true },
+      select: { id: true, status: true, trustedReportCount: true },
     });
     if (!game) throw new AuthError('Không tìm thấy game này.');
 
-    await prisma.game.update({
-      where: { id: gameId },
-      data: { status: hidden ? 'HIDDEN' : 'PUBLISHED' },
-    });
+    /*
+     * Game admin đã GỠ HẲN thì phụ huynh không được bật lại.
+     *
+     * Trước đây không có chỗ kiểm này, nên `hidden=false` set thẳng PUBLISHED và một
+     * game bị admin gỡ vì nội dung xấu chỉ cách việc trở lại trang chủ đúng một cú
+     * bấm của phụ huynh — mà chính phụ huynh cũng thường không biết vì sao nó bị gỡ.
+     * Đó là toàn bộ lý do REMOVED tồn tại tách khỏi HIDDEN.
+     */
+    if (game.status === 'REMOVED') {
+      throw new AuthError(
+        'Game này đã bị đội kiểm duyệt gỡ, bạn không tự bật lại được. Hãy liên hệ với chúng tôi nếu bạn cho rằng đây là nhầm lẫn.'
+      );
+    }
+
+    /*
+     * Ẩn thì luôn được — đây là lớp bảo vệ mạnh nhất của phụ huynh, không đặt điều
+     * kiện gì.
+     *
+     * Nhưng HIỆN LẠI thì chỉ hiện tới mức mà cộng đồng đang cho phép. Nếu không,
+     * mọi cơ chế đếm báo cáo đều vô nghĩa: game bị siết vì đủ báo cáo, phụ huynh bấm
+     * "hiện" một cái là về PUBLISHED, và có thể bấm lại mãi. Việc siết là để chờ
+     * người kiểm duyệt xem, không phải để thương lượng với chủ game.
+     */
+    const status = hidden ? 'HIDDEN' : communityStatus(game.trustedReportCount);
+
+    await prisma.game.update({ where: { id: gameId }, data: { status } });
     await prisma.moderationLog.create({
       data: {
         gameId,

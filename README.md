@@ -41,7 +41,9 @@ pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 34 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 21 kiểm tra
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 32 kiểm tra
+# e2e-moderation BẮT BUỘC có MAIL_LOG: chỉ báo cáo của phụ huynh đã xác minh email mới
+# tính vào ngưỡng, và đường duy nhất để xác minh là bấm link trong mail.
+SB3_FIXTURE=/…/game.sb3 MAIL_LOG=/tmp/kg-mail.log node infra/e2e-moderation.mjs  # 57 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-takedown.mjs     # 40 kiểm tra
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # 12 kiểm tra
 MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs                  # 13 kiểm tra
@@ -56,13 +58,17 @@ Hai file có số kiểm tra thay đổi theo biến môi trường bạn truy�
 - `e2e-email.mjs` — 13, thành **17** khi có thêm `SB3_FIXTURE` (kiểm mail báo phụ huynh
   mỗi lần con đăng game).
 
-`e2e-email.mjs` cần server được khởi động với stdout đổ vào file, vì nó moi link
-xác minh / đặt lại mật khẩu **từ log server**:
+`e2e-email.mjs` và `e2e-moderation.mjs` cần server được khởi động với stdout đổ vào
+file, vì chúng moi link xác minh / đặt lại mật khẩu **từ log server**:
 
 ```bash
 pnpm --filter @kidogame/web exec next dev -p 3000 > /tmp/kg-mail.log 2>&1 &
 MAIL_LOG=/tmp/kg-mail.log node infra/e2e-email.mjs
 ```
+
+Với `e2e-moderation.mjs` thì `MAIL_LOG` không phải tuỳ chọn mà là điều kiện chạy: nó
+phải dựng **sáu** phụ huynh đã xác minh email (ba để chạm ngưỡng ẩn mềm, ba nữa để chạm
+ngưỡng ẩn hẳn), và cách duy nhất để xác minh một tài khoản là bấm link trong mail.
 
 **Chạy e2e ở cổng khác 3000 là hỏng.** Player server gửi header
 `frame-ancestors <APP_ORIGIN>`, mặc định là `http://localhost:3000`. Đổi cổng app mà
@@ -241,6 +247,54 @@ bên lệch định dạng là hash không verify được mà không ai báo l�
 
 Chống dò mật khẩu khoá theo danh tính (email/username), **không theo IP**: cả một
 lớp học hay một gia đình thường dùng chung IP.
+
+## Báo cáo, và bốn trạng thái của một game
+
+Game public ngay khi đăng, không có hàng đợi duyệt trước — nên lớp tự động dưới đây là
+lớp hậu kiểm chạy không cần người. Quy tắc nằm gọn trong
+[`communityStatus`](apps/web/src/lib/moderation.ts), và **mọi** chỗ cần trả lời "bỏ lệnh
+ẩn thì game về đâu" đều phải gọi hàm đó.
+
+| Trạng thái | Trang chủ & tìm kiếm | Link trực tiếp | Ai đặt |
+|---|---|---|---|
+| `PUBLISHED` | có | chơi được | mặc định |
+| `LIMITED` | **không** | **chơi được** | tự động, 3 báo cáo đã xác minh |
+| `HIDDEN` | không | 404 | tự động ở 6 báo cáo, hoặc phụ huynh, hoặc yêu cầu gỡ bản quyền |
+| `REMOVED` | không | 404 | chỉ admin |
+
+**Chỉ báo cáo của phụ huynh đã xác minh email được tính vào ngưỡng.** Trẻ và khách vẫn
+báo cáo được, vẫn vào hàng đợi admin, chỉ không tự kích hoạt gì. Lý do: khách vãng lai
+khoá chống trùng theo hash IP, nên một người có Wi-Fi + 4G + VPN là tự đủ ba báo cáo mà
+không cần rủ ai — "ngưỡng 3" khi đó thực chất chỉ đắt bằng ba địa chỉ IP. Đòi email đã
+xác minh biến giá đó thành ba hòm thư thật. Hai con số nằm ở hai cột riêng
+(`reportCount` và `trustedReportCount`) và trang `/admin` hiện cả hai, vì thấy "5 báo
+cáo" mà game vẫn hiện thì người ta sẽ tưởng cơ chế hỏng.
+
+**Vì sao mức ẩn mềm tồn tại.** Mức đầu tiên xảy ra khi *chưa có người nào* xem nội dung
+game. Rút khỏi trang chủ là đã chặn đúng thứ cần chặn — đường lan truyền, không ai còn
+tình cờ gặp nội dung xấu nữa — trong khi game của một đứa trẻ bị vùi oan không biến mất
+trước mặt những người bạn nó vừa gửi link cho. Hai loại thiệt hại không đối xứng, và
+người chịu loại thứ hai là đứa trẻ.
+
+**Ba ràng buộc dễ vô tình phá:**
+
+1. **Phụ huynh ẩn được bất cứ lúc nào, nhưng "hiện lại" chỉ về tới mức cộng đồng cho
+   phép.** Không có ràng buộc này thì việc đếm báo cáo là vô nghĩa — bấm một cái là về
+   `PUBLISHED`, và bấm lại được mãi.
+2. **Game `LIMITED` vẫn còn nút báo cáo.** Bỏ nó thì mức ẩn mềm thành cái sàn không bao
+   giờ leo lên `HIDDEN`, và ngưỡng gấp đôi trở thành chữ chết.
+3. **Yêu cầu gỡ bản quyền phải ẩn được cả game đang `LIMITED`.** Game đó vẫn chơi được
+   bằng link nên vẫn đang phát tán nội dung, mà `/dieu-khoan` thì hứa công khai là ẩn
+   ngay khi nhận.
+
+Phụ huynh nhận mail ở cả hai mức. Mail cố ý KHÔNG nói ai đã báo cáo và vì lý do gì: lý
+do là dữ liệu để admin phán xử, đưa cho phụ huynh thì mở đường đoán xem đứa nào trong
+lớp đã bấm nút.
+
+**Đánh đổi đã biết, chưa xử:** hiện không có gì bắt phụ huynh xác minh email ngoài một
+banner nhắc ở `/phu-huynh`, nên lớp tự động sẽ nổ ít hơn hẳn so với khi đếm mọi báo cáo.
+Đổi lại nó không còn bị lách bằng vài phút đổi mạng. Muốn lớp tự động mạnh hơn thì phải
+làm cho việc xác minh email trở nên bắt buộc hoặc đáng làm — đó là quyết định sản phẩm.
 
 ## Nút điều khiển trên điện thoại
 
@@ -531,7 +585,7 @@ không bắt được, phải nghe `console` riêng.
 
 Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ huynh/bé),
 M2.5 (xác minh email + quên mật khẩu), M3 (tìm kiếm + tag + lọc tuổi),
-M4 (báo cáo → tự ẩn ở ngưỡng 3 → trang kiểm duyệt của admin).
+M4 (báo cáo → ẩn mềm ở 3 báo cáo đã xác minh, ẩn hẳn ở 6 → trang kiểm duyệt của admin).
 
 M5 (Deploy): cả ba phần của mốc này đã viết — Docker Compose + Caddy
 (`infra/Dockerfile`, `infra/docker-compose.yml`, `infra/.env.example`, Caddyfile

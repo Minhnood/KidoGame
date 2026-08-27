@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
-import { REPORT_AUTO_HIDE_THRESHOLD } from '@/lib/moderation';
+import { REPORT_AUTO_HIDE_THRESHOLD, REPORT_HARD_HIDE_THRESHOLD } from '@/lib/moderation';
 import { UPLOADS_PER_CHILD_PER_DAY } from '@/lib/ingest';
 import { isOperatorConfigured, operator, TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
 
@@ -100,9 +100,23 @@ export default function TermsPage() {
         <p>
           <strong>Game hiện công khai ngay khi đăng, không qua bước duyệt trước.</strong> Chúng
           tôi chọn như vậy để bé đăng xong là khoe được ngay. Đổi lại, việc kiểm soát diễn ra ở
-          phía sau: bất kỳ ai cũng báo cáo được một game, đủ {REPORT_AUTO_HIDE_THRESHOLD} báo cáo
-          thì game tự ẩn và chờ người lớn xem lại; phụ huynh ẩn game của con mình bất cứ lúc nào;
-          và chúng tôi gỡ những gì vi phạm những điều ở trên.
+          phía sau: bất kỳ ai cũng báo cáo được một game; phụ huynh ẩn game của con mình bất cứ
+          lúc nào; và chúng tôi gỡ những gì vi phạm những điều ở trên.
+        </p>
+        <p>
+          Về việc tự động: khi một game nhận đủ {REPORT_AUTO_HIDE_THRESHOLD} báo cáo{' '}
+          <strong>từ những phụ huynh đã xác minh email</strong>, hệ thống rút game khỏi trang chủ
+          và phần tìm kiếm ngay, nhưng ai có link trực tiếp thì vẫn chơi được. Đủ{' '}
+          {REPORT_HARD_HIDE_THRESHOLD} báo cáo như vậy thì game bị ẩn hoàn toàn. Chúng tôi làm hai
+          mức thay vì một, vì mức đầu tiên xảy ra khi <em>chưa có người nào</em> xem nội dung game:
+          nó cần chặn được đường lan truyền của nội dung xấu, mà không xoá ngay công của một đứa
+          trẻ chỉ vì vài người bấm nút. Bố mẹ của bé được thông báo qua email trong cả hai trường
+          hợp, và đội kiểm duyệt sẽ xem lại.
+        </p>
+        <p>
+          Báo cáo của trẻ và của khách chưa đăng nhập vẫn được ghi nhận và vẫn tới tay đội kiểm
+          duyệt — chỉ không tự động thay đổi trạng thái game. Đây là cách chúng tôi tránh việc một
+          người đổi mạng vài lần là ẩn được game của bất kỳ ai.
         </p>
       </Section>
 

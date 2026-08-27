@@ -36,7 +36,13 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
    */
   const actor = await getActor();
   const isAdmin = actor?.kind === 'parent' && actor.isAdmin;
-  if (!game || (game.status !== 'PUBLISHED' && !isAdmin)) notFound();
+
+  /*
+   * LIMITED chơi được với MỌI người — đó là toàn bộ ý nghĩa của ẩn mềm. Game chỉ
+   * biến mất khỏi trang chủ, tìm kiếm và các danh sách; ai có link vẫn vào được.
+   */
+  const xemDuoc = game?.status === 'PUBLISHED' || game?.status === 'LIMITED';
+  if (!game || (!xemDuoc && !isAdmin)) notFound();
 
   const warnings = (Array.isArray(game.warnings) ? game.warnings : []) as unknown as Warning[];
   const cloudWarning = warnings.find((w) => w.code === 'CLOUD_VARIABLES');
@@ -48,7 +54,15 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         lead={`Của bé ${game.child.displayName} · ${game.playCount} lượt chơi`}
       />
 
-      {game.status !== 'PUBLISHED' && (
+      {/*
+        Banner này CHỈ cho admin, và chỉ cho game người thường không xem được.
+
+        Với LIMITED thì cố ý KHÔNG có banner nào cho người xem thường: game vẫn chơi
+        được bình thường, mà dán lên đó dòng "game này đang bị báo cáo" thì mọi người
+        bé gửi link cho đều đọc được — biến một biện pháp tạm thời, chưa ai xác minh,
+        thành một lời buộc tội công khai nhắm vào đứa trẻ làm ra game.
+      */}
+      {!xemDuoc && (
         <div className="mx-auto max-w-180" data-testid="admin-preview-banner">
           <Notice tone="warn" role="status">
             Game này {game.status === 'HIDDEN' ? 'đang bị ẩn' : 'đã bị gỡ'}, người thường vào đây
@@ -57,8 +71,18 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* Chỉ đếm lượt chơi thật. Admin vào xem để kiểm duyệt không phải là một lượt chơi. */}
-      {game.status === 'PUBLISHED' && <PlayCounter gameId={game.id} />}
+      {isAdmin && game.status === 'LIMITED' && (
+        <div className="mx-auto max-w-180" data-testid="admin-limited-banner">
+          <Notice tone="warn" role="status">
+            Game này đang bị ẩn mềm vì đủ báo cáo: không hiện trên trang chủ và tìm kiếm, nhưng
+            link trực tiếp vẫn chơi được. Người xem thường không thấy dòng này.
+          </Notice>
+        </div>
+      )}
+
+      {/* Chỉ đếm lượt chơi thật. Admin vào xem để kiểm duyệt không phải là một lượt chơi.
+          LIMITED vẫn đếm: người vào bằng link là người chơi thật. */}
+      {xemDuoc && <PlayCounter gameId={game.id} />}
 
       {/* Mọi thuộc tính bảo mật của iframe nằm trong StageFrame — sửa ở đó. */}
       <StageFrame src={objectUrl('html', game.htmlSha256)} title={game.title} />
@@ -78,10 +102,14 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           </ButtonLink>
         </div>
 
-        {/* Game đã ẩn/gỡ thì không có gì để báo cáo nữa — nút chỉ dẫn tới lỗi. */}
-        <div className="mb-12">
-          {game.status === 'PUBLISHED' && <ReportForm gameId={game.id} />}
-        </div>
+        {/*
+          Game đã ẩn/gỡ thì không có gì để báo cáo nữa — nút chỉ dẫn tới lỗi.
+
+          Nhưng game LIMITED thì VẪN báo cáo được, cố ý: nó vẫn đang chơi được bằng
+          link, và chính nó là loại game cần thêm tín hiệu nhất. Bỏ nút ở đây thì mức
+          ẩn mềm thành cái sàn không bao giờ leo lên ẩn hẳn được.
+        */}
+        <div className="mb-12">{xemDuoc && <ReportForm gameId={game.id} />}</div>
       </div>
     </>
   );

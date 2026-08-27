@@ -17,16 +17,19 @@ function ToggleForm({
   fields,
   label,
   variant = 'ghost',
+  testId,
 }: {
   action: (prev: FormState, form: FormData) => Promise<FormState>;
   fields: Record<string, string>;
   label: string;
   variant?: 'primary' | 'ghost' | 'danger';
+  /** Để e2e khoanh đúng nút. Nhãn nút đổi theo trạng thái nên không bám vào chữ được. */
+  testId?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
 
   return (
-    <form action={formAction} className="inline">
+    <form action={formAction} className="inline" data-testid={testId}>
       {Object.entries(fields).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}
@@ -60,6 +63,7 @@ export function GameVisibilityToggle({ gameId, hidden }: { gameId: string; hidde
       fields={{ gameId, hidden: String(!hidden) }}
       label={hidden ? 'Hiện lại' : 'Ẩn game'}
       variant={hidden ? 'primary' : 'danger'}
+      testId="game-visibility"
     />
   );
 }

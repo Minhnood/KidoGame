@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AuthError } from './auth';
 import { prisma } from './db';
 import { appOrigin, sendMail } from './mail';
-import { REPORT_AUTO_HIDE_THRESHOLD } from './moderation';
+import { communityStatus } from './moderation';
 import { operator, TAKEDOWN_SLA_WORKING_DAYS } from './operator';
 import {
   MAX_CLAIMANT_EMAIL_LENGTH,
@@ -148,14 +148,21 @@ export async function submitTakedownRequest(input: TakedownInput): Promise<void>
   try {
     await prisma.$transaction(async (tx) => {
       /*
-       * Ẩn bằng `updateMany` có điều kiện `status: 'PUBLISHED'` thay vì đọc-rồi-ghi:
-       * số hàng bị tác động vừa là kết quả vừa là câu trả lời cho "chính yêu cầu
-       * này có phải thứ đã ẩn game hay không". Đọc trước rồi ghi sau thì hai yêu
-       * cầu đến cùng lúc sẽ cùng tự nhận là mình đã ẩn, và lúc bác bỏ cái thứ hai
-       * game sẽ hiện lại trong khi cái thứ nhất vẫn còn đang mở.
+       * Ẩn bằng `updateMany` có điều kiện trạng thái thay vì đọc-rồi-ghi: số hàng bị
+       * tác động vừa là kết quả vừa là câu trả lời cho "chính yêu cầu này có phải
+       * thứ đã ẩn game hay không". Đọc trước rồi ghi sau thì hai yêu cầu đến cùng
+       * lúc sẽ cùng tự nhận là mình đã ẩn, và lúc bác bỏ cái thứ hai game sẽ hiện
+       * lại trong khi cái thứ nhất vẫn còn đang mở.
+       *
+       * PHẢI gồm cả LIMITED, không chỉ PUBLISHED: game đang bị ẩn mềm vì báo cáo thì
+       * link trực tiếp vẫn chơi được, nên với một khiếu nại bản quyền nó vẫn đang
+       * phát tán nội dung. Bỏ LIMITED ra khỏi đây thì `didHide` = false, game giữ
+       * nguyên mức chơi-được-bằng-link, và ta đã hứa công khai ở /dieu-khoan là ẩn
+       * ngay khi nhận. Đúng loại lỗi không ai thấy: hàng vẫn vào hàng đợi, admin vẫn
+       * xử, chỉ có lời hứa là trượt.
        */
       const hidden = await tx.game.updateMany({
-        where: { id: game.id, status: 'PUBLISHED' },
+        where: { id: game.id, status: { in: ['PUBLISHED', 'LIMITED'] } },
         data: { status: 'HIDDEN' },
       });
       const didHide = hidden.count === 1;
@@ -274,7 +281,7 @@ export async function adminResolveTakedown(
         select: {
           id: true,
           title: true,
-          reportCount: true,
+          trustedReportCount: true,
           child: { select: { displayName: true, parent: { select: { email: true } } } },
         },
       },
@@ -284,6 +291,8 @@ export async function adminResolveTakedown(
   if (request.status !== 'OPEN') throw new AuthError('Yêu cầu này đã được xử lý rồi.');
 
   let restored = false;
+  /** Mức được hiện lại tới. Cần riêng vì "đã hiện lại" và "hiện lại tới đâu" khác nhau. */
+  let restoredTo: 'PUBLISHED' | 'LIMITED' | 'HIDDEN' | null = null;
 
   await prisma.$transaction(async (tx) => {
     if (accept) {
@@ -304,12 +313,23 @@ export async function adminResolveTakedown(
       const otherOpen = await tx.takedownRequest.count({
         where: { gameId: request.game.id, status: 'OPEN', id: { not: request.id } },
       });
-      if (otherOpen === 0 && request.game.reportCount < REPORT_AUTO_HIDE_THRESHOLD) {
-        const back = await tx.game.updateMany({
-          where: { id: request.game.id, status: 'HIDDEN' },
-          data: { status: 'PUBLISHED' },
-        });
-        restored = back.count === 1;
+
+      /*
+       * Hiện lại tới ĐÚNG mức mà báo cáo cộng đồng đang cho phép, không phải luôn
+       * luôn PUBLISHED. Trước đây chỗ này chỉ so `reportCount` với ngưỡng rồi
+       * hoặc hiện hẳn hoặc không hiện gì — nay đã có mức trung gian nên phải trả về
+       * đúng mức đó, để kết luận của vụ bản quyền không xoá mất tín hiệu của vụ báo
+       * cáo. `communityStatus` là nơi duy nhất biết quy tắc này.
+       */
+      if (otherOpen === 0) {
+        restoredTo = communityStatus(request.game.trustedReportCount);
+        if (restoredTo !== 'HIDDEN') {
+          const back = await tx.game.updateMany({
+            where: { id: request.game.id, status: 'HIDDEN' },
+            data: { status: restoredTo },
+          });
+          restored = back.count === 1;
+        }
       }
     }
 
@@ -380,9 +400,11 @@ export async function adminResolveTakedown(
             `Chúng tôi đã xem lại game "${request.game.title}" của bé ${request.game.child.displayName}`,
             'và thấy yêu cầu gỡ chưa đủ căn cứ.',
             '',
-            restored
+            restored && restoredTo === 'PUBLISHED'
               ? `Game đã hiện lại bình thường: ${gameUrl}`
-              : 'Game hiện vẫn đang ẩn vì một lý do khác, bạn xem lại ở trang quản lý nhé.',
+              : restored
+                ? `Game đã chơi lại được bằng link, nhưng vẫn chưa hiện trên trang chủ vì đang có báo cáo khác cần xem: ${gameUrl}`
+                : 'Game hiện vẫn đang ẩn vì một lý do khác, bạn xem lại ở trang quản lý nhé.',
           ].join('\n'),
     }),
   ]).then((rs) => {
