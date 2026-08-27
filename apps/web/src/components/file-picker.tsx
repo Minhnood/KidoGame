@@ -45,7 +45,7 @@ export function FilePicker({
         }}
       />
 
-      <div className="flex flex-wrap items-center gap-3 rounded-field border border-border bg-surface p-2.5 peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent">
+      <div className="flex flex-wrap items-center gap-3 rounded-field border border-field-border bg-surface p-2.5 peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus">
         <label
           htmlFor={id}
           className="inline-flex min-h-touch cursor-pointer items-center rounded-full bg-chrome px-5 font-bold text-chrome-ink transition-colors hover:bg-chrome/85"

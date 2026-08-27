@@ -37,9 +37,10 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 
 ```bash
 pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
+node infra/contrast-check.mjs              # 38 cặp màu, không cần server
 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 42 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 44 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 21 kiểm tra
 # e2e-moderation BẮT BUỘC có MAIL_LOG: chỉ báo cáo của phụ huynh đã xác minh email mới
 # tính vào ngưỡng, và đường duy nhất để xác minh là bấm link trong mail.
@@ -218,6 +219,53 @@ seed lại từ đầu.
 Tailwind v4, cấu hình CSS-first. **Design token nằm trong `@theme` ở
 `src/app/globals.css`** — đổi màu thương hiệu, bo góc, cỡ chữ chỉ sửa ở đó.
 
+### Bảng màu chọn theo mắt trẻ em
+
+Không phải "rực rỡ hơn" mà là **dễ đọc và đỡ mỏi mắt hơn**. Mắt trẻ khác mắt người lớn ở
+ba điểm cụ thể, và mỗi điểm dẫn tới một quyết định:
+
+| Đặc điểm của mắt trẻ | Hệ quả trong bảng màu |
+|---|---|
+| Thuỷ tinh thể trong hơn → truyền nhiều ánh sáng xanh hơn, chói hơn với nền trắng lạnh | Nền **ấm** (`#f8f7f3`) thay cho xanh-xám, và `surface` là trắng ngà chứ không phải `#ffffff` |
+| Đang HỌC đọc, chưa đoán được từ theo hình dạng như người lớn | Chữ nội dung nhắm mức **AAA (7:1)**, không phải mức tối thiểu AA (4.5:1) |
+| Loạn thị phổ biến và thường chưa được phát hiện → chữ trắng tinh trên nền gần đen bị loang viền | Chữ trên thanh điều hướng là trắng **dịu** (`#f4f4fa`), không phải `#ffffff` |
+
+**Tương phản được ĐO, không phải ước lượng bằng mắt:**
+
+```bash
+node infra/contrast-check.mjs      # 38 cặp màu, cả hai giao diện
+```
+
+Script đọc giá trị thẳng từ `globals.css` rồi tính theo công thức WCAG 2.1. Cần một
+script vì tương phản là con số chứ không phải cảm giác: một màu xám nhạt "vẫn đọc được"
+trên MacBook trong phòng máy lạnh có thể vô hình trên máy tính bảng cũ ngoài hiên. Mắt
+người viết code không phải mắt người dùng.
+
+Lần đo đầu tiên có **11 cặp không đạt**, gồm hai chỗ đáng lo nhất:
+
+- **Viền focus chỉ 2.18:1** ở giao diện sáng. Đó là thứ duy nhất cho biết bàn phím đang
+  ở đâu, mà cam sáng trên nền sáng thì gần như vô hình. Nay có token `--color-focus`
+  riêng: cam nâu đậm ở giao diện sáng, cam sáng ở giao diện tối.
+- **Viền ô nhập 1.17:1** — ô để trẻ bấm vào mà gõ, mờ tới mức trên máy tính bảng ngoài
+  sáng là không thấy có ô nào. Nay tách `--color-field-border` (≥3:1 theo WCAG 1.4.11)
+  khỏi `--color-border` dùng cho mép thẻ trang trí.
+
+**Hai token phải tách ra vì một cái không gánh được hai vai:**
+
+- `accent-dark` từng vừa là nền hover của nút cam, vừa là màu chữ link. Làm nền thì phải
+  còn ra màu cam; làm chữ trên nền sáng thì phải tối hơn nhiều. Nó thua ở vai thứ hai
+  (link "Quên mật khẩu?" chỉ 2.91:1), nên màu chữ tách sang `--color-accent-text`.
+- `border` từng vừa là viền ô nhập vừa là mép thẻ. Xem trên.
+
+**Về mù màu** (~8% bé trai bị mù màu đỏ-lục): bảng màu này không dùng riêng màu để
+truyền thông tin. Hộp cảnh báo và hộp lỗi đều có icon và nền riêng, không chỉ chữ màu
+khác; link inline có **gạch chân** chứ không chỉ đổi màu. Đáng chú ý vì đỏ (`danger`) và
+cam nâu (`accent-text`) chỉ chênh nhau 1.04:1 về độ sáng — mất cảm nhận màu là hai thứ
+đó gần như giống nhau, nên dấu hiệu phi-màu là phần duy nhất còn lại.
+
+Bốn màu phụ `sky` / `grass` / `berry` / `sun` hiện **không được dùng ở đâu cả**. Để lại
+vì chúng vô hại, nhưng đừng tưởng chúng đang có tác dụng gì.
+
 Vài lựa chọn có chủ đích cho đối tượng trẻ em:
 
 - Vùng chạm tối thiểu 48px (`--spacing-touch`), không phải 44px như web người lớn.
@@ -261,7 +309,7 @@ phép kiểm nào đỏ, chỉ có console biết:
    màu sập**. Người dùng ở đây là trẻ em dùng máy bố mẹ thải lại, nên chọn dài dòng mà
    không vỡ.
 
-`e2e-check` canh 8 phép kiểm cho phần này, gồm cả "giao diện tối có đảo màu CHỮ không"
+`e2e-check` canh 10 phép kiểm cho phần này, gồm cả "giao diện tối có đảo màu CHỮ không"
 (chỉ đảo nền là được chữ tối trên nền tối — vẫn "có giao diện tối" và vẫn không đọc
 được) và "không có lệch hydration nào".
 

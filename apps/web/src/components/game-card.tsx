@@ -37,7 +37,7 @@ export function GameCard({ game }: { game: GameCardData }) {
       />
       <div className="px-3.5 pb-3.5 pt-3">
         {/* 2 dòng thay vì cắt cụt: tên game bị cắt thì trẻ không biết game gì. */}
-        <p className="mb-0.5 line-clamp-2 font-bold group-hover:text-accent-dark">{game.title}</p>
+        <p className="mb-0.5 line-clamp-2 font-bold group-hover:text-accent-text">{game.title}</p>
         <p className="text-sm text-ink-soft">
           {game.authorName} · {game.playCount} lượt chơi
         </p>

@@ -46,17 +46,17 @@ export default async function LoginParentPage({
       </AuthForm>
 
       <p className="mb-12 text-ink-soft">
-        <Link href="/quen-mat-khau" className="font-bold text-accent-dark">
+        <Link href="/quen-mat-khau" className="font-bold text-accent-text underline">
           Quên mật khẩu?
         </Link>
         {' · '}
         Bé đăng nhập để đăng game?{' '}
-        <Link href="/be-dang-nhap" className="font-bold text-accent-dark">
+        <Link href="/be-dang-nhap" className="font-bold text-accent-text underline">
           Vào đây
         </Link>
         {' · '}
         Chưa có tài khoản?{' '}
-        <Link href="/dang-ky" className="font-bold text-accent-dark">
+        <Link href="/dang-ky" className="font-bold text-accent-text underline">
           Đăng ký
         </Link>
       </p>

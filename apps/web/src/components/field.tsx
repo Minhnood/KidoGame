@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react';
 
 const control =
-  'w-full rounded-field border border-border bg-surface px-3.5 py-3 ' +
+  'w-full rounded-field border border-field-border bg-surface px-3.5 py-3 ' +
   'text-base text-ink placeholder:text-ink-faint ' +
   'min-h-touch';
 

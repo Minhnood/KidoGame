@@ -15,14 +15,43 @@
    */
   --color-ink: #1b1b32;
   --color-ink-soft: #5a5a77;
-  --color-ink-faint: #8b8ba7;
+  /* Chỉ dùng cho placeholder. Bản cũ (#8b8ba7) chỉ đạt 3.31:1 trên nền trắng — dưới
+     ngưỡng 4.5:1, tức là dòng gợi ý "Tìm game theo tên..." mờ đi đúng với người cần
+     nó nhất. Xem `infra/contrast-check.mjs`. */
+  --color-ink-faint: #6e6e8c;
 
-  --color-bg: #f6f7fb;
-  --color-surface: #ffffff;
-  --color-border: #e3e5f0;
+  /* Nền ẤM, không phải xanh-xám. Mắt trẻ có thuỷ tinh thể trong hơn mắt người lớn
+     nên truyền qua nhiều ánh sáng xanh hơn và chói hơn với nền trắng lạnh. Ngả vàng
+     một chút làm giảm cảm giác chói mà không đụng tới tương phản (vẫn 15.7:1 với
+     chữ), và đi cùng cam thương hiệu tự nhiên hơn xanh-xám. */
+  --color-bg: #f8f7f3;
+  --color-surface: #fffdf8;
+
+  /* Viền TRANG TRÍ: mép thẻ, đường kẻ. Nhạt là có chủ đích. */
+  --color-border: #d9d9e4;
+
+  /* Viền Ô NHẬP — phải là token riêng, không dùng chung với viền trang trí.
+     WCAG 1.4.11 đòi 3:1 cho ranh giới của thành phần cần nhận diện được, mà viền
+     trang trí ở trên chỉ đạt ~1.4:1. Ô nhập là chỗ trẻ phải TÌM ra để bấm vào; một
+     cái khung mờ 1.2:1 thì trên máy tính bảng ngoài sáng là không thấy ô nào cả. */
+  --color-field-border: #8b8ba7;
 
   --color-accent: #ff8c1a;
+  /* CHỈ dùng làm nền hover của nút cam. Không dùng làm màu chữ — xem dưới. */
   --color-accent-dark: #e57200;
+
+  /* Màu CHỮ cho link, tách khỏi `accent-dark`.
+   *
+   * Một token không gánh được hai vai này: làm nền hover thì phải còn ra màu cam,
+   * làm chữ trên nền sáng thì phải tối hơn nhiều. `accent-dark` trước đây gánh cả
+   * hai và thua ở vai thứ hai — link "Quên mật khẩu?" chỉ đạt 2.91:1, dưới cả
+   * ngưỡng tối thiểu. */
+  --color-accent-text: #a54f00;
+
+  /* Viền focus. Cam sáng chỉ đạt 2.18:1 trên nền sáng, tức là vòng focus — thứ duy
+     nhất cho biết bàn phím đang ở đâu — gần như vô hình đúng ở giao diện sáng. Trẻ
+     điều hướng bằng Tab nhiều hơn ta tưởng, nên chỗ này không được để thua. */
+  --color-focus: #a54f00;
 
   /* --- Hai màu CỐ ĐỊNH, không đảo theo giao diện ---
    *
@@ -37,7 +66,11 @@
    * Hai vai đó chỉ cần đúng một cặp màu, nên gộp thành `chrome` / `chrome-ink`.
    */
   --color-chrome: #1b1b32;
-  --color-chrome-ink: #ffffff;
+  /* Trắng DỊU, không phải #ffffff. Trên nền gần đen, chữ trắng tinh bị loang viền
+     (halation) — rõ nhất với người loạn thị, mà loạn thị ở trẻ em thì phổ biến và
+     thường chưa được phát hiện. Dịu đi vẫn còn 15.3:1 ở giao diện sáng và 17.6:1 ở
+     giao diện tối, tức không mất gì về tương phản. */
+  --color-chrome-ink: #f4f4fa;
 
   /* Màu phụ để phân biệt các mục cho vui mắt, không mang ý nghĩa trạng thái. */
   --color-sky: #4aa8ff;
@@ -49,7 +82,9 @@
   --color-warn-border: #ffd9a8;
   --color-warn-ink: #8a5200;
 
-  --color-danger: #d64545;
+  /* Đậm hơn bản cũ (#d64545): trên nền hộp lỗi nó chỉ đạt 3.83:1, mà thông báo lỗi
+     là câu người ta đang cần đọc nhất. Nay 4.78:1. */
+  --color-danger: #c62f2f;
   --color-danger-bg: #fdecec;
   --color-danger-border: #f6c6c6;
 
@@ -98,17 +133,24 @@
 :root {
   --toi-ink: #ececf5;
   --toi-ink-soft: #a9a9c2;
-  --toi-ink-faint: #7c7c96;
+  /* Bản cũ (#7c7c96) chỉ đạt 4.14:1 trên nền thẻ — hụt ngưỡng. */
+  --toi-ink-faint: #8a8aa4;
 
   --toi-bg: #12121c;
   --toi-surface: #1c1c2b;
   --toi-border: #2f2f45;
+  /* Viền ô nhập ở giao diện tối phải SÁNG hơn nền, ngược chiều với giao diện sáng.
+     Dùng chung `--toi-border` (1.29:1) là ô nhập biến mất trên nền tối. */
+  --toi-field-border: #6a6a85;
 
   --toi-accent: #ff9d3d;
-  /* Ở giao diện tối, "đậm hơn" khi hover là SÁNG hơn. Giữ nguyên tên biến vì nó
-     còn được dùng làm màu chữ cho link (`text-accent-dark`), và trên nền tối thì
-     cam sáng mới đủ tương phản. */
+  /* Ở giao diện tối, "đậm hơn" khi hover là SÁNG hơn. */
   --toi-accent-dark: #ffb570;
+  /* Chữ link. Trên nền tối thì cam sáng mới đủ tương phản (9.7:1) — đúng ngược với
+     giao diện sáng, nơi chữ link phải là cam nâu đậm. */
+  --toi-accent-text: #ffb570;
+  /* Vòng focus giữ cam sáng: trên nền tối nó đã đạt 9:1, không cần đổi. */
+  --toi-focus: #ff9d3d;
 
   --toi-chrome: #0d0d18;
 
@@ -137,8 +179,11 @@
     --color-bg: var(--toi-bg);
     --color-surface: var(--toi-surface);
     --color-border: var(--toi-border);
+    --color-field-border: var(--toi-field-border);
     --color-accent: var(--toi-accent);
     --color-accent-dark: var(--toi-accent-dark);
+    --color-accent-text: var(--toi-accent-text);
+    --color-focus: var(--toi-focus);
     --color-chrome: var(--toi-chrome);
     --color-sky: var(--toi-sky);
     --color-grass: var(--toi-grass);
@@ -163,8 +208,11 @@
   --color-bg: var(--toi-bg);
   --color-surface: var(--toi-surface);
   --color-border: var(--toi-border);
+  --color-field-border: var(--toi-field-border);
   --color-accent: var(--toi-accent);
   --color-accent-dark: var(--toi-accent-dark);
+  --color-accent-text: var(--toi-accent-text);
+  --color-focus: var(--toi-focus);
   --color-chrome: var(--toi-chrome);
   --color-sky: var(--toi-sky);
   --color-grass: var(--toi-grass);
@@ -243,7 +291,7 @@ body {
 
 /* Viền focus rõ ràng — trẻ dùng bàn phím và điều hướng bằng tab nhiều hơn ta tưởng. */
 :where(a, button, input, textarea, select):focus-visible {
-  outline: 3px solid var(--color-accent);
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
   border-radius: 4px;
 }

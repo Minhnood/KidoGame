@@ -366,12 +366,34 @@ if (FIXTURE) {
  * không đổi được giữa đường.
  * -------------------------------------------------------------------------- */
 {
+  /*
+   * Đọc ĐỘ SÁNG thay vì so chuỗi "rgb(...)" với một giá trị chép cứng.
+   *
+   * Bản trước chép cứng `rgb(246, 247, 251)`, và nó đổ ngay khi bảng màu được chỉnh
+   * cho dịu mắt hơn — dù giao diện vẫn hoàn toàn đúng. Phép kiểm ở đây cần khẳng
+   * định "sáng thì phải sáng, tối thì phải tối", chứ không phải khoá cứng một mã màu
+   * mà việc tinh chỉnh màu là chuyện bình thường. Giá trị màu cụ thể đã có
+   * `infra/contrast-check.mjs` canh riêng.
+   */
   const doc = (p) =>
-    p.evaluate(() => ({
-      bg: getComputedStyle(document.body).backgroundColor,
-      ink: getComputedStyle(document.body).color,
-      theme: document.documentElement.dataset.theme ?? '',
-    }));
+    p.evaluate(() => {
+      const dosang = (css) => {
+        const [r, g, b] = css.match(/\d+/g).slice(0, 3).map(Number);
+        const lin = [r, g, b].map((v) => {
+          const s = v / 255;
+          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+      };
+      const cs = getComputedStyle(document.body);
+      return {
+        bg: cs.backgroundColor,
+        ink: cs.color,
+        bgSang: dosang(cs.backgroundColor),
+        inkSang: dosang(cs.color),
+        theme: document.documentElement.dataset.theme ?? '',
+      };
+    });
 
   const mo = async (colorScheme) => {
     const ctx = await browser.newContext({ colorScheme, viewport: { width: 1100, height: 900 } });
@@ -395,8 +417,14 @@ if (FIXTURE) {
   const dSang = await doc(sang.p);
   const dToi = await doc(toi.p);
 
-  check('Máy ở chế độ sáng: trang dùng bảng màu sáng', dSang.bg === 'rgb(246, 247, 251)', dSang.bg);
-  check('Máy ở chế độ tối: trang tự dùng bảng màu tối', dToi.bg === 'rgb(18, 18, 28)', dToi.bg);
+  check('Máy ở chế độ sáng: trang dùng bảng màu sáng', dSang.bgSang > 0.8, dSang.bg);
+  check('Máy ở chế độ tối: trang tự dùng bảng màu tối', dToi.bgSang < 0.06, dToi.bg);
+  /*
+   * Nền tối phải đi cùng CHỮ sáng. Nếu chỉ kiểm nền thì một bảng màu tối mà quên
+   * đảo màu chữ vẫn xanh — và đó đúng là trường hợp trang không đọc được.
+   */
+  check('Giao diện tối: chữ sáng hơn nền rõ rệt', dToi.inkSang > 0.7, dToi.ink);
+  check('Giao diện sáng: chữ tối hơn nền rõ rệt', dSang.inkSang < 0.06, dSang.ink);
   /*
    * Không chỉ kiểm nền: nếu chỉ nền đổi mà chữ không đổi thì trang thành chữ tối
    * trên nền tối — vẫn "có giao diện tối", và vẫn không đọc được.
@@ -423,7 +451,7 @@ if (FIXTURE) {
   const chonSang = await doc(toi.p);
   check(
     'Người dùng chọn sáng thì thắng cài đặt tối của máy',
-    chonSang.theme === 'light' && chonSang.bg === 'rgb(246, 247, 251)',
+    chonSang.theme === 'light' && chonSang.bgSang > 0.8,
     `${chonSang.theme} / ${chonSang.bg}`
   );
 
@@ -431,7 +459,7 @@ if (FIXTURE) {
   const sauTaiLai = await doc(toi.p);
   check(
     'Tải lại vẫn giữ lựa chọn giao diện',
-    sauTaiLai.theme === 'light' && sauTaiLai.bg === 'rgb(246, 247, 251)',
+    sauTaiLai.theme === 'light' && sauTaiLai.bgSang > 0.8,
     `${sauTaiLai.theme} / ${sauTaiLai.bg}`
   );
 

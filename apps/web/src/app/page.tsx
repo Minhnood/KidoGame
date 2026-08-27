@@ -162,14 +162,14 @@ export default async function HomePage({
           {filtering ? (
             <>
               Không tìm thấy game nào khớp.{' '}
-              <Link href="/" className="font-bold text-accent-dark">
+              <Link href="/" className="font-bold text-accent-text underline">
                 Xem tất cả game
               </Link>
             </>
           ) : (
             <>
               Chưa có game nào cả.{' '}
-              <Link href="/upload" className="font-bold text-accent-dark">
+              <Link href="/upload" className="font-bold text-accent-text underline">
                 Đăng game đầu tiên
               </Link>{' '}
               nhé!

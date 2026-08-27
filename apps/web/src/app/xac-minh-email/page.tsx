@@ -72,7 +72,7 @@ export default async function VerifyEmailPage({
         ) : (
           <p className="text-ink-soft">
             Vào{' '}
-            <Link href="/phu-huynh" className="font-bold text-accent-dark">
+            <Link href="/phu-huynh" className="font-bold text-accent-text underline">
               trang của bố mẹ
             </Link>{' '}
             để bấm gửi lại link mới.

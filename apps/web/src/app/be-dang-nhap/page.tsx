@@ -44,7 +44,7 @@ export default async function LoginChildPage() {
 
       <p className="mb-12 text-ink-soft">
         Bố mẹ đăng nhập{' '}
-        <Link href="/dang-nhap" className="font-bold text-accent-dark">
+        <Link href="/dang-nhap" className="font-bold text-accent-text underline">
           ở đây
         </Link>
         .
