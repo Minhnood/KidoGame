@@ -56,15 +56,6 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile
-      args:
-        # PHẢI truyền lúc BUILD, không chỉ đặt ở `environment` bên dưới: CSP
-        # `frame-src` của app được Next nướng vào bundle trong `next build`.
-        # Xem khối giải thích dài trong infra/Dockerfile.
-        #
-        # Hệ quả cần nhớ: ĐỔI PLAYER_DOMAIN THÌ PHẢI BUILD LẠI. Chạy
-        # `docker compose up -d` mà không có `--build` là image cũ giữ nguyên CSP
-        # cũ. App sẽ từ chối khởi động và nói rõ lý do, chứ không hỏng im lặng.
-        PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
     restart: unless-stopped
     depends_on:
       db:

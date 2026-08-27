@@ -39,7 +39,7 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
 
 # End-to-end, cần cả hai server ở trên đang chạy + Chrome
-SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 30 kiểm tra
+SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-check.mjs        # 34 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-auth.mjs         # 19 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-moderation.mjs   # 32 kiểm tra
 SB3_FIXTURE=/đường/dẫn/tới/game.sb3 node infra/e2e-takedown.mjs     # 40 kiểm tra
@@ -299,34 +299,32 @@ nữa. Đừng sửa domain trực tiếp trong Caddyfile: lệch giữa hai ch�
 không boot"* / *"stage 0x0"* — nhìn y hệt lỗi đóng gói. Đây đúng là cái bẫy đã
 vấp ở dev khi chạy e2e lệch cổng 3000.
 
-#### Đổi `PLAYER_DOMAIN` thì PHẢI build lại image
+#### Cái bẫy build-time đã từng có ở đây
 
-Cùng một cái bẫy, nhưng đi từ hướng ngược lại, và nó **đã xảy ra thật** ngay lần
-`docker compose up` đầu tiên.
+Ghi lại vì nó **đã xảy ra thật** ngay lần `docker compose up` đầu tiên, và vì bài học
+còn nguyên giá trị dù cách sửa đã đổi.
 
-CSP `frame-src` của app được **tính lúc BUILD**: `headers()` trong `next.config.ts`
-được Next đánh giá trong `next build` rồi nướng vào `.next/routes-manifest.json`.
-Còn `objectUrl()` trong `src/lib/storage.ts` đọc `PLAYER_ORIGIN` **lúc gọi**. Hai
-thời điểm khác nhau cho cùng một giá trị.
+Hồi CSP còn nằm trong `headers()` của `next.config.ts`, Next đánh giá nó trong
+`next build` rồi nướng vào `.next/routes-manifest.json` — tức `frame-src` bị chốt theo
+`PLAYER_ORIGIN` **lúc build**. Còn `objectUrl()` trong `src/lib/storage.ts` đọc biến đó
+**lúc gọi**. Hai thời điểm khác nhau cho cùng một giá trị. Kết quả: iframe trỏ đúng
+player domain, CSP vẫn chỉ cho phép `http://127.0.0.1:3001`, trình duyệt chặn iframe,
+và triệu chứng là *"game không boot"*, *"stage 0x0"* — không có lỗi CSP nào hiện ra ở
+nơi bạn đang nhìn.
 
-Nên nếu chỉ đặt `PLAYER_ORIGIN` ở `environment` của compose thì: iframe trỏ đúng
-player domain (URL sinh lúc chạy), nhưng CSP vẫn chỉ cho phép `http://127.0.0.1:3001`
-(mặc định lúc build) → trình duyệt chặn iframe → **"game không boot", "stage 0x0"**.
-Không có lỗi CSP nào hiện ra ở nơi bạn đang nhìn.
-
-Vì vậy compose truyền `PLAYER_ORIGIN` **qua `build.args`**, và image ghi lại giá trị
-đó thành `BUILT_PLAYER_ORIGIN`. `src/instrumentation.ts` đối chiếu hai giá trị lúc
-server khởi động; lệch là **ném lỗi ngay**, app trả 500 cho mọi request kèm log nói
-thẳng phải chạy `docker compose up -d --build`. Container không phục vụ được còn hơn
-container phục vụ mà mọi game đều là màn hình đen.
+**Không còn nữa.** Từ khi CSP chuyển sang `src/middleware.ts` để dùng nonce, nó được
+dựng lại theo từng request và đọc env lúc chạy. Đã kiểm chứng bằng cách chạy image với
+một `PLAYER_ORIGIN` chưa từng tồn tại lúc build và thấy CSP đổi theo:
 
 ```bash
-# ĐÚNG khi đổi domain
-docker compose up -d --build
-
-# SAI: image cũ giữ nguyên CSP cũ. App sẽ từ chối chạy và nói rõ vì sao.
-docker compose up -d
+docker compose run --rm -e PLAYER_ORIGIN=https://khac-han.test web ...
+# -> frame-src https://khac-han.test
 ```
+
+Nên **đổi domain giờ chỉ cần `docker compose up -d`**, không phải `--build`. Cơ chế
+chốt chặn `BUILT_PLAYER_ORIGIN` từng có trong `src/instrumentation.ts` đã bị gỡ: giữ
+một cái chốt canh điều kiện không còn tồn tại thì sớm muộn nó sẽ chặn oan một thao tác
+hợp lệ, và người gặp sẽ mất hàng giờ vì một lời cảnh báo sai.
 
 #### Thử toàn bộ stack trên máy trước khi lên VPS
 
@@ -442,6 +440,46 @@ devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoả
 | `apps/web/src/components` | Bộ component dùng chung (button, field, notice, card, file-picker) |
 | `infra` | Server tĩnh cho dev, Caddyfile + Dockerfile + compose + backup.sh cho production, script e2e |
 | `storage` | File theo địa chỉ nội dung: `sb3/`, `html/`, `thumb/` |
+
+## CSP của app origin — nonce, không phải unsafe-inline
+
+Policy sống trong [`src/middleware.ts`](apps/web/src/middleware.ts), **không** trong
+`next.config.ts`.
+
+Trước đây nó phải mang `script-src 'unsafe-inline'` vì Next chèn script inline để
+hydrate. Nhưng `'unsafe-inline'` làm `script-src` gần như vô nghĩa: chỗ nào lọt được một
+thẻ `<script>` vào HTML là chạy được. Trên một trang mà tên game và mô tả do trẻ con
+nhập được render ra, đó là lớp phòng thủ không nên bỏ trống.
+
+Nonce sửa đúng chỗ đó. Mỗi lần tải trang sinh 16 byte ngẫu nhiên; chỉ script mang đúng
+chuỗi đó mới chạy, và kẻ tấn công không đoán được nonce của lần tải trang mà nạn nhân
+đang mở.
+
+**Ba điều dễ làm hỏng:**
+
+1. **`requestHeaders.set('content-security-policy', ...)` KHÔNG thừa.** Next lấy nonce
+   bằng cách đọc header CSP trên *request* mà middleware đặt vào, rồi tự gắn vào thẻ
+   script của nó. Bỏ dòng đó là trang trắng.
+2. **Không được để CSP ở cả hai nơi.** Hai header CSP thì trình duyệt áp dụng GIAO của
+   chúng — cái cũ không có nonce, cái mới không có `'unsafe-inline'`, giao lại là không
+   script nào chạy. Vì vậy `next.config.ts` chỉ còn các header tĩnh khác.
+3. **`'unsafe-eval'` chỉ ở dev.** `next dev` build bundle bằng devtool eval-source-map.
+   Thiếu nó thì client component không hydrate và hỏng **im lặng** — trang vẫn hiện đủ,
+   chỉ mọi nút bấm không phản ứng.
+
+`style-src` **cố ý giữ `'unsafe-inline'`**: `next/font` và Tailwind đều chèn thẻ
+`<style>` không đi qua đường nonce của Next. Siết chỗ đó đổi lấy rủi ro giao diện vỡ
+không rõ nguyên nhân, trong khi lợi ích nhỏ hơn hẳn — CSS inject được thì xấu, script
+inject được thì mất phiên đăng nhập của trẻ.
+
+Middleware bỏ qua `/_next/static` và `/_next/image`. Không phải để nhanh: nonce phải
+khác nhau mỗi lần tải, nên response mang nonce thì không cache dùng chung được, mà
+`/_next/static` vốn là nội dung bất biến cache vĩnh viễn.
+
+`e2e-check.mjs` canh ba thứ: không có vi phạm CSP nào trong console, nonce đổi mỗi lần
+tải, và `script-src` không còn `'unsafe-inline'`. Vi phạm CSP **không ném exception** —
+trình duyệt chỉ ghi một dòng console rồi lặng lẽ không chạy script — nên `pageerror`
+không bắt được, phải nghe `console` riêng.
 
 ## Vài điều dễ vấp
 

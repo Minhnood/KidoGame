@@ -44,6 +44,20 @@ const page = await context.newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(e.message));
 
+/*
+ * Vi phạm CSP KHÔNG ném exception — trình duyệt chỉ ghi một dòng vào console rồi
+ * lặng lẽ không chạy script đó. Nên `pageerror` ở trên không bắt được, mà hậu quả
+ * lại đúng loại tệ nhất: trang vẫn hiện đủ, chỉ có mọi nút bấm không phản ứng.
+ *
+ * Đáng canh từ khi CSP chuyển sang dùng nonce (src/middleware.ts). Nonce sai một ly
+ * là toàn bộ client component chết im lặng.
+ */
+const cspViolations = [];
+page.on('console', (m) => {
+  const text = m.text();
+  if (/Content Security Policy/i.test(text)) cspViolations.push(text.slice(0, 200));
+});
+
 // Bắt mọi request để soi cookie gửi đi đâu.
 const cookieLeaks = [];
 page.on('request', (req) => {
@@ -112,6 +126,47 @@ check(
 );
 check('Thanh điều khiển hiện đủ nút', stage.greenFlag);
 check('Không có lỗi JS trên trang', pageErrors.length === 0, pageErrors.join('; '));
+
+// Riêng iframe game bị chặn thì đã có phép kiểm "Game boot" bắt; ở đây quan tâm
+// những vi phạm trên CHÍNH trang app, tức là nonce hỏng.
+check(
+  'Không có vi phạm CSP nào trên trang app',
+  cspViolations.length === 0,
+  cspViolations.join(' | ') || 'sạch'
+);
+
+/*
+ * Nonce phải MỚI cho mỗi request. Dùng lại một nonce giữa các lần tải trang thì
+ * kẻ tấn công chỉ cần đọc nonce một lần là dùng được cho lần sau, và cả cơ chế
+ * thành vô nghĩa — mà từ bên ngoài nhìn vào mọi thứ vẫn chạy đúng.
+ */
+{
+  const nonces = [];
+  for (let i = 0; i < 3; i++) {
+    const res = await fetch(APP, { headers: { 'cache-control': 'no-cache' } });
+    nonces.push(res.headers.get('content-security-policy')?.match(/'nonce-([^']+)'/)?.[1] ?? '');
+  }
+  check(
+    'CSP dùng nonce, KHÔNG dùng unsafe-inline cho script',
+    nonces.every(Boolean),
+    nonces[0] ? 'có nonce' : 'KHÔNG thấy nonce'
+  );
+  check(
+    'Mỗi lần tải trang là một nonce khác nhau',
+    new Set(nonces).size === nonces.length,
+    nonces.map((n) => n.slice(0, 8)).join(', ')
+  );
+}
+
+{
+  const csp = (await fetch(APP)).headers.get('content-security-policy') ?? '';
+  const scriptSrc = csp.match(/script-src[^;]*/)?.[0] ?? '';
+  check(
+    "script-src không còn 'unsafe-inline'",
+    !scriptSrc.includes("'unsafe-inline'"),
+    scriptSrc
+  );
+}
 
 // ---------- Header của player origin ----------
 /*

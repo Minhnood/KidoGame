@@ -1,0 +1,17 @@
+{
+  // Dùng TypeScript CỦA PROJECT, không dùng bản đi kèm VS Code.
+  //
+  // Không có dòng này thì IDE và `pnpm typecheck` chạy hai phiên bản tsc khác
+  // nhau, và IDE sẽ hiện những lỗi không tồn tại trong build thật. Đã gặp:
+  // `ts(2882) Cannot find module or type declarations for side-effect import of
+  // './globals.css'` ở src/app/layout.tsx — bản tsc mới hơn bắt lỗi side-effect
+  // import không có khai báo kiểu, còn 5.9.3 của project thì không.
+  //
+  // Lỗi giả trong IDE tệ hơn là không có lỗi: nó dạy người ta bỏ qua gạch đỏ.
+  //
+  // typescript nằm ở apps/web (devDependency của workspace đó), không ở gốc repo.
+  // Nếu bạn mở VS Code ngay tại apps/web thay vì gốc repo thì đường dẫn này phải
+  // rút thành "node_modules/typescript/lib".
+  "typescript.tsdk": "apps/web/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}
