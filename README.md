@@ -359,6 +359,21 @@ trong khi form hợp lệ đang mở, rồi bấm gửi.
 Tài khoản seed `demo@kidogame.local` được đánh dấu đã xác minh ngay trong seed, vì hòm
 thư đó không tồn tại nên không có link nào để bấm.
 
+> **MAIL HỎNG GIỜ LÀ SỰ CỐ CHẶN NGƯỜI DÙNG MỚI — không còn là chuyện bất tiện.**
+>
+> Trước cổng này, `RESEND_API_KEY` sai chỉ làm hỏng luồng quên mật khẩu. Bây giờ nó
+> chặn hẳn việc lên sàn: phụ huynh đăng ký được, đăng nhập được, nhưng **không bao giờ
+> tạo được tài khoản cho con**, nên đứa trẻ không có gì để đăng game.
+>
+> Đã kiểm chứng trên stack Docker với khoá Resend giả: đăng ký vẫn thành công (cố ý —
+> mail trượt không được làm hỏng việc đăng ký), cảnh báo hiện ra, khung tạo tài khoản
+> con biến mất. Nút **Gửi link xác minh** là đường thoát duy nhất, và nó có hiện lỗi
+> nếu gửi tiếp tục trượt — nhờ vậy người dùng biết là hệ thống đang lỗi chứ không phải
+> họ làm sai.
+>
+> Vì vậy trước khi mở cho người thật: gửi thử một lá thư xác minh tới hòm thư có thật
+> và bấm được link, coi đó là điều kiện bắt buộc của việc triển khai.
+
 ## Báo cáo, và bốn trạng thái của một game
 
 Game public ngay khi đăng, không có hàng đợi duyệt trước — nên lớp tự động dưới đây là

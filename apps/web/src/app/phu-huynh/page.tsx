@@ -57,11 +57,20 @@ export default async function ParentDashboard() {
           <Notice tone="warn">
             <p className="font-semibold">Bạn cần xác minh email trước khi tạo tài khoản cho con.</p>
             <p className="mt-1">
-              Chúng tôi đã gửi một lá thư tới <strong>{actor.email}</strong>. Bấm link trong thư là
-              xong. Việc này cần thiết vì tạo tài khoản cho con chính là lúc bạn thay con đồng ý
-              với điều khoản — nên chúng tôi phải biết chắc hòm thư này là của bạn. Nó cũng là
-              cách duy nhất để lấy lại mật khẩu nếu bạn quên.
+              Một lá thư đã được gửi tới <strong>{actor.email}</strong> lúc bạn đăng ký — bấm link
+              trong thư là xong. Không thấy thư (kể cả trong thư rác) thì bấm nút dưới đây.
             </p>
+            <p className="mt-1">
+              Việc này cần thiết vì tạo tài khoản cho con chính là lúc bạn thay con đồng ý với điều
+              khoản, nên chúng tôi phải biết chắc hòm thư này là của bạn. Nó cũng là cách duy nhất
+              để lấy lại mật khẩu nếu bạn quên.
+            </p>
+            {/*
+              KHÔNG khẳng định chắc chắn "chúng tôi đã gửi": lúc đăng ký, mail gửi trượt
+              thì việc đăng ký vẫn thành công (cố ý — xem `registerParentAction`), nên câu
+              đó có thể là nói sai với đúng những người đang mắc kẹt. Nút bên dưới mới là
+              đường thoát thật, và nó HIỆN LỖI nếu gửi tiếp tục trượt.
+            */}
             <VerifyEmailButton />
           </Notice>
         </div>
@@ -151,9 +160,9 @@ export default async function ParentDashboard() {
       {!me?.emailVerifiedAt ? (
         <div data-testid="create-child-blocked" className="mb-12">
           <Notice tone="warn" role="status">
-            Xác minh email xong là khung tạo tài khoản hiện ra ngay ở đây. Thư đã gửi tới{' '}
-            <strong>{actor.email}</strong> — nếu không thấy, xem thử thư rác, hoặc bấm{' '}
-            <strong>Gửi lại thư xác minh</strong> ở phía trên.
+            Xác minh email xong là khung tạo tài khoản hiện ra ngay ở đây. Nếu chưa nhận được thư
+            gửi tới <strong>{actor.email}</strong>, xem thử thư rác, hoặc bấm{' '}
+            <strong>Gửi link xác minh</strong> ở phía trên.
           </Notice>
         </div>
       ) : (
