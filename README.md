@@ -89,13 +89,24 @@ APP_ORIGIN=http://localhost:3100 PLAYER_ORIGIN=http://127.0.0.1:3002 \
 `e2e-touch.mjs` cần một game CÓ dùng phím (mũi tên hoặc phím cách), không thì
 không có nút nào để kiểm.
 
-### Một bộ chỉ chạy được trên bản production
+### Hai bộ chỉ chạy được trên bản production
 
 ```bash
 cd infra && docker compose up -d --build
 docker compose run --rm web pnpm --filter @kidogame/web db:deploy
-node infra/e2e-prod-cookie.mjs        # 10 kiểm tra
+node infra/e2e-prod-cookie.mjs        # 10 kiểm tra — soi kỹ một luồng
+node infra/e2e-prod-routes.mjs        # 14 route  — soi nông toàn bộ bề mặt
 ```
+
+`e2e-prod-routes.mjs` mở lần lượt mọi trang bằng ba vai (khách, phụ huynh, bé) và
+soi bốn thứ: lỗi JS, vi phạm CSP, lệch hydration, và mọi phản hồi 4xx/5xx kể cả
+của tài nguyên phụ. Nó tự lấy một game từ trang chủ nên không cần truyền id.
+
+Có bộ này vì **CSP ở dev có `'unsafe-eval'`, production thì không**. Cả một lớp lỗi
+— thư viện nào đó gọi `eval`, một inline script lọt lưới nonce — chạy êm ru ở dev và
+chỉ sập khi lên thật. Bản dev không chỉ *không bắt được* loại đó, nó còn tích cực
+che đi. Bộ này cũng kiểm "trang render ra gần như rỗng", vì đó là hình dạng thường
+gặp khi CSP chặn mất bundle: HTTP vẫn 200, không có lỗi nào ồn ào.
 
 Cookie phiên **đổi hình dạng theo môi trường**: ở production nó mang tiền tố `__Host-`
 và cờ `Secure`, ở dev thì không — vì `dev-lan` chạy HTTP trần và cookie `Secure` sẽ
