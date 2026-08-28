@@ -93,6 +93,38 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             dangerouslySetInnerHTML={{ __html: SCRIPT_GIAO_DIEN }}
           />
         )}
+        {/*
+         * Link nhảy thẳng tới nội dung, cho người dùng bàn phím.
+         *
+         * Không có nó thì mỗi trang phải bấm Tab 5 lần mới ra khỏi thanh điều
+         * hướng — đã đếm trên bản production. Năm lần không nhiều, nhưng nó lặp
+         * ở MỌI trang và MỌI lần, và người phải trả giá đó là đứa trẻ không dùng
+         * được chuột.
+         *
+         * `sr-only` cho tới khi được focus (`focus:not-sr-only`): người dùng
+         * chuột không bao giờ thấy nó, người dùng bàn phím thấy ngay ở Tab đầu.
+         * Ẩn hẳn bằng `display:none` thì bàn phím cũng không tới được — thành ra
+         * vô dụng.
+         *
+         * PHẢI là phần tử focus được đầu tiên trong <body>, nên nó nằm trên
+         * <header>. Script chống loé giao diện ở trên không focus được nên không
+         * chen vào thứ tự.
+         */}
+        <a
+          href="#noi-dung"
+          /*
+           * Padding và màu nằm TRONG nhánh `focus:`, không để ngoài.
+           *
+           * `sr-only` của Tailwind đặt `padding: 0` để hộp co về 1×1. Viết
+           * `px-4 py-2` ở ngoài là ghi đè đúng dòng đó, và hộp phình lại thành
+           * 32×16 ngay cả lúc chưa focus. Nội dung vẫn bị `clip` nên mắt thường
+           * khó thấy, nhưng nó là một ô nền đậm 32×16 nằm ở góc trên trái —
+           * loại lỗi chỉ lộ trên đúng một trình duyệt, đúng một zoom level.
+           */
+          className="sr-only bg-chrome text-chrome-ink focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:px-4 focus:py-2"
+        >
+          Bỏ qua thanh điều hướng, tới nội dung
+        </a>
         <header className="bg-chrome py-3 text-chrome-ink">
           <Wrap className="flex items-center justify-between gap-4">
             <Link href="/" className="text-xl font-extrabold tracking-tight no-underline">
@@ -104,7 +136,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </Wrap>
         </header>
-        <main className="flex-1">
+        {/*
+         * `tabIndex={-1}` để link nhảy ở trên thật sự MANG FOCUS tới đây.
+         *
+         * Không có nó thì trình duyệt cuộn tới đúng chỗ nhưng focus vẫn ở link
+         * cũ, nên lần Tab tiếp theo quay về thanh điều hướng — người dùng bàn
+         * phím lại đi đúng con đường vừa muốn bỏ qua. Đây là lý do phần lớn link
+         * nhảy trên mạng chỉ *trông như* hoạt động.
+         */}
+        <main id="noi-dung" tabIndex={-1} className="flex-1">
           <Wrap>{children}</Wrap>
         </main>
         <SiteFooter />

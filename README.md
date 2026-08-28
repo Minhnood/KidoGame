@@ -89,6 +89,31 @@ APP_ORIGIN=http://localhost:3100 PLAYER_ORIGIN=http://127.0.0.1:3002 \
 `e2e-touch.mjs` cần một game CÓ dùng phím (mũi tên hoặc phím cách), không thì
 không có nút nào để kiểm.
 
+### Bàn phím và trình đọc màn hình
+
+```bash
+node infra/a11y-check.mjs          # 13 kiểm tra, cần dev server
+```
+
+Tách riêng đúng như `contrast-check.mjs`, vì đây là một chiều quan tâm khác:
+tương phản và bàn phím hỏng theo hai kiểu khác nhau, người trả giá cũng khác.
+
+Kiểm hai nhóm. Nhóm một là **link nhảy tới nội dung** — ẩn với người dùng chuột,
+hiện khi được focus, và quan trọng nhất: bấm vào thì focus **chuyển vào chính
+`<main>`**. Thiếu `tabIndex={-1}` trên `<main>` thì trình duyệt vẫn cuộn tới nội
+dung nên *trông như* link hoạt động, nhưng focus còn ở link cũ và lần Tab tiếp
+theo quay về thanh điều hướng — đúng con đường vừa muốn bỏ qua. Phần lớn link nhảy
+trên mạng hỏng theo kiểu này, và kiểm bằng mắt thì không thấy.
+
+Nhóm hai là mỗi trang: `lang="vi"` (sai thì trình đọc màn hình phát âm tiếng Việt
+bằng giọng Anh), đúng một `h1`, mọi ảnh có `alt`, mọi ô nhập có label, và **vòng
+focus nhìn thấy được trên mọi phần tử tab tới được**. Token `--color-focus` tồn
+tại trong CSS không đủ — một `outline: none` ở đâu đó là đủ để mất dấu bàn phím.
+
+Bộ này bỏ qua `<nextjs-portal>` (overlay báo lỗi của Next ở dev). Không loại ra
+thì mọi trang báo đỏ ở dev vì một thứ không tồn tại trên production, và báo động
+giả kiểu đó làm người ta bỏ luôn cả bộ kiểm.
+
 ### Hai bộ chỉ chạy được trên bản production
 
 ```bash
