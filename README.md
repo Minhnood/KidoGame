@@ -661,6 +661,11 @@ docker compose up -d --build backup
 docker compose exec backup /backup.sh once              # thử ngay, đừng chờ 3 giờ sáng
 ```
 
+**Phải là `docker compose exec`, KHÔNG phải `run`.** Service này khai
+`entrypoint: [bash, /backup.sh, loop]`, nên `docker compose run backup /backup.sh once`
+nối chuỗi thành `bash /backup.sh loop /backup.sh once` — chế độ `loop`, và nó ngồi im
+chờ tới 3 giờ sáng. Không báo lỗi, không in gì nếu output bị pipe. Nhìn y như treo máy.
+
 Bốn điều đã cân nhắc, đừng vô tình gỡ:
 
 - **Xoay vòng trước, đẩy sau.** `rsync --delete` làm đầu kia giống hệt đầu này,
@@ -688,6 +693,19 @@ Khoá SSH nằm ở `infra/ssh/`, mount vào container chỉ-đọc, và bị ch
 `.gitignore`, `.dockerignore` gốc lẫn `infra/.dockerignore` (build context của
 service này là `infra/`, nên nó cần file `.dockerignore` riêng — Docker chỉ đọc
 cái nằm cạnh context).
+
+**Đã chạy thử thật, không chỉ đọc code.** Dựng một container `sshd` làm máy đích trên
+cùng network rồi đẩy sang đó, kiểm bốn thứ:
+
+| Kiểm | Kết quả |
+|---|---|
+| Đẩy được, file bên kia giống hệt | `sha256` khớp từng byte |
+| `--delete` phản chiếu phần đã xoay vòng | hạ `BACKUP_KEEP=1`, đầu kia từ 6 file còn 2 |
+| Host key sai thì TỪ CHỐI | `Host key verification failed`, mã thoát 1 |
+| Host key đúng thì chạy | mã thoát 0 |
+
+Phép kiểm thứ ba là phép quan trọng nhất. Nó chứng minh rằng nếu ai đó chen được vào
+giữa, bản sao lưu **không** đi tới máy của họ — chứ không phải chỉ là ta hy vọng thế.
 
 ### Phục hồi
 
