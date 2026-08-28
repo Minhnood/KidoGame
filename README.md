@@ -617,6 +617,52 @@ Nó kiểm bốn tầng, theo đúng thứ tự hay hỏng:
 huynh bằng hòm thư có thật, nhận được thư, và **bấm được link xác minh**. Thư rơi
 vào Spam cũng tính là hỏng. Script chỉ loại trước những cách hỏng dễ đoán.
 
+#### Đi trọn con đường đó bằng một lệnh
+
+```bash
+node infra/mail-journey.mjs --email ban@gmail.com
+```
+
+Nó đăng ký một phụ huynh bằng hòm thư đó, xác nhận rằng **chưa xác minh thì chưa
+tạo được tài khoản con**, rồi dừng lại chờ bạn mở hòm thư và bấm link. Bấm xong nó
+tự đi tiếp: tạo tài khoản cho con, và cho con đăng nhập. Chuỗi thông từ đầu tới cuối
+thì mới coi là xong.
+
+Vì sao cần bước bấm tay: `--send` của `mail-check.mjs` chỉ chứng minh **Resend nhận
+thư**. Nó không chứng minh thư *tới* hòm thư, không chứng minh thư thoát khỏi Spam,
+và không chứng minh cái link bên trong trỏ đúng chỗ. Ba điều đó chỉ có một con người
+mở hòm thư ra mới trả lời được.
+
+#### Chưa có domain vẫn kiểm được — làm hai chặng
+
+Nhiều người tưởng phải mua domain trước mới thử được. Không phải.
+
+**Chặng 1, không cần domain gì cả.** Resend cho gửi từ `onboarding@resend.dev` tới
+**đúng hòm thư đã đăng ký tài khoản Resend**, không cần xác minh domain:
+
+```bash
+# trong infra/.env
+RESEND_API_KEY=re_...                              # lấy ở resend.com/api-keys
+MAIL_FROM="KidoGame <onboarding@resend.dev>"
+
+node infra/mail-check.mjs                          # phải xanh phần key
+node infra/mail-journey.mjs --email <hòm thư đăng ký Resend>
+```
+
+Chặng này chứng minh gần như toàn bộ: key đúng, gọi API được, thư vào hòm thư thật,
+link bấm được, phụ huynh tạo được tài khoản con, con đăng nhập được. Nó **không**
+chứng minh được uy tín domain — tức chưa biết thư gửi tới người lạ có vào Spam hay
+không, và vẫn chỉ gửi được tới một địa chỉ.
+
+**Chặng 2, khi đã có domain.** Thêm domain ở `resend.com/domains`, dán các bản ghi
+DNS nó đưa (SPF, DKIM, và MX cho subdomain gửi), thêm DMARC, rồi đổi
+`MAIL_FROM="KidoGame <no-reply@domain-cua-ban>"`. Chạy lại `mail-check.mjs`: nó đọc
+danh sách bản ghi **từ API Resend** rồi tự hỏi DNS công cộng từng cái, nên nó biết
+đúng những gì domain của bạn cần. Xong thì chạy lại `mail-journey.mjs`, lần này
+bằng một hòm thư **không phải** hòm thư chủ tài khoản.
+
+DNS lan thường mất từ vài phút tới vài giờ. Đừng kết luận là hỏng ở lần chạy đầu.
+
 ### Sao lưu
 
 Service `backup` chạy sẵn trong stack, mỗi ngày vào `BACKUP_HOUR` (mặc định 3
