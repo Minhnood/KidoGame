@@ -89,6 +89,28 @@ APP_ORIGIN=http://localhost:3100 PLAYER_ORIGIN=http://127.0.0.1:3002 \
 `e2e-touch.mjs` cần một game CÓ dùng phím (mũi tên hoặc phím cách), không thì
 không có nút nào để kiểm.
 
+### Một bộ chỉ chạy được trên bản production
+
+```bash
+cd infra && docker compose up -d --build
+docker compose run --rm web pnpm --filter @kidogame/web db:deploy
+node infra/e2e-prod-cookie.mjs        # 10 kiểm tra
+```
+
+Cookie phiên **đổi hình dạng theo môi trường**: ở production nó mang tiền tố `__Host-`
+và cờ `Secure`, ở dev thì không — vì `dev-lan` chạy HTTP trần và cookie `Secure` sẽ
+không bao giờ được đặt. Nghĩa là bảy bộ ở trên, tất cả đều chạy ở dev, không đi qua
+nhánh production lấy một lần. Một nửa cơ chế đăng nhập không có ai canh.
+
+Không phải lo xa: **ngay lần chạy đầu tiên bộ này đã bắt được một lỗi thật.**
+`jar.delete()` của Next sinh ra lệnh xoá không kèm `Secure`, mà cookie `__Host-` thiếu
+`Secure` thì trình duyệt từ chối cả lệnh xoá — nên đăng xuất không dọn được cookie khỏi
+máy trẻ. Bản ghi `Session` vẫn bị xoá nên không thành lỗ bảo mật, nhưng bản dev thì
+không có cách nào thấy được điều đó.
+
+Vì vậy bộ này kiểm cả **chuỗi `Set-Cookie` thô**, không chỉ trạng thái cookie cuối cùng.
+Đúng chỗ lỗi đã nấp.
+
 ### Test trên điện thoại thật
 
 ```bash

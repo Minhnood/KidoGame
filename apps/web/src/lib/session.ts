@@ -141,9 +141,24 @@ export async function destroySession(): Promise<void> {
   if (token) {
     await prisma.session.delete({ where: { tokenHash: hashToken(token) } }).catch(() => {});
   }
-  // Xoá kèm `path: '/'` chứ không chỉ mỗi tên: cookie được set ở path `/`, và
-  // lệnh xoá phải khớp path thì trình duyệt mới bỏ đúng cái đó.
-  jar.delete({ name: SESSION_COOKIE, path: '/' });
+  /*
+   * Xoá bằng cách GHI ĐÈ một cookie đã hết hạn, không dùng `jar.delete()`.
+   *
+   * `jar.delete()` sinh ra `__Host-kidogame_session=; Path=/; Expires=1970` —
+   * thiếu `Secure`. Mà cookie mang tiền tố `__Host-` thiếu `Secure` thì trình
+   * duyệt TỪ CHỐI nguyên cái, nên lệnh xoá bị vứt và cookie cũ ở nguyên đó.
+   *
+   * Đã dựng lại được trên stack Docker: bấm Đăng xuất, response mang đúng
+   * dòng Set-Cookie trên, và cookie vẫn còn trong trình duyệt sau đó.
+   *
+   * Không thành lỗ bảo mật vì bản ghi Session đã bị xoá ở trên — cookie còn lại
+   * trỏ vào hư không và `getActor()` trả null. Nhưng nó là rác vĩnh viễn trong
+   * trình duyệt của trẻ, và là loại lỗi mà lần sau sẽ thành lỗ thật.
+   *
+   * Dùng lại `cookieOptions` để lệnh xoá mang đủ `secure` và `path` như lúc set:
+   * đây chính là điều kiện để trình duyệt chịu nhận.
+   */
+  jar.set(SESSION_COOKIE, '', cookieOptions(0));
 }
 
 /** Thu hồi mọi phiên của một tài khoản — dùng khi đổi mật khẩu hoặc khoá tài khoản. */
