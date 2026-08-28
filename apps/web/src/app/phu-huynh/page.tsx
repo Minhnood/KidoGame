@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
 import { createChildAction } from '@/lib/actions';
+import { gameDangBiKhieuNai } from '@/lib/takedown';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { EmptyState, PageTitle } from '@/components/page';
@@ -32,6 +33,17 @@ export default async function ParentDashboard() {
       },
     },
   });
+
+  /*
+   * Game nào đang bị một yêu cầu gỡ bản quyền giữ ẩn. Cần để nói trước cho phụ huynh
+   * biết, thay vì để họ bấm "Hiện lại" rồi mới nhận lỗi.
+   *
+   * Chỉ cho biết CÓ khiếu nại, không hé danh tính người khiếu nại hay lý do — họ để
+   * lại thông tin đó cho đội kiểm duyệt, không phải cho phụ huynh.
+   */
+  const biKhieuNai = await gameDangBiKhieuNai(
+    children.flatMap((c) => c.games.map((g) => g.id))
+  );
 
   const thisYear = new Date().getFullYear();
 
@@ -122,9 +134,15 @@ export default async function ParentDashboard() {
                         </Link>
                         <span className="ml-2 text-sm text-ink-soft">
                           {game.playCount} lượt chơi
-                          {game.status === 'LIMITED' && ' · tạm không hiện trên trang chủ'}
-                          {game.status === 'HIDDEN' && ' · đang ẩn'}
-                          {game.status === 'REMOVED' && ' · đã bị gỡ'}
+                          {biKhieuNai.has(game.id)
+                            ? ' · tạm ẩn vì có yêu cầu gỡ bản quyền đang chờ xử lý'
+                            : (
+                                <>
+                                  {game.status === 'LIMITED' && ' · tạm không hiện trên trang chủ'}
+                                  {game.status === 'HIDDEN' && ' · đang ẩn'}
+                                  {game.status === 'REMOVED' && ' · đã bị gỡ'}
+                                </>
+                              )}
                         </span>
                       </span>
                       {/*
@@ -136,8 +154,12 @@ export default async function ParentDashboard() {
 
                         REMOVED thì không có nút: đó là phán quyết của admin, phụ huynh
                         không tự lật được, và server cũng từ chối.
+
+                        Game đang bị khiếu nại bản quyền cũng vậy — server từ chối bật
+                        lại, nên bày một cái nút "Hiện lại" ở đây chỉ để nó báo lỗi là
+                        làm người ta bực và tưởng web hỏng.
                       */}
-                      {game.status !== 'REMOVED' && (
+                      {game.status !== 'REMOVED' && !biKhieuNai.has(game.id) && (
                         <GameVisibilityToggle gameId={game.id} hidden={game.status === 'HIDDEN'} />
                       )}
                     </li>

@@ -12,6 +12,32 @@ import {
 } from './takedown-limits';
 import { sanitizeMultiline, sanitizeText } from './text';
 
+/**
+ * Những game (trong danh sách đưa vào) đang có yêu cầu gỡ bản quyền CHƯA xử lý.
+ *
+ * Cần vì phụ huynh KHÔNG được bật lại một game đang bị giữ ẩn bởi khiếu nại bản quyền.
+ * Chỗ này từng là lỗ thật: `setGameHiddenAction` chỉ hỏi `communityStatus` (tức chỉ đếm
+ * báo cáo), nên một yêu cầu gỡ ẩn game xong là phụ huynh bấm "Hiện lại" một cái đưa nó
+ * công khai trở lại — trong khi `/dieu-khoan` hứa công khai với người khiếu nại là ẩn
+ * ngay và trả lời trong hạn.
+ *
+ * Hệ quả thứ hai còn khó thấy hơn: lúc admin bác khiếu nại, `adminResolveTakedown` tính
+ * "đã cho hiện lại chưa" bằng `updateMany` có điều kiện `status: 'HIDDEN'`. Game đã bị
+ * phụ huynh bật lại thì điều kiện đó không khớp, `restored` = false, và người khiếu nại
+ * nhận thư nói "game vẫn đang ẩn" trong khi nó đang chạy công khai.
+ *
+ * Nhận cả DANH SÁCH id chứ không phải một id: trang của phụ huynh liệt kê nhiều game
+ * cùng lúc, hỏi từng cái là N+1 truy vấn.
+ */
+export async function gameDangBiKhieuNai(gameIds: string[]): Promise<Set<string>> {
+  if (gameIds.length === 0) return new Set();
+  const rows = await prisma.takedownRequest.findMany({
+    where: { gameId: { in: gameIds }, status: 'OPEN' },
+    select: { gameId: true },
+  });
+  return new Set(rows.map((r) => r.gameId));
+}
+
 /*
  * Luồng gỡ nội dung vi phạm bản quyền.
  *

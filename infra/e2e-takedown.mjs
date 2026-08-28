@@ -282,6 +282,34 @@ const admin = await adminCtx.newPage();
 
   check('Game bị ẩn NGAY khi nhận yêu cầu, khách vào trả 404', (await status(anonCtx, games[0].url)) === 404);
 
+  /*
+   * Phụ huynh KHÔNG được lật lệnh ẩn này.
+   *
+   * Đã từng là lỗ thật, dựng lại được bằng luồng thật: yêu cầu gỡ ẩn game xong, phụ
+   * huynh bấm "Hiện lại" một cái là game công khai trở lại, không lỗi gì — trong khi
+   * /dieu-khoan hứa công khai với người khiếu nại là ẩn ngay và trả lời trong hạn.
+   *
+   * Còn một hệ quả khó thấy hơn nữa: lúc admin bác khiếu nại, `adminResolveTakedown`
+   * tính "đã cho hiện lại chưa" bằng điều kiện `status: 'HIDDEN'`. Game đã bị phụ huynh
+   * bật lại thì điều kiện không khớp và người khiếu nại nhận thư nói "game vẫn đang ẩn"
+   * trong khi nó đang chạy công khai.
+   */
+  {
+    const ph = await parentCtx.newPage();
+    await ph.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+    const row = ph.locator('li', { has: ph.locator(`a[href="/game/${games[0].id}"]`) }).last();
+    check(
+      'Phụ huynh KHÔNG có nút bật lại game đang bị khiếu nại bản quyền',
+      (await row.locator('[data-testid=game-visibility] button').count()) === 0
+    );
+    check(
+      'Trang phụ huynh nói rõ vì sao game bị ẩn',
+      /yêu cầu gỡ bản quyền/.test(await row.innerText())
+    );
+    check('Game vẫn 404 với khách', (await status(anonCtx, games[0].url)) === 404);
+    await ph.close();
+  }
+
   check(
     'Gửi trùng vẫn thấy xác nhận, không lộ là đã có người gửi',
     (await submitTakedown(p, {

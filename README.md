@@ -412,6 +412,12 @@ người chịu loại thứ hai là đứa trẻ.
 3. **Yêu cầu gỡ bản quyền phải ẩn được cả game đang `LIMITED`.** Game đó vẫn chơi được
    bằng link nên vẫn đang phát tán nội dung, mà `/dieu-khoan` thì hứa công khai là ẩn
    ngay khi nhận.
+4. **Phụ huynh không bật lại được game đang có yêu cầu gỡ bản quyền chờ xử lý.** Cùng
+   loại ràng buộc với điểm 1 nhưng ở luồng khác, và từng là lỗ thật: khiếu nại ẩn game
+   xong, phụ huynh bấm "Hiện lại" một cái là game công khai trở lại, không lỗi gì. Hệ
+   quả thứ hai còn khó thấy hơn — `adminResolveTakedown` tính "đã cho hiện lại chưa"
+   bằng điều kiện `status: 'HIDDEN'`, nên game đã bị bật lại thì người khiếu nại nhận
+   thư nói *"game vẫn đang ẩn"* trong khi nó đang chạy công khai.
 
 Phụ huynh nhận mail ở cả hai mức. Mail cố ý KHÔNG nói ai đã báo cáo và vì lý do gì: lý
 do là dữ liệu để admin phán xử, đưa cho phụ huynh thì mở đường đoán xem đứa nào trong
@@ -494,32 +500,10 @@ nữa. Đừng sửa domain trực tiếp trong Caddyfile: lệch giữa hai ch�
 không boot"* / *"stage 0x0"* — nhìn y hệt lỗi đóng gói. Đây đúng là cái bẫy đã
 vấp ở dev khi chạy e2e lệch cổng 3000.
 
-#### Cái bẫy build-time đã từng có ở đây
-
-Ghi lại vì nó **đã xảy ra thật** ngay lần `docker compose up` đầu tiên, và vì bài học
-còn nguyên giá trị dù cách sửa đã đổi.
-
-Hồi CSP còn nằm trong `headers()` của `next.config.ts`, Next đánh giá nó trong
-`next build` rồi nướng vào `.next/routes-manifest.json` — tức `frame-src` bị chốt theo
-`PLAYER_ORIGIN` **lúc build**. Còn `objectUrl()` trong `src/lib/storage.ts` đọc biến đó
-**lúc gọi**. Hai thời điểm khác nhau cho cùng một giá trị. Kết quả: iframe trỏ đúng
-player domain, CSP vẫn chỉ cho phép `http://127.0.0.1:3001`, trình duyệt chặn iframe,
-và triệu chứng là *"game không boot"*, *"stage 0x0"* — không có lỗi CSP nào hiện ra ở
-nơi bạn đang nhìn.
-
-**Không còn nữa.** Từ khi CSP chuyển sang `src/middleware.ts` để dùng nonce, nó được
-dựng lại theo từng request và đọc env lúc chạy. Đã kiểm chứng bằng cách chạy image với
-một `PLAYER_ORIGIN` chưa từng tồn tại lúc build và thấy CSP đổi theo:
-
-```bash
-docker compose run --rm -e PLAYER_ORIGIN=https://khac-han.test web ...
-# -> frame-src https://khac-han.test
-```
-
-Nên **đổi domain giờ chỉ cần `docker compose up -d`**, không phải `--build`. Cơ chế
-chốt chặn `BUILT_PLAYER_ORIGIN` từng có trong `src/instrumentation.ts` đã bị gỡ: giữ
-một cái chốt canh điều kiện không còn tồn tại thì sớm muộn nó sẽ chặn oan một thao tác
-hợp lệ, và người gặp sẽ mất hàng giờ vì một lời cảnh báo sai.
+**Đổi domain chỉ cần `docker compose up -d`, không phải `--build`.** CSP được dựng lại
+theo từng request trong `src/middleware.ts` và đọc env lúc chạy, nên không có gì bị chốt
+cứng vào image. Đã kiểm chứng bằng cách chạy image với một `PLAYER_ORIGIN` chưa từng tồn
+tại lúc build và thấy `frame-src` đổi theo.
 
 #### Thử toàn bộ stack trên máy trước khi lên VPS
 

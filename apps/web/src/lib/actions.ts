@@ -25,7 +25,7 @@ import {
   communityStatus,
   reportGame,
 } from './moderation';
-import { adminResolveTakedown, submitTakedownRequest } from './takedown';
+import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
 import { clientFingerprint, destroySession, getActor } from './session';
 import { prisma } from './db';
 
@@ -240,6 +240,22 @@ export async function setGameHiddenAction(_prev: FormState, form: FormData): Pro
     if (game.status === 'REMOVED') {
       throw new AuthError(
         'Game này đã bị đội kiểm duyệt gỡ, bạn không tự bật lại được. Hãy liên hệ với chúng tôi nếu bạn cho rằng đây là nhầm lẫn.'
+      );
+    }
+
+    /*
+     * Game đang có yêu cầu gỡ bản quyền CHƯA xử lý thì cũng không bật lại được.
+     *
+     * Đây là lỗ đã dựng lại được bằng luồng thật: khiếu nại ẩn game xong, phụ huynh
+     * bấm "Hiện lại" một cái là nó công khai trở lại, không lỗi gì. Trong khi
+     * `/dieu-khoan` hứa với người khiếu nại là ẩn ngay và trả lời trong hạn.
+     *
+     * Cố ý KHÔNG nói ai khiếu nại và vì lý do gì — người khiếu nại để lại danh tính
+     * cho đội kiểm duyệt, không phải cho phụ huynh. Cần đối chất thì admin đứng giữa.
+     */
+    if (!hidden && (await gameDangBiKhieuNai([gameId])).has(gameId)) {
+      throw new AuthError(
+        'Game này đang tạm ẩn vì có yêu cầu gỡ bản quyền chờ xử lý. Đội kiểm duyệt sẽ xem lại và trả lời; bạn chưa bật lại được lúc này.'
       );
     }
 
