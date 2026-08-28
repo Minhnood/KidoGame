@@ -585,10 +585,19 @@ bốn service vẫn healthy. Lỗi chỉ lộ ra khi một phụ huynh thật b�
 nhận được thư — lúc đó họ đã bỏ đi rồi. Nên có script riêng để hỏi thẳng:
 
 ```bash
-set -a && . infra/.env && set +a          # nạp env production
-node infra/mail-check.mjs                 # kiểm cấu hình + DNS
+node infra/mail-check.mjs                        # kiểm cấu hình + DNS
 node infra/mail-check.mjs --send ban@gmail.com   # gửi thật một lá
 ```
+
+Nó **tự đọc `infra/.env`**, không cần nạp trước. Cố ý như vậy: đừng bao giờ
+`source` file `.env` này. Nó không phải shell script, và hai giá trị trong đó phá
+shell — `MAIL_FROM=KidoGame <no-reply@…>` có `<` là chuyển hướng,
+`OPERATOR_NAME=KidoGame (thử local)` có `(` là subshell. Shell in một dòng parse
+error rồi **đi tiếp**, để lại biến rỗng. Docker compose đọc file trực tiếp nên
+container vẫn đúng — và chính điều đó làm cái bẫy khó thấy: hệ thống chạy ngon,
+chỉ công cụ chạy tay là báo sai. Đã vấp thật.
+
+Trong `.env` thì cứ bọc nháy kép cho những giá trị đó, cho ai lỡ tay `source`.
 
 Nó kiểm bốn tầng, theo đúng thứ tự hay hỏng:
 

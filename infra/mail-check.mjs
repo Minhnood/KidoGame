@@ -13,10 +13,50 @@
  *   node infra/mail-check.mjs                      # chỉ kiểm cấu hình + DNS
  *   node infra/mail-check.mjs --send you@gmail.com # gửi thật một lá tới hòm thư của bạn
  *
- * Đọc env từ tiến trình. Trên VPS thì nạp infra/.env trước:
- *   set -a && . infra/.env && set +a && node infra/mail-check.mjs
+ * Tự đọc infra/.env, không cần nạp trước. Biến đã có sẵn trong môi trường thì
+ * thắng file.
  */
 import { promises as dns } from 'node:dns';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Đọc infra/.env theo cách docker compose đọc, KHÔNG qua shell.
+ *
+ * VÌ SAO không bảo người ta `set -a && . infra/.env`: file .env không phải shell
+ * script. `MAIL_FROM=KidoGame <no-reply@…>` có dấu `<` là chuyển hướng, và
+ * `OPERATOR_NAME=KidoGame (thử local)` có dấu ngoặc — shell vỡ ở cả hai, in một
+ * dòng parse error rồi đi tiếp, để lại biến RỖNG. Nghĩa là công cụ kiểm mail sẽ
+ * báo "chưa đặt MAIL_FROM" trong khi nó đặt rồi, và người ta đi sửa nhầm chỗ.
+ * Chính bẫy này đã vấp thật khi lần đầu chạy lệnh viết trong README.
+ */
+function loadEnvFile() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  let raw;
+  try {
+    raw = readFileSync(join(here, '.env'), 'utf8');
+  } catch {
+    return; // Không có file cũng không sao — có thể env đến từ nơi khác.
+  }
+
+  for (const line of raw.split('\n')) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
+    let value = m[2].trim();
+    // Bỏ nháy bao ngoài nếu có, giống compose.
+    if (
+      (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
+      (value.startsWith("'") && value.endsWith("'") && value.length > 1)
+    ) {
+      value = value.slice(1, -1);
+    }
+    // Biến truyền thẳng vào lệnh phải thắng file.
+    if (process.env[m[1]] === undefined) process.env[m[1]] = value;
+  }
+}
+
+loadEnvFile();
 
 const args = process.argv.slice(2);
 const sendIdx = args.indexOf('--send');
@@ -68,8 +108,23 @@ check('MAIL_FROM đúng định dạng', !!fromAddr, fromAddr ?? 'không tách �
 
 const fromDomain = fromAddr?.split('@')[1] ?? null;
 
-const appOrigin = process.env.APP_ORIGIN;
-check('Có APP_ORIGIN', !!appOrigin, appOrigin ?? 'CHƯA ĐẶT (link trong mail sẽ trỏ về localhost:3000)');
+/*
+ * infra/.env chỉ khai APP_DOMAIN; APP_ORIGIN do compose dựng ra
+ * (`APP_ORIGIN: https://${APP_DOMAIN}`). Dựng lại y hệt ở đây, không thì công cụ
+ * báo thiếu APP_ORIGIN trong khi container chạy hoàn toàn đúng — một báo động giả
+ * dẫn người ta đi thêm một biến thừa vào .env.
+ */
+const appOrigin =
+  process.env.APP_ORIGIN ?? (process.env.APP_DOMAIN ? `https://${process.env.APP_DOMAIN}` : undefined);
+check(
+  'Có APP_ORIGIN',
+  !!appOrigin,
+  appOrigin
+    ? process.env.APP_ORIGIN
+      ? appOrigin
+      : `${appOrigin} (dựng từ APP_DOMAIN, đúng như compose làm)`
+    : 'CHƯA ĐẶT (link trong mail sẽ trỏ về localhost:3000)'
+);
 if (appOrigin && !/^https:\/\//.test(appOrigin)) {
   note('APP_ORIGIN không phải https — link xác minh gửi cho phụ huynh sẽ là http.');
 }
@@ -86,8 +141,10 @@ if (apiKey && fromDomain) {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
 
-    if (res.status === 401 || res.status === 403) {
-      check('API key dùng được', false, `Resend trả ${res.status} — key sai hoặc đã bị thu hồi`);
+    // Resend trả 400 chứ không phải 401 cho key sai — dễ tưởng là lỗi mạng.
+    if ([400, 401, 403].includes(res.status)) {
+      check('API key dùng được', false, `Resend trả ${res.status} — key sai, giả, hoặc đã bị thu hồi`);
+      note('Lấy key thật ở https://resend.com/api-keys rồi đặt vào infra/.env.');
     } else if (!res.ok) {
       check('API key dùng được', false, `Resend trả ${res.status}`);
     } else {
