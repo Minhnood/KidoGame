@@ -125,10 +125,12 @@ services:
   # quên bật thì đúng bằng không có backup, nhưng lại cho cảm giác đã có.
   # ---------------------------------------------------------------------------
   backup:
-    # DÙNG LẠI ĐÚNG postgres:17 của service db. Không phải để tiết kiệm chỗ mà vì
-    # `pg_dump` lệch major với server là nó TỪ CHỐI chạy. Ghim chung một tag thì
-    # nâng Postgres là hai bên lên cùng lúc, không thể lệch.
-    image: postgres:17
+    # Image riêng, nhưng vẫn FROM postgres:17 — xem Dockerfile.backup. Ghim đúng
+    # tag của service db vì `pg_dump` lệch major với server là nó TỪ CHỐI chạy.
+    # Thêm rsync + openssh-client để đẩy bản sao lưu ra khỏi máy này.
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
     restart: unless-stopped
     depends_on:
       db:
@@ -143,6 +145,12 @@ services:
       # sáng UTC — tức 10 GIỜ SÁNG giờ Việt Nam, đúng quãng trẻ hay chơi. Con số 3
       # đọc lên ai cũng hiểu là 3 giờ sáng, nên phải làm cho nó đúng là 3 giờ sáng.
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      # Đẩy bản sao lưu sang máy khác. Rỗng = tắt, và mỗi lần chạy sẽ log một dòng
+      # nhắc rằng bản sao lưu đang nằm cùng ổ với dữ liệu gốc.
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_REMOTE_PORT: ${BACKUP_REMOTE_PORT:-22}
+      BACKUP_SSH_KEY: /ssh/id_backup
+      BACKUP_SSH_KNOWN_HOSTS: /ssh/known_hosts
     volumes:
       - ./backup.sh:/backup.sh:ro
       # Chỉ đọc: việc của nó là sao chép ra, không bao giờ sửa file game.
@@ -150,6 +158,10 @@ services:
       # Bind mount ra host chứ không dùng named volume: bản sao lưu phải nhìn thấy
       # và copy đi được từ ngoài mà không cần lệnh docker nào.
       - ${BACKUP_HOST_DIR:-./backups}:/backups
+      # Khoá SSH + known_hosts cho bước đẩy ra ngoài máy. Chỉ đọc, và thư mục này
+      # KHÔNG vào image (xem .dockerignore) — nó chứa khoá riêng.
+      # Thư mục phải tồn tại kể cả khi chưa dùng tới; ./ssh trong repo có .gitkeep.
+      - ./ssh:/ssh:ro
     # Image postgres có entrypoint riêng lo việc khởi tạo cluster, phải ghi đè.
     entrypoint: ['/bin/bash', '/backup.sh', 'loop']
 

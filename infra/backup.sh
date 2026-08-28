@@ -32,6 +32,15 @@ KEEP="${BACKUP_KEEP:-7}"
 # Giờ chạy hằng ngày ở chế độ loop, 0–23.
 HOUR="${BACKUP_HOUR:-3}"
 
+# --- Đẩy ra ngoài máy ------------------------------------------------------
+# Đích rsync, dạng `user@host:/duong/dan`. Rỗng = tắt hẳn bước này.
+REMOTE="${BACKUP_REMOTE:-}"
+# Khoá SSH riêng, mount vào container ở chế độ chỉ đọc.
+SSH_KEY="${BACKUP_SSH_KEY:-/ssh/id_backup}"
+SSH_PORT="${BACKUP_REMOTE_PORT:-22}"
+# File known_hosts. BẮT BUỘC khi có REMOTE — xem giải thích ở push_offsite().
+KNOWN_HOSTS="${BACKUP_SSH_KNOWN_HOSTS:-/ssh/known_hosts}"
+
 log() { echo "[backup] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
 run_once() {
@@ -82,6 +91,68 @@ run_once() {
 	rotate 'storage-*.tar.gz'
 
 	log "xong: $(du -sh "$DEST" 2>/dev/null | cut -f1) trong $DEST"
+
+	# Xoay vòng TRƯỚC rồi mới đẩy đi: rsync có --delete nên máy kia sẽ giống hệt
+	# máy này, kể cả phần đã xoá. Đẩy trước rồi mới xoá thì bản cũ đọng lại bên
+	# kia mãi mãi và ổ đĩa đó đầy vào một ngày không ai để ý.
+	push_offsite
+}
+
+# ---------------------------------------------------------------------------
+# Đẩy bản sao lưu sang máy khác.
+#
+# VÌ SAO cần: bản sao lưu mặc định nằm trên CHÍNH cái ổ chứa dữ liệu gốc. Nó
+# chống được lỡ tay `delete from`, chống được nâng cấp hỏng. Nó KHÔNG chống được
+# ổ đĩa chết, VPS bị xoá, hay tài khoản nhà cung cấp bị khoá — mà đó mới là những
+# cách người ta thật sự mất sạch dữ liệu.
+#
+# Tắt mặc định. Bật bằng cách đặt BACKUP_REMOTE trong infra/.env.
+# ---------------------------------------------------------------------------
+push_offsite() {
+	if [ -z "$REMOTE" ]; then
+		log "BACKUP_REMOTE chưa đặt -> bản sao lưu chỉ nằm trên máy này, KHÔNG chống được ổ chết"
+		return 0
+	fi
+
+	if [ ! -f "$SSH_KEY" ]; then
+		log "LỖI: có BACKUP_REMOTE nhưng không thấy khoá $SSH_KEY — không đẩy được đi đâu cả"
+		return 1
+	fi
+
+	# StrictHostKeyChecking=yes, và known_hosts phải do NGƯỜI chuẩn bị.
+	#
+	# Cách làm quen tay là `-o StrictHostKeyChecking=no`. Ở đây thì không: script
+	# này cầm khoá SSH và đẩy toàn bộ dữ liệu người dùng — email phụ huynh, hash
+	# mật khẩu, file của trẻ — sang đầu kia. Tắt kiểm host key nghĩa là bất cứ ai
+	# chen được vào giữa cũng nhận trọn gói đó, và không để lại dấu vết nào.
+	if [ ! -f "$KNOWN_HOSTS" ]; then
+		log "LỖI: thiếu $KNOWN_HOSTS. Tạo bằng: ssh-keyscan -p $SSH_PORT <host> > known_hosts"
+		return 1
+	fi
+
+	local ssh_cmd="ssh -i $SSH_KEY -p $SSH_PORT -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes -o ConnectTimeout=20"
+
+	log "đẩy sang $REMOTE"
+	# --delete để đầu kia phản chiếu đúng thư mục này (đã xoay vòng ở trên).
+	# --partial để lần sau nối tiếp phần dở, đường truyền ở VN hay đứt giữa chừng.
+	if ! rsync -az --delete --partial --timeout=120 -e "$ssh_cmd" "$DEST/" "$REMOTE/"; then
+		log "LỖI: đẩy sang $REMOTE thất bại — coi như KHÔNG có bản sao lưu ngoài máy"
+		return 1
+	fi
+
+	# rsync trả 0 không có nghĩa là bên kia có file đọc được: quota đầy, thư mục
+	# bị mount nhầm, hay đường dẫn gõ sai đều có thể im lặng. Đếm lại từ đầu kia.
+	local host="${REMOTE%%:*}" path="${REMOTE#*:}" remote_count
+	remote_count=$($ssh_cmd "$host" "ls -1 '$path' 2>/dev/null | wc -l" 2>/dev/null || echo 0)
+	local local_count
+	local_count=$(ls -1 "$DEST" 2>/dev/null | wc -l)
+
+	if [ "$remote_count" -lt "$local_count" ]; then
+		log "LỖI: bên kia chỉ có $remote_count file, bên này $local_count — đẩy chưa trọn"
+		return 1
+	fi
+
+	log "đã đẩy xong, $remote_count file ở $REMOTE"
 }
 
 # Xoá bản cũ, giữ $KEEP bản mới nhất.

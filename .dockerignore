@@ -26,4 +26,7 @@ backups
 **/.env
 **/.env.local
 
+# Khoá SSH của bước đẩy sao lưu. Vào image là phát tán khoá riêng theo image.
+infra/ssh
+
 *.log

@@ -1,0 +1,5 @@
+# Thư mục này giữ khoá SSH cho bước đẩy sao lưu ra ngoài máy.
+#
+# Nội dung thật KHÔNG bao giờ được commit — xem .gitignore. Cần hai file:
+#   infra/ssh/id_backup     khoá riêng, chmod 600
+#   infra/ssh/known_hosts   tạo bằng: ssh-keyscan -p 22 <host> > infra/ssh/known_hosts

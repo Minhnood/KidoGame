@@ -609,12 +609,63 @@ xong. Dump chạy hết lệnh không có nghĩa là dump đọc được, mà b
 còn tệ hơn không có backup.
 
 **Mặc định vẫn CHƯA phải backup thật.** `infra/backups` nằm cùng ổ đĩa với dữ
-liệu gốc: nó chống lỡ tay xoá, không chống ổ đĩa chết. Trỏ `BACKUP_HOST_DIR` sang
-ổ khác, hoặc `rsync` thư mục đó sang máy khác — bước đó chưa được tự động hoá.
+liệu gốc: nó chống lỡ tay xoá, không chống ổ đĩa chết. Mỗi lần chạy mà chưa cấu
+hình gì thêm, script in đúng một dòng nhắc lại điều đó — cố ý, để trạng thái
+"chưa an toàn" không im lặng trôi qua hàng trăm dòng log.
+
+Có hai cách chữa, chọn một:
+
+| Cách | Chống được | Không chống được |
+|---|---|---|
+| `BACKUP_HOST_DIR=/mnt/o-khac/kidogame` | ổ chính chết | VPS bị xoá, tài khoản nhà cung cấp bị khoá |
+| `BACKUP_REMOTE=user@host:/duong/dan` | cả hai | — |
 
 `backups/` đã nằm trong `.gitignore` và `.dockerignore`: bản dump chứa email phụ
 huynh và hash mật khẩu, lỡ commit một file là rò dữ liệu người dùng vào lịch sử
 git, nơi xoá đi cũng không mất.
+
+#### Đẩy bản sao lưu ra khỏi máy
+
+Đặt `BACKUP_REMOTE` là bật. Sau mỗi lần sao lưu, script `rsync --delete` toàn bộ
+thư mục sang máy kia. Đầu kia chỉ cần `sshd` và `rsync` — không cần Docker,
+không cần Postgres.
+
+```bash
+ssh-keygen -t ed25519 -N '' -f infra/ssh/id_backup      # khoá riêng, không commit
+ssh-copy-id -i infra/ssh/id_backup.pub user@host        # hoặc dán tay vào authorized_keys
+ssh-keyscan -p 22 host > infra/ssh/known_hosts          # BẮT BUỘC, xem bên dưới
+# rồi trong infra/.env:  BACKUP_REMOTE=user@host:/srv/kidogame-backups
+docker compose up -d --build backup
+docker compose exec backup /backup.sh once              # thử ngay, đừng chờ 3 giờ sáng
+```
+
+Bốn điều đã cân nhắc, đừng vô tình gỡ:
+
+- **Xoay vòng trước, đẩy sau.** `rsync --delete` làm đầu kia giống hệt đầu này,
+  kể cả phần vừa xoá. Đẩy trước rồi mới xoay vòng thì bản cũ đọng lại bên kia
+  vĩnh viễn, và ổ đó đầy vào một ngày không ai để ý.
+- **`StrictHostKeyChecking=yes`, và `known_hosts` phải do người chuẩn bị.** Cách
+  quen tay là `-o StrictHostKeyChecking=no`. Ở đây thì không: bước này gửi toàn
+  bộ dữ liệu người dùng — email phụ huynh, hash mật khẩu, file của trẻ — sang
+  đầu kia. Tin bừa host key nghĩa là ai chen được vào giữa cũng nhận trọn gói
+  đó, và không để lại dấu vết nào. Thiếu `known_hosts` thì script **dừng và
+  báo lỗi** chứ không lặng lẽ bỏ qua.
+- **Đếm lại file ở đầu kia sau khi rsync xong.** `rsync` trả 0 không có nghĩa là
+  bên kia có file đọc được: quota đầy, thư mục mount nhầm, đường dẫn gõ sai đều
+  có thể im lặng.
+- **Đẩy trượt là cả lần sao lưu bị coi là thất bại** (mã thoát khác 0, log in
+  `LỖI`). Bản dump nội máy vẫn còn nguyên, nhưng một bản sao lưu ngoài máy đang
+  không xảy ra thì phải kêu — không thì ta sống nhiều tháng với niềm tin sai.
+
+Service `backup` giờ build từ `infra/Dockerfile.backup` thay vì dùng thẳng
+`postgres:17`, chỉ để thêm `rsync` và `openssh-client`. Vẫn `FROM postgres:17`:
+`pg_dump` lệch major với server là nó **từ chối** chạy, nên hai service phải ghim
+chung một tag.
+
+Khoá SSH nằm ở `infra/ssh/`, mount vào container chỉ-đọc, và bị chặn ở cả
+`.gitignore`, `.dockerignore` gốc lẫn `infra/.dockerignore` (build context của
+service này là `infra/`, nên nó cần file `.dockerignore` riêng — Docker chỉ đọc
+cái nằm cạnh context).
 
 ### Phục hồi
 
