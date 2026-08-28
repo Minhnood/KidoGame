@@ -540,6 +540,41 @@ curl -skI https://play.localhost/sb3/<xx>/<sha>.sb3
 động hoá đúng bộ đó cho bản dev; bước tay ở đây là để xác nhận Caddy khớp với
 `player-server.mjs`.
 
+### Mail thật — điều kiện bắt buộc để mở cửa
+
+Từ khi bắt xác minh email, mail hỏng **chặn hẳn người dùng mới**: phụ huynh không
+xác minh được thì không tạo được tài khoản cho con, tức đứa trẻ không có gì để
+đăng game. Trước đó `RESEND_API_KEY` sai chỉ hỏng luồng quên mật khẩu; giờ nó
+hỏng cả cửa vào.
+
+Cái khó là nó hỏng **im lặng**. `docker compose up` vẫn xanh, trang chủ vẫn chạy,
+bốn service vẫn healthy. Lỗi chỉ lộ ra khi một phụ huynh thật bấm nút và không
+nhận được thư — lúc đó họ đã bỏ đi rồi. Nên có script riêng để hỏi thẳng:
+
+```bash
+set -a && . infra/.env && set +a          # nạp env production
+node infra/mail-check.mjs                 # kiểm cấu hình + DNS
+node infra/mail-check.mjs --send ban@gmail.com   # gửi thật một lá
+```
+
+Nó kiểm bốn tầng, theo đúng thứ tự hay hỏng:
+
+1. `RESEND_API_KEY`, `MAIL_FROM`, `APP_ORIGIN` có mặt và **đúng định dạng**. Sai
+   định dạng `MAIL_FROM` là kiểu lỗi tệ nhất: Resend trả 422, `sendMail` ném lỗi,
+   người dùng chỉ thấy "gửi thư thất bại" và không ai biết vì sao.
+2. Key gọi được API, và domain trong `MAIL_FROM` đã đăng ký + **verified** ở
+   Resend. Chưa đăng ký thì Resend chỉ cho gửi tới chính hòm thư chủ tài khoản —
+   đủ để thử, không đủ để mở cửa.
+3. DNS: hỏi thẳng DNS công cộng cho từng bản ghi mà **Resend nói domain này cần**
+   (đọc qua API, không chép cứng, vì Resend đổi region là đổi hostname), cộng
+   DMARC. Không tin trạng thái Resend cache lại: bản ghi có thể đã bị xoá hoặc bị
+   nhà cung cấp DNS ghi đè sau lần verify.
+4. `--send` thì gửi thật.
+
+**Script xanh hết vẫn CHƯA phải là xong.** Mốc thật là: đăng ký một tài khoản phụ
+huynh bằng hòm thư có thật, nhận được thư, và **bấm được link xác minh**. Thư rơi
+vào Spam cũng tính là hỏng. Script chỉ loại trước những cách hỏng dễ đoán.
+
 ### Sao lưu
 
 Service `backup` chạy sẵn trong stack, mỗi ngày vào `BACKUP_HOUR` (mặc định 3
