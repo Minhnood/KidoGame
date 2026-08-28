@@ -2,7 +2,28 @@ import { createHash, randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { prisma } from './db';
 
-export const SESSION_COOKIE = 'kidogame_session';
+/**
+ * Ở production thì cookie chạy qua HTTPS và mang được tiền tố `__Host-`.
+ *
+ * Tiền tố đó KHÔNG phải để cho đẹp tên. Nó là một quy tắc trình duyệt tự thi
+ * hành: cookie mang tiền tố này bị TỪ CHỐI nếu có thuộc tính `Domain`. Đó đúng
+ * là lỗ mà việc bỏ `domain` ở dưới không bịt được — bỏ `domain` ngăn player
+ * origin ĐỌC cookie, nhưng không ngăn nó GHI một cookie trùng tên với
+ * `Domain=kidogame.vn`. Hai cookie cùng tên thì trình duyệt gửi cả hai, cái có
+ * `Path` dài hơn đi trước, và `cookies().get()` lấy cái đầu tiên. Kết quả là
+ * script trên player origin gán được phiên của nó cho đứa trẻ đang đăng nhập,
+ * và `jar.delete()` không xoá nổi cái đó nên đăng xuất cũng không gỡ ra được.
+ *
+ * Chưa có đường nào để JS lạ chạy trên player origin (extension URL bị chặn,
+ * asset lọc theo whitelist, payload đóng gói được escape). Đây là hàng rào thứ
+ * hai — dựng sẵn vì cả hệ thống này đã coi player origin là nơi có mã thù địch.
+ *
+ * VÌ SAO phải theo môi trường: `__Host-` bắt buộc `Secure`, mà `secure` chỉ bật
+ * ở production. Dev và `dev-lan` chạy HTTP trần — gắn tiền tố ở đó thì trình
+ * duyệt vứt cookie đi và không ai đăng nhập được, kể cả trên điện thoại thật.
+ */
+const IS_PROD = process.env.NODE_ENV === 'production';
+export const SESSION_COOKIE = IS_PROD ? '__Host-kidogame_session' : 'kidogame_session';
 const SESSION_DAYS = 30;
 
 /**
@@ -10,7 +31,8 @@ const SESSION_DAYS = 30;
  *
  * KHÔNG set `domain`: cookie thành host-only, nên nó chỉ đi tới đúng app origin
  * và không bao giờ lọt sang player origin (nơi chạy game của người dùng).
- * Set `domain` ở đây là phá tan lớp cách ly quan trọng nhất của cả hệ thống.
+ * Set `domain` ở đây là phá tan lớp cách ly quan trọng nhất của cả hệ thống —
+ * và ở production nó còn làm trình duyệt vứt luôn cookie, vì tiền tố `__Host-`.
  *
  * `sameSite: 'lax'` chặn cookie đi kèm POST từ site khác, tức là đã chống CSRF
  * cho mọi mutation — vì mọi mutation ở đây đều là POST.
@@ -18,8 +40,9 @@ const SESSION_DAYS = 30;
 function cookieOptions(maxAgeSeconds: number) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: IS_PROD,
     sameSite: 'lax' as const,
+    // `__Host-` cũng đòi đúng `Path=/`. Trùng với thứ ta vốn muốn.
     path: '/',
     maxAge: maxAgeSeconds,
     // Cố tình KHÔNG có `domain`.
@@ -118,7 +141,9 @@ export async function destroySession(): Promise<void> {
   if (token) {
     await prisma.session.delete({ where: { tokenHash: hashToken(token) } }).catch(() => {});
   }
-  jar.delete(SESSION_COOKIE);
+  // Xoá kèm `path: '/'` chứ không chỉ mỗi tên: cookie được set ở path `/`, và
+  // lệnh xoá phải khớp path thì trình duyệt mới bỏ đúng cái đó.
+  jar.delete({ name: SESSION_COOKIE, path: '/' });
 }
 
 /** Thu hồi mọi phiên của một tài khoản — dùng khi đổi mật khẩu hoặc khoá tài khoản. */

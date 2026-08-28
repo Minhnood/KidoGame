@@ -24,7 +24,21 @@
 {$APP_DOMAIN:app.kidogame.vn} {
 	encode zstd gzip
 
-	reverse_proxy web:3000
+	reverse_proxy web:3000 {
+		# GHI ĐÈ X-Forwarded-For, không để Caddy nối thêm.
+		#
+		# Mặc định Caddy NỐI IP thật vào cuối chuỗi client gửi lên, nên phần tử
+		# trái nhất là do client tự viết. Mà `clientIp()` trong src/lib/actions.ts
+		# lấy đúng phần tử trái nhất — tức là IP hoàn toàn giả được bằng một dòng
+		# header. Cái đó nuôi hạn mức 5 yêu cầu gỡ bản quyền mỗi IP mỗi ngày, mà
+		# gửi yêu cầu là game của một đứa trẻ bị ẩn ngay lập tức.
+		#
+		# Ở đây Caddy là hop DUY NHẤT trước app (không Cloudflare, không LB), nên
+		# ghi đè là đúng: không có proxy hợp lệ nào phía trước để mà giữ chuỗi.
+		# Thêm một lớp proxy phía trước thì PHẢI sửa lại dòng này, không thì mọi
+		# người dùng trông như cùng một IP.
+		header_up X-Forwarded-For {remote_host}
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
