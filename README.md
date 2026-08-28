@@ -714,7 +714,10 @@ giữa, bản sao lưu **không** đi tới máy của họ — chứ không ph�
 docker compose stop web
 docker compose exec -T db psql -U kidogame -d postgres \
   -c 'DROP DATABASE IF EXISTS kidogame;' -c 'CREATE DATABASE kidogame OWNER kidogame;'
-docker compose exec -T backup pg_restore -d "$DATABASE_URL" /backups/db-<stamp>.dump
+
+# Nháy ĐƠN quanh cả lệnh, và $DATABASE_URL nằm trong nháy kép bên trong. Xem cảnh
+# báo ngay dưới — viết sai chỗ này là lệnh chạy vào hư không.
+docker compose exec -T backup sh -c 'pg_restore -d "$DATABASE_URL" /backups/db-<stamp>.dump'
 
 # 2. File game.
 docker compose run --rm -v ./backups:/backups:ro web \
@@ -723,11 +726,44 @@ docker compose run --rm -v ./backups:/backups:ro web \
 docker compose start web
 ```
 
-CHECK constraint trong `prisma/constraints.sql` **có** đi theo bản dump — đã kiểm
-bằng cách phục hồi rồi soi `pg_constraint`. Nhưng nếu bạn phục hồi bằng cách nào
-khác (dump `--data-only`, hay dựng schema bằng `prisma db push` rồi nạp dữ liệu)
-thì phải chạy lại `pnpm db:constraints`, vì các ràng buộc đó không nằm trong
-Prisma schema.
+**Vì sao phải bọc `sh -c '…'`.** Viết thẳng
+`docker compose exec -T backup pg_restore -d "$DATABASE_URL" …` thì `$DATABASE_URL`
+được **shell của host** khai triển, mà trên host biến đó thường rỗng. `pg_restore`
+nhận chuỗi rỗng, quay ra tìm socket Postgres local *bên trong container backup* —
+nơi không có Postgres nào — và báo:
+
+```
+connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed
+```
+
+Thông báo đó chỉ vào một cái socket, không chỉ vào biến môi trường, nên rất dễ đi
+sai hướng. Và đây là lệnh người ta gõ lúc vừa mất dữ liệu, thường là lúc nửa đêm.
+Bọc trong nháy đơn để **container** khai triển biến của chính nó.
+
+**Đã diễn tập thật, không chỉ viết ra.** Đăng một game qua bản production, sao lưu,
+rồi xoá sạch: `delete from "Parent"` (cascade cuốn theo Child và Game) và xoá cả ba
+thư mục trong `storage`. Phục hồi theo đúng các lệnh trên, kết quả:
+
+| Kiểm | Kết quả |
+|---|---|
+| Số hàng Parent / Child / Game | khớp hiện trạng trước khi phá |
+| CHECK constraint `game_counts_non_negative` | còn |
+| Enum `GameStatus` đủ cả `LIMITED` | còn |
+| Trang chủ hiện lại game | có |
+| Game **boot được**, stage 712×534 | có |
+| File nào của storage bị 404 | không cái nào |
+
+Dòng áp chót là dòng đáng giá nhất: nó phân biệt "DB phục hồi xong" với "đứa trẻ
+bấm vào game của mình và chơi được". Hai thứ đó không giống nhau, và thứ tự dump ở
+mục trên tồn tại chính là để chúng luôn đi cùng nhau.
+
+Một điều đã xác nhận nhân tiện: container `backup` mount `storage` **chỉ đọc** thật
+— thử `rm -rf` từ trong đó thì nhận `Read-only file system`.
+
+CHECK constraint trong `prisma/constraints.sql` **có** đi theo bản dump. Nhưng nếu
+bạn phục hồi bằng cách nào khác (dump `--data-only`, hay dựng schema bằng
+`prisma db push` rồi nạp dữ liệu) thì phải chạy lại `pnpm db:constraints`, vì các
+ràng buộc đó không nằm trong Prisma schema.
 
 `caddy_data` mất thì chỉ phải xin lại chứng chỉ, không cần sao lưu.
 
