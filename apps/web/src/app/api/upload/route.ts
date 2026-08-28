@@ -9,13 +9,17 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return NextResponse.json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });
-  }
-
+  /*
+   * XÉT ĐĂNG NHẬP TRƯỚC KHI ĐỌC BODY. Thứ tự này quan trọng, đừng đảo lại.
+   *
+   * Bản trước gọi `request.formData()` ngay dòng đầu, nghĩa là một request KHÔNG
+   * đăng nhập vẫn khiến server đọc trọn body vào memory rồi mới bị từ chối. Cổng
+   * duy nhất mở cho người lạ mà lại làm việc đắt nhất trước khi kiểm quyền.
+   *
+   * Nó cũng làm dòng comment ở dưới ("chặn theo dung lượng TRƯỚC khi đọc vào
+   * memory") thành sai sự thật, vì `formData()` đã đọc xong từ trước đó — và một
+   * comment sai còn tệ hơn không có comment, nó dạy người sau tin nhầm.
+   */
   // Chỉ tài khoản của BÉ được đăng game. Phụ huynh không đăng hộ — game phải
   // gắn đúng với bé để trang quản lý của phụ huynh và phần ghi công có nghĩa.
   const actor = await getActor();
@@ -32,12 +36,28 @@ export async function POST(request: Request) {
     );
   }
 
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return NextResponse.json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });
+  }
+
   const file = form.get('file');
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'Hãy chọn file .sb3 của bé nhé.' }, { status: 400 });
   }
 
-  // Chặn theo dung lượng TRƯỚC khi đọc vào memory.
+  /*
+   * Chặn theo dung lượng trước khi ĐÓNG GÓI — không phải trước khi đọc vào memory.
+   *
+   * `formData()` ở trên đã đọc xong body rồi, nên `file.size` chỉ biết được sau đó.
+   * Cái phép kiểm này cứu được là bước đắt tiền phía sau: giải nén, chuẩn hoá,
+   * đóng gói qua packager, sinh thumbnail bằng sharp.
+   *
+   * Muốn chặn thật sự trước khi đọc vào memory thì phải chặn ở tầng Caddy
+   * (`request_body max_size`) — Next không cho xem body theo từng phần ở đây.
+   */
   if (file.size > LIMITS.MAX_SB3_BYTES) {
     return NextResponse.json(
       { error: `File quá lớn (tối đa ${Math.floor(LIMITS.MAX_SB3_BYTES / 1024 / 1024)}MB).` },

@@ -79,11 +79,24 @@ function hasProfanity(strings: string[], words: string[]): string | null {
        * rất dễ khi quét lượng chuỗi lớn. Vì vậy chọn wordlist theo bề mặt quét là
        * việc của người GỌI hàm này — xem apps/web/src/lib/profanity.ts.
        */
-      const i = hay.indexOf(w);
-      if (i === -1) continue;
-      const before = i === 0 ? ' ' : hay[i - 1];
-      const after = i + w.length >= hay.length ? ' ' : hay[i + w.length];
-      if (!/[a-z0-9à-ỹ]/.test(before) && !/[a-z0-9à-ỹ]/.test(after)) return w;
+      /*
+       * Quét HẾT mọi lần xuất hiện, không chỉ lần đầu.
+       *
+       * Bản trước dùng đúng một `indexOf`: gặp lần đầu mà lần đó nằm trong một
+       * từ khác thì `continue` sang từ tiếp theo, và những lần sau không bao giờ
+       * được xét. Nghĩa là một từ vô hại chứa chuỗi đó là đủ để VÔ HIỆU HOÁ cả
+       * từ ấy trên toàn bộ chuỗi đang quét.
+       */
+      let khop = false;
+      for (let i = hay.indexOf(w); i !== -1; i = hay.indexOf(w, i + 1)) {
+        const before = i === 0 ? ' ' : hay[i - 1];
+        const after = i + w.length >= hay.length ? ' ' : hay[i + w.length];
+        if (!/[a-z0-9à-ỹ]/.test(before) && !/[a-z0-9à-ỹ]/.test(after)) {
+          khop = true;
+          break;
+        }
+      }
+      if (khop) return w;
     }
   }
   return null;

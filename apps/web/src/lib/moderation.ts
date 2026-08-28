@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { AuthError } from './auth';
 import { prisma } from './db';
 import { appOrigin, sendMail } from './mail';
@@ -56,7 +56,26 @@ function reporterKey(
   actor: { kind: 'parent' | 'child'; id: string } | null,
   ip: string | null
 ): string {
-  const raw = actor ? `${actor.kind}:${actor.id}` : `ip:${ip ?? 'khong-ro'}`;
+  if (actor) return createHash('sha256').update(`${actor.kind}:${actor.id}`).digest('hex');
+
+  /*
+   * Khách vãng lai mà KHÔNG biết IP thì sinh khoá ngẫu nhiên, không dùng hằng số.
+   *
+   * Bản trước ghi `ip:${ip ?? 'khong-ro'}`: thiếu IP là mọi khách hash về CÙNG MỘT
+   * giá trị, rồi `@@unique([gameId, reporterIpHash])` coi từ người thứ hai trở đi
+   * là báo cáo trùng và ÂM THẦM BỎ. Nghĩa là một game chỉ nhận được đúng một báo
+   * cáo của khách, mãi mãi, và không có lỗi nào để ai nhìn thấy.
+   *
+   * Khi nào xảy ra: khi không có `x-forwarded-for`. Ở production thì Caddy luôn
+   * đặt header đó (đã ghi đè trong Caddyfile), nhưng ở dev, ở LAN, hay nếu sau này
+   * có ai đổi cách vào thì là mất trắng lớp báo cáo của khách.
+   *
+   * Đánh đổi cố ý: mất chống trùng cho đúng nhóm này. Chấp nhận được, vì báo cáo
+   * của khách KHÔNG tính vào ngưỡng tự ẩn (`reportCountsTowardThreshold` đòi phụ
+   * huynh đã xác minh email) — nó chỉ đưa game vào hàng đợi admin. Mất chống trùng
+   * là thêm việc cho admin; bỏ báo cáo là mất hẳn một con mắt.
+   */
+  const raw = ip ? `ip:${ip}` : `khong-ro:${randomUUID()}`;
   return createHash('sha256').update(raw).digest('hex');
 }
 

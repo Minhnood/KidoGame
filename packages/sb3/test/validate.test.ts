@@ -236,4 +236,47 @@ describe('quét từ ngữ', () => {
     });
     expect(r.stats.targets).toBe(2);
   });
+
+  /*
+   * Hồi quy cho một lỗ THẬT, tìm ra bằng lượt soi code ngày 28/8/2026.
+   *
+   * Bản trước dùng đúng MỘT `indexOf` cho mỗi từ: gặp lần đầu mà lần đó nằm bên
+   * trong một từ khác thì bỏ qua luôn cả từ ấy, những lần xuất hiện sau không bao
+   * giờ được xét. Nghĩa là chỉ cần một từ vô hại chứa chuỗi đó đứng TRƯỚC là vô
+   * hiệu hoá cả bộ lọc cho từ ấy trên toàn bộ chuỗi.
+   *
+   * Ba phép kiểm dưới đây khoá cả hai chiều: phải chặn khi có lần xuất hiện đứng
+   * riêng ở PHÍA SAU, và vẫn không được báo nhầm khi mọi lần xuất hiện đều nằm
+   * trong từ khác.
+   */
+  it('CHẶN khi từ xấu đứng riêng ở phía sau một từ vô hại chứa nó', async () => {
+    const p = validProject();
+    p.targets![1].blocks!.say = {
+      opcode: 'looks_sayforsecs',
+      inputs: { MESSAGE: [1, [10, 'Nguyen oi ngu qua']] },
+      fields: {},
+    };
+    expect(await codeOf(validSb3([], p), { profanity: ['ngu'] })).toBe('PROFANITY');
+  });
+
+  it('CHẶN khi từ xấu xuất hiện nhiều lần, chỉ lần cuối đứng riêng', async () => {
+    const p = validProject();
+    p.targets![1].blocks!.say = {
+      opcode: 'looks_sayforsecs',
+      inputs: { MESSAGE: [1, [10, 'Nguyen Ngutha ngu']] },
+      fields: {},
+    };
+    expect(await codeOf(validSb3([], p), { profanity: ['ngu'] })).toBe('PROFANITY');
+  });
+
+  it('KHÔNG báo nhầm khi MỌI lần xuất hiện đều nằm trong từ khác', async () => {
+    const p = validProject();
+    p.targets![1].blocks!.say = {
+      opcode: 'looks_sayforsecs',
+      inputs: { MESSAGE: [1, [10, 'Nguyen va Ngutha di Nguyenland']] },
+      fields: {},
+    };
+    const r = await validateAndNormalize(await validSb3([], p), { profanity: ['ngu'] });
+    expect(r.stats.targets).toBe(2);
+  });
 });

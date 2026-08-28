@@ -359,11 +359,32 @@ export async function adminRemoveGameAction(_prev: FormState, form: FormData): P
 export async function adminRestoreGameAction(_prev: FormState, form: FormData): Promise<FormState> {
   const state = await run(async () => {
     const adminId = await requireAdmin();
-    await adminRestoreGame(
-      adminId,
-      String(form.get('gameId') ?? ''),
-      'Admin xác nhận không sao, cho hiện lại'
-    );
+    const gameId = String(form.get('gameId') ?? '');
+
+    /*
+     * Admin CŨNG không bật lại được game đang có khiếu nại bản quyền chờ xử lý.
+     *
+     * Đây đúng là lỗ đã vá cho phụ huynh ở phía trên trong cùng ngày — và đường
+     * admin bị bỏ sót. Vá một nửa, sót nửa kia, lần thứ ba trong dự án này (lần
+     * đầu ở luồng báo cáo, lần hai ở luồng phụ huynh).
+     *
+     * Hệ quả thứ hai giống hệt và vẫn tệ như vậy: `adminResolveTakedown` tính
+     * "đã cho hiện lại chưa" bằng `updateMany` có điều kiện `status: 'HIDDEN'`.
+     * Game đã bị bật lại thì điều kiện không khớp, `restored` = false, và người
+     * khiếu nại nhận thư nói "game vẫn đang ẩn" trong khi nó đang công khai —
+     * tức mình nói sai với họ, bằng văn bản, mà không ai phát hiện được.
+     *
+     * Với admin thì việc ĐÚNG không phải là bấm "Cho hiện lại", mà là vào hàng
+     * đợi bản quyền bác khiếu nại — `adminResolveTakedown` tự cho hiện lại và tự
+     * gửi thư cho cả hai phía. Nên thông báo chỉ đường sang đấy.
+     */
+    if ((await gameDangBiKhieuNai([gameId])).has(gameId)) {
+      throw new AuthError(
+        'Game này đang có yêu cầu gỡ bản quyền chờ xử lý. Hãy xử lý ở hàng đợi bản quyền — bác khiếu nại sẽ tự cho hiện lại và gửi thư cho cả hai phía.'
+      );
+    }
+
+    await adminRestoreGame(adminId, gameId, 'Admin xác nhận không sao, cho hiện lại');
   });
   revalidatePath('/admin');
   return state;

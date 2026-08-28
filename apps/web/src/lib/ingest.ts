@@ -27,16 +27,33 @@ export const MAX_TAGS_PER_GAME = 2;
 export const MAX_TITLE_LENGTH = 80;
 export const MAX_DESCRIPTION_LENGTH = 500;
 
+/**
+ * Có xuất hiện `w` như một TỪ RIÊNG trong `hay` không.
+ *
+ * Phải quét HẾT mọi lần xuất hiện, không chỉ lần đầu.
+ *
+ * Bản trước dùng đúng một `indexOf`: gặp lần đầu mà lần đó nằm trong một từ khác
+ * thì trả về false luôn, và những lần sau không bao giờ được xét. Hệ quả là chỉ
+ * cần một từ vô hại chứa chuỗi đó là VÔ HIỆU HOÁ cả từ ấy trong toàn bộ câu —
+ * `"Soccer cc game"` và `"Admin oi dm may"` đều lọt, trong khi `"cc"` và `"dm"`
+ * đứng một mình thì bị chặn.
+ *
+ * Đây là lớp lọc nội dung cho trẻ em, nên "gần đúng" không đủ.
+ */
+function coTuRieng(hay: string, w: string): boolean {
+  const laKyTuTu = /[a-z0-9à-ỹ]/;
+  for (let i = hay.indexOf(w); i !== -1; i = hay.indexOf(w, i + 1)) {
+    const before = i === 0 ? ' ' : hay[i - 1];
+    const after = i + w.length >= hay.length ? ' ' : hay[i + w.length];
+    if (!laKyTuTu.test(before) && !laKyTuTu.test(after)) return true;
+  }
+  return false;
+}
+
 /** Chỉ dùng cho tiêu đề/mô tả — nội dung .sb3 do `validateAndNormalize` lo, với danh sách khác. */
 function containsProfanity(text: string): boolean {
   const hay = text.toLowerCase();
-  return PROFANITY_TEXT.some((w) => {
-    const i = hay.indexOf(w);
-    if (i === -1) return false;
-    const before = i === 0 ? ' ' : hay[i - 1];
-    const after = i + w.length >= hay.length ? ' ' : hay[i + w.length];
-    return !/[a-z0-9à-ỹ]/.test(before) && !/[a-z0-9à-ỹ]/.test(after);
-  });
+  return PROFANITY_TEXT.some((w) => coTuRieng(hay, w));
 }
 
 export interface IngestInput {

@@ -85,8 +85,14 @@ const ROUTES = [
   { path: '/quen-mat-khau', as: 'khách' },
   { path: '/dieu-khoan', as: 'khách' },
   { path: '/bao-cao-ban-quyen', as: 'khách' },
-  // Bộ lọc và tìm kiếm đi qua nhánh render khác hẳn trang chủ trống.
-  { path: '/?q=meo&tag=phieu-luu&age=8-10', as: 'khách' },
+  /*
+   * Bộ lọc và tìm kiếm đi qua nhánh render khác hẳn trang chủ trống.
+   *
+   * Tham số tuổi là `tuoi`, KHÔNG phải `age` — trang chủ đọc `sp.tuoi`. Bản đầu
+   * của route này viết `age=8-10`, nên nó đi vào đúng nhánh trang chủ trống và
+   * cái nó tồn tại để phủ thì chưa bao giờ chạy. Một phép kiểm xanh vì lý do sai.
+   */
+  { path: '/?q=meo&tag=phieu-luu&tuoi=8-10', as: 'khách' },
   // Token sai phải ra trang lỗi tử tế, không phải trang trắng hay 500.
   { path: '/xac-minh-email?token=sai', as: 'khách' },
   { path: '/dat-lai-mat-khau?token=sai', as: 'khách' },
