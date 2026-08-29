@@ -72,6 +72,22 @@
      giao diện tối, tức không mất gì về tương phản. */
   --color-chrome-ink: #f4f4fa;
 
+  /* --- Màu của tranh trang trí hai bên lề ---
+   *
+   * Tách hẳn khỏi bảng màu giao diện, cố ý. Đây là hình TRANG TRÍ thuần tuý: không
+   * mang thông tin nào, không có chữ nào nằm trên, nên WCAG không đòi ngưỡng tương
+   * phản — và `contrast-check` cũng không xét chúng. Đổi mấy màu này không bao giờ
+   * làm ai đọc không nổi chữ.
+   *
+   * Nhưng ĐỪNG dùng chúng cho thứ gì khác ngoài tranh: đặt chữ lên nền màu này là
+   * lách qua đúng cái hàng rào mà cả bảng màu kia dựng lên.
+   */
+  --color-decor-la: #74c184;
+  --color-decor-la-dam: #4f9a63;
+  --color-decor-than: #b0793f;
+  --color-decor-co: #8ecb95;
+  --color-decor-troi: #ffc861;
+
   --color-warn-bg: #fff6e8;
   --color-warn-border: #ffd9a8;
   --color-warn-ink: #8a5200;
@@ -148,6 +164,15 @@
 
   --toi-chrome: #0d0d18;
 
+  /* Tranh trang trí ở giao diện tối: TỐI đi và bớt rực, không phải sáng lên.
+     Ban đêm mà để nguyên xanh lá tươi thì hai bên lề sáng hơn cả nội dung, và mắt
+     bị kéo ra rìa màn hình đúng lúc đang cần nhìn vào giữa. */
+  --toi-decor-la: #2f5c3c;
+  --toi-decor-la-dam: #24462e;
+  --toi-decor-than: #55402a;
+  --toi-decor-co: #356641;
+  --toi-decor-troi: #6b532a;
+
   --toi-warn-bg: #392b14;
   --toi-warn-border: #6b4d1c;
   --toi-warn-ink: #ffdca8;
@@ -174,6 +199,11 @@
     --color-accent-text: var(--toi-accent-text);
     --color-focus: var(--toi-focus);
     --color-chrome: var(--toi-chrome);
+    --color-decor-la: var(--toi-decor-la);
+    --color-decor-la-dam: var(--toi-decor-la-dam);
+    --color-decor-than: var(--toi-decor-than);
+    --color-decor-co: var(--toi-decor-co);
+    --color-decor-troi: var(--toi-decor-troi);
     --color-warn-bg: var(--toi-warn-bg);
     --color-warn-border: var(--toi-warn-border);
     --color-warn-ink: var(--toi-warn-ink);
@@ -199,6 +229,11 @@
   --color-accent-text: var(--toi-accent-text);
   --color-focus: var(--toi-focus);
   --color-chrome: var(--toi-chrome);
+  --color-decor-la: var(--toi-decor-la);
+  --color-decor-la-dam: var(--toi-decor-la-dam);
+  --color-decor-than: var(--toi-decor-than);
+  --color-decor-co: var(--toi-decor-co);
+  --color-decor-troi: var(--toi-decor-troi);
   --color-warn-bg: var(--toi-warn-bg);
   --color-warn-border: var(--toi-warn-border);
   --color-warn-ink: var(--toi-warn-ink);
@@ -217,8 +252,20 @@
  * CSS viết tay — chỉ giữ những thứ nằm ngoài thang utility.
  */
 
-body {
+/*
+ * Nền đặt ở <html>, KHÔNG ở <body> — và đây không phải chuyện sở thích.
+ *
+ * Tranh trang trí hai bên lề là một phần tử `position: fixed; z-index: -1` nằm
+ * trong <body>. Nếu nền nằm ở <body> thì trình duyệt lấy nền đó làm nền của cả
+ * khung nhìn, và mọi thứ z-index âm bị vẽ ra SAU nó — tranh biến mất sạch, không
+ * một thông báo lỗi nào. Chuyển nền lên <html> thì <body> trong suốt, tranh nằm
+ * đúng giữa nền và nội dung.
+ */
+html {
   background: var(--color-bg);
+}
+
+body {
   color: var(--color-ink);
 }
 

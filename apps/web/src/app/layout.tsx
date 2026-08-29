@@ -3,6 +3,7 @@ import { Nunito } from 'next/font/google';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { SiteNav } from '@/components/site-nav';
+import { SiteDecor } from '@/components/site-decor';
 import { SiteFooter } from '@/components/site-footer';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Wrap } from '@/components/page';
@@ -125,6 +126,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Bỏ qua thanh điều hướng, tới nội dung
         </a>
+        {/* Tranh trang trí hai bên lề. Đặt TRƯỚC <header> nhưng nó `fixed` nên vị trí
+            trong cây DOM không ảnh hưởng gì tới bố cục — điều đáng quan tâm là nó
+            không chen vào thứ tự Tab, và nó không hề focus được. */}
+        <SiteDecor />
         <header className="bg-chrome py-3 text-chrome-ink">
           {/*
             Cho phép xuống dòng ở ĐÂY, và chỉ ở đây.

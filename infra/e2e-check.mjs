@@ -385,12 +385,23 @@ if (FIXTURE) {
         });
         return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
       };
-      const cs = getComputedStyle(document.body);
+      /*
+       * NỀN đọc ở <html>, CHỮ đọc ở <body> — hai phần tử khác nhau, cố ý.
+       *
+       * Nền nằm ở <html> vì tranh trang trí hai bên lề là một phần tử z-index âm
+       * trong <body>: để nền ở <body> thì trình duyệt lấy nó làm nền khung nhìn và
+       * mọi thứ z-index âm bị vẽ ra sau nó (xem `globals.css`). Bản trước của phép
+       * kiểm này đọc nền của <body>, nên sau khi chuyển nó đo được `rgba(0,0,0,0)`
+       * cho CẢ hai giao diện — tức là hai giao diện "giống nhau" vì cùng đo nhầm
+       * một chỗ trong suốt.
+       */
+      const csHtml = getComputedStyle(document.documentElement);
+      const csBody = getComputedStyle(document.body);
       return {
-        bg: cs.backgroundColor,
-        ink: cs.color,
-        bgSang: dosang(cs.backgroundColor),
-        inkSang: dosang(cs.color),
+        bg: csHtml.backgroundColor,
+        ink: csBody.color,
+        bgSang: dosang(csHtml.backgroundColor),
+        inkSang: dosang(csBody.color),
         theme: document.documentElement.dataset.theme ?? '',
       };
     });
