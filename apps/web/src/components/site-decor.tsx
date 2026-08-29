@@ -71,8 +71,37 @@ function Hoa({ x, y, mau }: { x: number; y: number; mau: string }) {
   );
 }
 
+/** Chiếc lá: một hình thoi bo tròn, xoay theo hướng cành. */
+function La({ x, y, g, dam }: { x: number; y: number; g: number; dam?: boolean }) {
+  return (
+    <path
+      d="M0 0c9-8 20-8 26 0-6 8-17 8-26 0Z"
+      transform={`translate(${x} ${y}) rotate(${g})`}
+      fill={dam ? 'var(--color-decor-la-dam)' : 'var(--color-decor-la)'}
+    />
+  );
+}
+
+/** Quả táo treo dưới cành: cuống, quả, một vệt sáng và một chiếc lá con. */
+function Tao({ x, y }: { x: number; y: number }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <path
+        d="M0-16v7"
+        stroke="var(--color-decor-than)"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+      <path d="M1-13c4-3 9-2 9-2s-1 5-6 5Z" fill="var(--color-decor-la-dam)" />
+      <circle cx="0" cy="0" r="10" fill="var(--color-decor-tao)" />
+      {/* Vệt sáng làm quả tròn ra chứ không phẳng như một chấm sơn. */}
+      <ellipse cx="-3.4" cy="-3.4" rx="3" ry="2.2" fill="var(--color-decor-tao-sang)" />
+    </g>
+  );
+}
+
 /**
- * Cành mọc NGANG ra từ mép màn hình.
+ * CÀNH có hoa và táo mọc ngang ra từ mép màn hình.
  *
  * Vẽ cho mép TRÁI; bên phải dùng lại chính nó rồi lật bằng `scaleX(-1)` chứ không
  * vẽ bản thứ hai — hai bản vẽ tay của cùng một cái cành thì sớm muộn sẽ lệch nhau,
@@ -81,40 +110,76 @@ function Hoa({ x, y, mau }: { x: number; y: number; mau: string }) {
  * Cả cành NẰM TRONG nhóm `kg-dua-canh`, kể cả khúc gốc: nhờ vậy hộp bao bắt đầu
  * đúng ở x=0, tức đúng chỗ cành dính vào mép, nên nó đu quanh gốc như gió thổi chứ
  * không quay quanh giữa chùm lá như một cái chong chóng.
+ *
+ * Khung 200×110 — DÀI và THẤP, cố ý. Cành phải rộng bằng cả bên lề, mà lề trên màn
+ * 1920 rộng gần 450px; khung vuông thì cành cũng cao ngần ấy và ba cành chồng lên
+ * nhau. Dài ngang thì nới rộng bao nhiêu cũng không đội cao lên.
  */
 function Canh({ delay = 0 }: { delay?: number }) {
   return (
     <g className="kg-dua-canh" style={{ animationDelay: `${delay}s` }}>
+      {/* Cành chính, thon dần ra đầu ngọn. */}
       <path
-        d="M0 66C26 64 44 54 62 38"
+        d="M0 60C36 58 74 50 108 40 136 32 164 27 194 25"
         stroke="var(--color-decor-than)"
-        strokeWidth="10"
+        strokeWidth="9"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Hai nhánh con: một vươn lên, một rủ xuống mang táo. */}
+      <path
+        d="M62 54C74 40 88 31 104 25"
+        stroke="var(--color-decor-than)"
+        strokeWidth="5.5"
         strokeLinecap="round"
         fill="none"
       />
       <path
-        d="M22 65C34 78 48 88 62 96"
+        d="M96 44C106 58 118 68 132 74"
         stroke="var(--color-decor-than)"
-        strokeWidth="7"
+        strokeWidth="5"
         strokeLinecap="round"
         fill="none"
       />
-      <circle cx="44" cy="22" r="15" fill="var(--color-decor-la-dam)" />
-      <circle cx="86" cy="48" r="14" fill="var(--color-decor-la-dam)" />
-      <circle cx="64" cy="34" r="22" fill="var(--color-decor-la)" />
-      <circle cx="88" cy="88" r="12" fill="var(--color-decor-la-dam)" />
-      <circle cx="66" cy="100" r="18" fill="var(--color-decor-la)" />
+
+      <La x={26} y={48} g={-24} dam />
+      <La x={54} y={38} g={-38} />
+      <La x={78} y={30} g={-18} dam />
+      <La x={116} y={22} g={-26} />
+      <La x={150} y={16} g={-14} dam />
+      <La x={104} y={52} g={38} />
+      <La x={40} y={64} g={22} />
+      <La x={168} y={30} g={26} />
+
+      <Hoa x={70} y={30} mau="var(--color-decor-hoa-hong)" />
+      <Hoa x={140} y={26} mau="var(--color-decor-hoa-hong)" />
+      <Hoa x={112} y={62} mau="var(--color-decor-hoa-vang)" />
+
+      <Tao x={46} y={78} />
+      <Tao x={134} y={88} />
+      <Tao x={176} y={48} />
     </g>
   );
 }
 
-/** Một cành đặt ở mép trái hoặc mép phải, tại một độ cao cho trước. */
+/**
+ * Một cành đặt ở mép trái hoặc mép phải, tại một độ cao cho trước.
+ *
+ * Bề rộng = ĐÚNG bề rộng bên lề: `(100vw − 64rem) / 2`, vì nội dung rộng tối đa
+ * `max-w-5xl` = 64rem. Chốt cứng theo pixel thì trên màn rộng cành chỉ chiếm một
+ * góc và bên lề lại trơ ra — đúng cái đã phải sửa.
+ *
+ * Có TRẦN 300px: màn siêu rộng thì lề lên tới 450px+, mà cành phóng to theo là chữ
+ * "hoa" với "táo" to bằng nắm tay, kéo mắt hẳn khỏi nội dung.
+ */
 function CanhVien({ ben, top, delay }: { ben: 'trai' | 'phai'; top: string; delay: number }) {
   return (
     <svg
-      viewBox="0 0 110 130"
+      viewBox="0 0 200 110"
       style={{ top }}
-      className={`absolute w-20 2xl:w-28 ${ben === 'trai' ? 'left-0' : 'right-0 -scale-x-100'}`}
+      className={`absolute w-[min(calc((100vw-64rem)/2),300px)] ${
+        ben === 'trai' ? 'left-0' : 'right-0 -scale-x-100'
+      }`}
       fill="none"
       focusable="false"
     >
@@ -224,7 +289,7 @@ export function SiteDecor() {
       {/* --- Mặt đất bên trái: đồi, hai cây, bụi cỏ, hoa --- */}
       <svg
         viewBox="0 0 150 200"
-        className="absolute bottom-0 left-0 w-28 2xl:w-44"
+        className="absolute bottom-0 left-0 w-[min(calc((100vw-64rem)/2),320px)]"
         fill="none"
         focusable="false"
       >
@@ -244,7 +309,7 @@ export function SiteDecor() {
              xứng y hệt thì thành ảnh soi gương chứ không ra khung cảnh. --- */}
       <svg
         viewBox="0 0 150 200"
-        className="absolute bottom-0 right-0 w-28 2xl:w-44"
+        className="absolute bottom-0 right-0 w-[min(calc((100vw-64rem)/2),320px)]"
         fill="none"
         focusable="false"
       >

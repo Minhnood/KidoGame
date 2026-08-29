@@ -92,6 +92,8 @@
   --color-decor-hoa-hong: #f2a0be;
   --color-decor-hoa-vang: #ffd979;
   --color-decor-chim: #9aa3b8;
+  --color-decor-tao: #e2574f;
+  --color-decor-tao-sang: #f5867f;
 
   --color-warn-bg: #fff6e8;
   --color-warn-border: #ffd9a8;
@@ -183,6 +185,8 @@
   --toi-decor-hoa-hong: #6b3d51;
   --toi-decor-hoa-vang: #7a6634;
   --toi-decor-chim: #3a3f52;
+  --toi-decor-tao: #7c322f;
+  --toi-decor-tao-sang: #9c4a45;
 
   --toi-warn-bg: #392b14;
   --toi-warn-border: #6b4d1c;
@@ -220,6 +224,8 @@
     --color-decor-hoa-hong: var(--toi-decor-hoa-hong);
     --color-decor-hoa-vang: var(--toi-decor-hoa-vang);
     --color-decor-chim: var(--toi-decor-chim);
+    --color-decor-tao: var(--toi-decor-tao);
+    --color-decor-tao-sang: var(--toi-decor-tao-sang);
     --color-warn-bg: var(--toi-warn-bg);
     --color-warn-border: var(--toi-warn-border);
     --color-warn-ink: var(--toi-warn-ink);
@@ -255,6 +261,8 @@
   --color-decor-hoa-hong: var(--toi-decor-hoa-hong);
   --color-decor-hoa-vang: var(--toi-decor-hoa-vang);
   --color-decor-chim: var(--toi-decor-chim);
+  --color-decor-tao: var(--toi-decor-tao);
+  --color-decor-tao-sang: var(--toi-decor-tao-sang);
   --color-warn-bg: var(--toi-warn-bg);
   --color-warn-border: var(--toi-warn-border);
   --color-warn-ink: var(--toi-warn-ink);
