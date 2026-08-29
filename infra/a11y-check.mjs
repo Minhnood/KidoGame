@@ -199,6 +199,80 @@ for (const [path, role] of PAGES) {
   await page.close();
 }
 
+// ---------------------------------------------------------------------------
+// Tràn ngang trên máy nhỏ
+// ---------------------------------------------------------------------------
+/*
+ * VÌ SAO có mục này: ngày 29/8 một bản vá thanh điều hướng làm trang tràn ngang
+ * 31px ở 360px rồi 2px ở 320px — và KHÔNG bộ kiểm nào bắt được. Nó lộ ra chỉ vì
+ * tình cờ có người đi đo. Lần soi "điện thoại rẻ" hôm 28/8 cũng có đo `scrollWidth`,
+ * nhưng đó là một lần soi tay: soi xong là hết, không để lại gì canh giúp lần sau.
+ *
+ * Tràn ngang là loại lỗi đặc biệt đáng canh tự động vì nó KHÔNG gây lỗi gì cả —
+ * trang vẫn 200, vẫn render, chỉ là phải vuốt ngang mới đọc hết. Trên máy tính của
+ * người viết code thì không bao giờ thấy.
+ *
+ * 320px là máy nhỏ nhất còn đáng đỡ (iPhone SE đời đầu, máy cũ bố mẹ thải lại);
+ * 360px là bề rộng phổ biến nhất của điện thoại Android giá rẻ.
+ */
+console.log('\n── Tràn ngang trên máy nhỏ ─────────────────────────────────');
+{
+  // Trang chơi game phải lấy id thật — đây là trang có phần tử rộng nhất (khung
+  // game 720px), tức là chỗ dễ tràn nhất, nên bỏ qua nó là bỏ qua đúng chỗ cần đo.
+  const probe = await guest.newPage();
+  await probe.goto(APP, { waitUntil: 'networkidle' });
+  const gameHref = await probe
+    .locator('a[href^="/game/"]')
+    .first()
+    .getAttribute('href')
+    .catch(() => null);
+  await probe.close();
+
+  const duong = [...PAGES.filter(([, role]) => role === 'khách').map(([p]) => p)];
+  if (gameHref) duong.push(gameHref);
+
+  for (const width of [320, 360, 390, 414]) {
+    const ctx = await browser.newContext({
+      viewport: { width, height: 780 },
+      ignoreHTTPSErrors: true,
+    });
+    const page = await ctx.newPage();
+    const tran = [];
+
+    for (const path of duong) {
+      await page.goto(APP + path, { waitUntil: 'networkidle' });
+      const ket = await page.evaluate(() => {
+        const de = document.documentElement;
+        const thua = de.scrollWidth - de.clientWidth;
+        if (thua <= 0) return null;
+        /*
+         * Chỉ ra phần tử nào thò ra. Không có dòng này thì báo lỗi chỉ nói "tràn
+         * 31px" và người sửa phải tự đi dò từng thẻ — mà tràn ngang thường do đúng
+         * MỘT phần tử không chịu co lại.
+         */
+        let thu_pham = '(không xác định)';
+        for (const el of document.querySelectorAll('body *')) {
+          const r = el.getBoundingClientRect();
+          if (r.right > de.clientWidth + 0.5) {
+            const cls = (el.className?.toString?.() ?? '').trim().slice(0, 50);
+            thu_pham = el.tagName.toLowerCase() + (cls ? `.${cls}…` : '');
+            break;
+          }
+        }
+        return { thua, thu_pham };
+      });
+      if (ket) tran.push(`${path} thừa ${ket.thua}px ← ${ket.thu_pham}`);
+    }
+
+    await ctx.close();
+    check(
+      `Màn ${width}px: không trang nào phải vuốt ngang`,
+      tran.length === 0,
+      tran.length ? tran.join(' | ') : `${duong.length} trang sạch`
+    );
+  }
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
