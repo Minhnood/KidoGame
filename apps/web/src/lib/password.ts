@@ -2,19 +2,97 @@ import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import type { ScryptOptions } from 'node:crypto';
 
 /**
+ * Máy chủ đang băm tối đa rồi. KHÔNG phải sai mật khẩu.
+ *
+ * Phải là một loại lỗi RIÊNG, không được lẫn vào `false` của `verifyPassword`:
+ * lẫn vào là quá tải bị kể lại thành "sai mật khẩu", rồi `recordFailure()` đếm nó
+ * như một lần gõ sai và khoá tài khoản của người vô can. Nghĩa là lúc máy chủ
+ * đang bận nhất, hệ thống sẽ tự tay khoá chính những người đang cố đăng nhập.
+ */
+export class ScryptBusyError extends Error {
+  constructor() {
+    super('Máy chủ đang bận, thử lại sau vài giây nhé.');
+    this.name = 'ScryptBusyError';
+  }
+}
+
+/*
+ * TRẦN SỐ LẦN BĂM CHẠY CÙNG LÚC — cho cả tiến trình.
+ *
+ * Vì sao cần: `LoginAttempt` khoá theo DANH TÍNH (email/username), cố ý như vậy để
+ * không khoá oan cả một lớp học dùng chung IP. Nhưng hệ quả là đổi email mỗi
+ * request thì KHÔNG có gì chặn: mỗi request là một lần băm 64MB, và không ai đếm
+ * tổng. Đây là cạn tài nguyên, loại mà bài soát bảo mật cố ý không tính.
+ *
+ * Số đo trên máy dev (N=2^16, r=8):
+ *   1 lần băm             ~130 ms
+ *   4 lần song song       ~163 ms   (gần như không chậm hơn)
+ *   16 lần song song      ~568 ms,  RSS đỉnh 299 MB
+ *
+ * Nên chọn 4: đỉnh bộ nhớ ~256MB, còn chỗ cho Next + Prisma trên một VPS nhỏ, mà
+ * độ trễ gần như không đổi so với chạy một mình.
+ *
+ * Hàng chờ 32: quá số đó thì TỪ CHỐI NGAY thay vì xếp hàng vô hạn. Xếp hàng vô hạn
+ * chỉ đổi kiểu chết — thay vì hết RAM thì thành hàng nghìn request treo rồi cùng
+ * timeout. 32 người chờ, 4 người chạy, mỗi lượt 130ms thì người cuối đợi ~1 giây;
+ * đó là lý do KHÔNG cần thêm cơ chế timeout cho hàng chờ.
+ *
+ * Trần này đặt ở ĐÂY chứ không ở tầng route, cố ý: mọi đường dẫn tới scrypt đều đi
+ * qua hàm này — đăng nhập, đăng ký, đổi mật khẩu, tạo tài khoản con, cả hash mồi
+ * `verifyOrDecoy`. Đặt ở tầng route thì người thêm route mới sau này phải nhớ, và
+ * sớm muộn sẽ có người quên.
+ */
+const MAX_SONG_SONG = Math.max(1, Number(process.env.SCRYPT_MAX_CONCURRENT ?? 4));
+const MAX_HANG_CHO = Math.max(0, Number(process.env.SCRYPT_MAX_QUEUE ?? 32));
+
+let dangChay = 0;
+const hangCho: Array<() => void> = [];
+
+/** Số liệu để soi lúc chạy và để phép kiểm khẳng định. */
+export function scryptLoad(): { dangChay: number; hangCho: number } {
+  return { dangChay, hangCho: hangCho.length };
+}
+
+async function xinLuot(): Promise<void> {
+  if (dangChay < MAX_SONG_SONG) {
+    dangChay++;
+    return;
+  }
+  if (hangCho.length >= MAX_HANG_CHO) throw new ScryptBusyError();
+  /*
+   * Không tăng `dangChay` ở đây: suất được TRAO tay trong `traLuot()`, và ở đó
+   * `dangChay` giữ nguyên. Tăng cả hai chỗ là đếm đôi, và trần thành vô nghĩa
+   * đúng lúc có tải — tức là đúng lúc cần nó.
+   */
+  await new Promise<void>((resolve) => hangCho.push(resolve));
+}
+
+function traLuot(): void {
+  const tiep = hangCho.shift();
+  if (tiep) tiep();
+  else dangChay--;
+}
+
+/**
  * promisify() của node:util chỉ nhìn thấy overload 3 tham số của scrypt, nên mất tham số options (N, r, p, maxmem). Tự bọc để giữ đủ chữ ký.
  */
-function scrypt(
+async function scrypt(
   password: string | Buffer,
   salt: string | Buffer,
   keylen: number,
   options: ScryptOptions
 ): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    scryptCb(password, salt, keylen, options, (err, derived) =>
-      err ? reject(err) : resolve(derived)
-    );
-  });
+  // Ném ở đây thì KHÔNG gọi `traLuot()` — chưa hề nhận suất nào.
+  await xinLuot();
+  try {
+    return await new Promise<Buffer>((resolve, reject) => {
+      scryptCb(password, salt, keylen, options, (err, derived) =>
+        err ? reject(err) : resolve(derived)
+      );
+    });
+  } finally {
+    traLuot();
+  }
 }
 
 /*
@@ -83,7 +161,16 @@ export async function verifyPassword(password: string, stored: string): Promise<
     );
 
     return actual.length === expected.length && timingSafeEqual(actual, expected);
-  } catch {
+  } catch (e) {
+    /*
+     * Quá tải PHẢI bay lên trên, không được nuốt thành `false`.
+     *
+     * Cái `catch` này tồn tại để một dòng hash hỏng trong DB không thành lỗi 500.
+     * Nhưng "máy chủ đang bận" là chuyện khác hẳn: trả `false` ở đây là nói dối
+     * rằng người ta gõ sai mật khẩu, và tầng trên sẽ đếm nó vào số lần sai rồi
+     * khoá tài khoản — biến một lúc quá tải thành một đợt khoá tài khoản hàng loạt.
+     */
+    if (e instanceof ScryptBusyError) throw e;
     return false;
   }
 }

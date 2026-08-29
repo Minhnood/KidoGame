@@ -50,3 +50,8 @@ jobs:
       # xuống dưới ngưỡng đọc được của mắt trẻ.
       - name: Tương phản bảng màu
         run: node infra/contrast-check.mjs
+
+      # Trần băm mật khẩu. Gọi thẳng hàm nên không cần server cũng không cần DB —
+      # đó chính là lý do nó chạy được ở đây trong khi bảy bộ e2e thì không.
+      - name: Trần scrypt
+        run: pnpm --filter @kidogame/web exec tsx ../../infra/scrypt-cap-check.ts

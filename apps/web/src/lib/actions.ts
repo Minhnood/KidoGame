@@ -17,6 +17,7 @@ import {
   requestPasswordReset,
   resetPasswordWithToken,
 } from './account';
+import { ScryptBusyError, scryptLoad } from './password';
 import {
   adminDismissReports,
   adminRemoveGame,
@@ -56,6 +57,15 @@ async function run(fn: () => Promise<void>): Promise<FormState> {
     return { ok: true };
   } catch (e) {
     if (e instanceof AuthError) return { error: e.message };
+    /*
+     * Quá tải băm mật khẩu: nói thật là máy chủ đang bận, đừng để rơi xuống câu
+     * chung "Có lỗi xảy ra". Người dùng cần biết đây là chuyện tạm thời và thử lại
+     * được, chứ không phải họ vừa làm sai cái gì.
+     */
+    if (e instanceof ScryptBusyError) {
+      console.warn('[action] chạm trần scrypt:', scryptLoad());
+      return { error: e.message };
+    }
     if (e && typeof e === 'object' && 'digest' in e && String(e.digest).startsWith('NEXT_')) {
       throw e;
     }
