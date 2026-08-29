@@ -17,7 +17,14 @@ export async function SiteNav() {
   const actor = await getActor();
 
   return (
-    <nav className="flex flex-wrap items-center gap-2 sm:gap-3">
+    /*
+     * `flex-nowrap`, KHÔNG phải `flex-wrap`.
+     *
+     * Trên màn 390px, bản cũ để "Bố mẹ" rơi xuống dòng riêng còn logo tụt xuống dòng
+     * dưới — thanh điều hướng cao gấp đôi và trông như vỡ. Ở đây thà chật một chút
+     * còn hơn xuống dòng, nên các mục tự thu padding trên máy nhỏ thay vì gãy hàng.
+     */
+    <nav className="flex flex-nowrap items-center gap-1 sm:gap-3">
       {actor?.kind === 'child' && (
         <>
           <span className="hidden text-sm text-chrome-ink/70 sm:inline">Xin chào {actor.displayName}</span>
@@ -35,7 +42,7 @@ export async function SiteNav() {
         <Link
           href="/admin"
           data-testid="nav-admin"
-          className="min-h-touch inline-flex items-center px-2 font-semibold text-chrome-ink/80 no-underline hover:text-chrome-ink"
+          className="min-h-touch inline-flex shrink-0 items-center whitespace-nowrap px-1 font-semibold sm:px-2 text-chrome-ink/80 no-underline hover:text-chrome-ink"
         >
           Kiểm duyệt
         </Link>
@@ -46,7 +53,7 @@ export async function SiteNav() {
           <button
             type="submit"
             data-testid="logout"
-            className="min-h-touch cursor-pointer rounded-full border-0 bg-transparent px-3 font-semibold text-chrome-ink/80 hover:text-chrome-ink"
+            className="min-h-touch shrink-0 cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 font-semibold text-chrome-ink/80 hover:text-chrome-ink sm:px-3"
           >
             Đăng xuất
           </button>
@@ -55,7 +62,7 @@ export async function SiteNav() {
         <>
           <Link
             href="/dang-nhap"
-            className="min-h-touch inline-flex items-center px-2 font-semibold text-chrome-ink/80 no-underline hover:text-chrome-ink"
+            className="min-h-touch inline-flex shrink-0 items-center whitespace-nowrap px-1 font-semibold sm:px-2 text-chrome-ink/80 no-underline hover:text-chrome-ink"
           >
             Bố mẹ
           </Link>

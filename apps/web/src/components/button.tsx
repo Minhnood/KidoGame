@@ -8,8 +8,16 @@ type Size = 'md' | 'lg';
  * Nút bấm. Mọi biến thể đều cao tối thiểu `--spacing-touch` (48px) vì ngón tay
  * trẻ em kém chính xác hơn người lớn — đừng thu nhỏ để cho "gọn".
  */
+/*
+ * `whitespace-nowrap`: nhãn nút KHÔNG được ngắt dòng.
+ *
+ * Nút nằm trong thanh điều hướng chật trên điện thoại, và khi ngắt dòng thì
+ * "Bé đăng nhập" thành hai dòng, đẩy cả thanh cao lên gần gấp rưỡi. Nút thà chật
+ * còn hơn thành một khối chữ hai dòng — chữ trên nút là một mệnh lệnh ngắn, đọc
+ * theo hàng ngang.
+ */
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-full font-bold ' +
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-bold ' +
   'no-underline cursor-pointer transition-colors ' +
   'disabled:opacity-55 disabled:cursor-not-allowed';
 
@@ -26,9 +34,16 @@ const variants: Record<Variant, string> = {
     'bg-danger-bg text-danger border border-danger-border hover:bg-danger hover:text-surface',
 };
 
+/*
+ * Padding ngang hẹp hơn trên máy nhỏ, rộng ra từ `sm`.
+ *
+ * Chiều CAO không đổi (vẫn `min-h-touch` = 48px) — đó mới là chiều quyết định ngón
+ * tay trẻ có bấm trúng không. Bề ngang thì trên màn 360px phải nhường, không thì
+ * thanh điều hướng đẩy cả trang tràn ngang; đã đo và thấy tràn thật 11px.
+ */
 const sizes: Record<Size, string> = {
-  md: 'min-h-touch px-5 text-base',
-  lg: 'min-h-14 px-7 text-lg',
+  md: 'min-h-touch px-4 text-base sm:px-5',
+  lg: 'min-h-14 px-6 text-lg sm:px-7',
 };
 
 function classesFor(variant: Variant, size: Size, extra?: string) {

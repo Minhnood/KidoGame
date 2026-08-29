@@ -1,8 +1,10 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
 import { objectUrl } from '@/lib/storage';
 import { ButtonAnchor, ButtonLink } from '@/components/button';
+import { GameCard } from '@/components/game-card';
 import { Notice } from '@/components/notice';
 import { PageTitle } from '@/components/page';
 import { PlayCounter } from './play-counter';
@@ -21,7 +23,10 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
   const game = await prisma.game.findUnique({
     where: { id },
-    include: { child: { select: { displayName: true } } },
+    include: {
+      child: { select: { displayName: true } },
+      tags: { include: { tag: { select: { slug: true, label: true } } } },
+    },
   });
 
   /*
@@ -46,6 +51,24 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
   const warnings = (Array.isArray(game.warnings) ? game.warnings : []) as unknown as Warning[];
   const cloudWarning = warnings.find((w) => w.code === 'CLOUD_VARIABLES');
+
+  /*
+   * Game khác của cùng một bé.
+   *
+   * Trước đây hết game là hết đường: chỉ còn nút "Xem game khác" ném về trang chủ.
+   * Mà thứ một đứa trẻ vừa chơi xong muốn nhất là xem bạn ấy còn làm gì nữa — đó
+   * cũng chính là cách một sân chơi Scratch nuôi được người dùng, chứ không phải
+   * bằng danh sách "mới nhất".
+   *
+   * Chỉ lấy PUBLISHED: game LIMITED cố ý bị rút khỏi MỌI danh sách, kể cả danh sách
+   * này. Ai có link vẫn chơi được, nhưng ta không đi phát tán thêm.
+   */
+  const gameKhac = await prisma.game.findMany({
+    where: { childId: game.childId, status: 'PUBLISHED', id: { not: game.id } },
+    orderBy: { createdAt: 'desc' },
+    take: 4,
+    include: { child: { select: { displayName: true } } },
+  });
 
   return (
     <>
@@ -92,6 +115,22 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
         {game.description && <p className="mt-4">{game.description}</p>}
 
+        {/* Tag dẫn ngược về trang chủ đã lọc sẵn — một đứa trẻ thích game giải đố thì
+            đường ngắn nhất tới game giải đố tiếp theo là ngay ở đây. */}
+        {game.tags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2" data-testid="game-tags">
+            {game.tags.map(({ tag }) => (
+              <Link
+                key={tag.slug}
+                href={`/?tag=${tag.slug}`}
+                className="inline-flex items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-semibold text-ink no-underline hover:border-accent"
+              >
+                {tag.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
         <div className="mt-5 flex flex-wrap gap-2.5">
           {/* Tải source gốc: văn hoá cốt lõi của Scratch, trẻ học bằng cách mở game của nhau. */}
           <ButtonAnchor variant="ghost" href={objectUrl('sb3', game.sb3Sha256)} download>
@@ -109,7 +148,31 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           link, và chính nó là loại game cần thêm tín hiệu nhất. Bỏ nút ở đây thì mức
           ẩn mềm thành cái sàn không bao giờ leo lên ẩn hẳn được.
         */}
-        <div className="mb-12">{xemDuoc && <ReportForm gameId={game.id} />}</div>
+        <div className="mb-10">{xemDuoc && <ReportForm gameId={game.id} />}</div>
+
+        {gameKhac.length > 0 && (
+          <section className="mb-12 border-t border-border pt-7" data-testid="game-khac">
+            <h2 className="mb-4 text-xl font-extrabold tracking-tight">
+              {/* KHÔNG viết "của bé {tên}": tên hiển thị của trẻ ở đây thường đã mang
+                  sẵn chữ "Bé" (seed là "Bé Minh"), thành ra "của bé Bé Minh". */}
+              Game khác của {game.child.displayName}
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+              {gameKhac.map((g) => (
+                <GameCard
+                  key={g.id}
+                  game={{
+                    id: g.id,
+                    title: g.title,
+                    authorName: g.child.displayName,
+                    thumbUrl: objectUrl('thumb', g.thumbSha256),
+                    playCount: g.playCount,
+                  }}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </>
   );

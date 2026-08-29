@@ -126,11 +126,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Bỏ qua thanh điều hướng, tới nội dung
         </a>
         <header className="bg-chrome py-3 text-chrome-ink">
-          <Wrap className="flex items-center justify-between gap-4">
-            <Link href="/" className="text-xl font-extrabold tracking-tight no-underline">
+          {/*
+            Cho phép xuống dòng ở ĐÂY, và chỉ ở đây.
+            Thanh điều hướng bên trong thì `flex-nowrap` — nhờ vậy trên máy rất hẹp
+            (320px, kiểu iPhone SE đời đầu) cả cụm nút rơi xuống một hàng riêng nằm
+            gọn dưới logo, thay vì vỡ lẻ từng nút mỗi cái một dòng như bản cũ. Không
+            khoá cứng cả hai tầng: khoá cả hai là trang tràn ngang ở 320px, đã đo
+            thấy tràn 31px.
+          */}
+          <Wrap className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 min-[360px]:flex-nowrap sm:gap-4">
+            {/* `shrink-0`: logo là mốc nhận diện, thà để phần bên phải chật còn hơn
+                để chữ "KidoGame" bị bóp méo hay xuống dòng giữa chừng. */}
+            <Link
+              href="/"
+              className="shrink-0 text-lg font-extrabold tracking-tight no-underline sm:text-xl"
+            >
               Kido<span className="text-accent">Game</span>
             </Link>
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="ml-auto flex items-center gap-0.5 sm:gap-2">
               <SiteNav />
               <ThemeToggle />
             </div>

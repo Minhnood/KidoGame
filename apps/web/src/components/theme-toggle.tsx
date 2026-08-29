@@ -85,7 +85,7 @@ export function ThemeToggle() {
          mà chỉ nghe "đổi giao diện" thì không biết đang ở giao diện nào. */
       aria-label={`Đổi giao diện — đang dùng: ${nhan.chu}`}
       title={`Giao diện: ${nhan.chu}`}
-      className="min-h-touch inline-flex cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 font-semibold text-chrome-ink/80 hover:text-chrome-ink"
+      className="min-h-touch inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 font-semibold text-chrome-ink/80 hover:text-chrome-ink sm:px-3"
     >
       <span aria-hidden="true">{nhan.icon}</span>
       <span className="hidden text-sm sm:inline">{nhan.chu}</span>

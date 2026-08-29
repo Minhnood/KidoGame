@@ -3,9 +3,10 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { normalizeForSearch } from '@/lib/search';
 import { objectUrl } from '@/lib/storage';
+import { getActor } from '@/lib/session';
 import { GameCard } from '@/components/game-card';
 import { TextInput } from '@/components/field';
-import { Button } from '@/components/button';
+import { Button, ButtonLink } from '@/components/button';
 import { EmptyState, PageTitle } from '@/components/page';
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,8 @@ export default async function HomePage({
     };
   }
 
-  const [tags, games] = await Promise.all([
+  const [actor, tags, games] = await Promise.all([
+    getActor(),
     prisma.tag.findMany({ orderBy: { label: 'asc' }, select: { slug: true, label: true } }),
     prisma.game.findMany({
       where,
@@ -89,6 +91,58 @@ export default async function HomePage({
 
   return (
     <>
+      {/*
+        Dải chào chỉ hiện khi KHÔNG lọc.
+
+        Người đang tìm một game cụ thể không cần được mời chào lại — họ đã ở trong
+        trang rồi. Giữ nó ở màn hình đầu tiên của trang chủ trần thì mới đúng việc:
+        nói cho một đứa trẻ lần đầu vào biết đây là chỗ làm gì, và rằng chính bé
+        cũng đăng game được. Trước đây trang chủ chỉ liệt kê, không mời ai cả.
+
+        KHÔNG dùng thẻ heading ở đây: <h1> của trang là tiêu đề danh sách bên dưới,
+        và hai h1 làm trình đọc màn hình mất mốc "trang này nói về gì" —
+        `infra/a11y-check.mjs` canh đúng điều đó.
+      */}
+      {!filtering && (
+        <section
+          data-testid="home-hero"
+          className="mt-7 rounded-card border border-accent/30 bg-accent/12 px-6 py-7 sm:px-8"
+        >
+          <p className="text-2xl font-extrabold leading-snug sm:text-3xl">
+            Chào bé, hôm nay chơi game gì?
+          </p>
+          <p className="mt-2 max-w-2xl text-ink-soft">
+            Tất cả game ở đây đều do các bạn nhỏ tự làm bằng Scratch. Chơi thử đã, rồi đăng
+            game của bé lên cho các bạn khác cùng chơi nhé.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {actor?.kind === 'child' ? (
+              <ButtonLink href="/upload" size="lg">
+                Đăng game của bé
+              </ButtonLink>
+            ) : actor?.kind === 'parent' ? (
+              <ButtonLink href="/phu-huynh" size="lg">
+                Trang của bố mẹ
+              </ButtonLink>
+            ) : (
+              <>
+                <ButtonLink href="/be-dang-nhap" size="lg">
+                  Bé đăng nhập
+                </ButtonLink>
+                {/*
+                  Đường thứ hai cho phụ huynh, cố ý đứng cạnh: trẻ không tự tạo được
+                  tài khoản, nên nếu chỉ có nút "Bé đăng nhập" thì đứa trẻ chưa có tài
+                  khoản đi vào ngõ cụt ngay ở màn hình đầu.
+                */}
+                <ButtonLink href="/dang-ky" size="lg" variant="ghost">
+                  Bố mẹ tạo tài khoản
+                </ButtonLink>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
       <PageTitle
         title={filtering ? 'Kết quả tìm' : 'Game mới nhất'}
         lead="Các game do chính các bé làm bằng Scratch."
