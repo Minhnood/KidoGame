@@ -71,6 +71,58 @@ function Hoa({ x, y, mau }: { x: number; y: number; mau: string }) {
   );
 }
 
+/**
+ * Cành mọc NGANG ra từ mép màn hình.
+ *
+ * Vẽ cho mép TRÁI; bên phải dùng lại chính nó rồi lật bằng `scaleX(-1)` chứ không
+ * vẽ bản thứ hai — hai bản vẽ tay của cùng một cái cành thì sớm muộn sẽ lệch nhau,
+ * và lệch ở đây nghĩa là nửa màn hình bên kia trông sai mà không ai biết vì sao.
+ *
+ * Cả cành NẰM TRONG nhóm `kg-dua-canh`, kể cả khúc gốc: nhờ vậy hộp bao bắt đầu
+ * đúng ở x=0, tức đúng chỗ cành dính vào mép, nên nó đu quanh gốc như gió thổi chứ
+ * không quay quanh giữa chùm lá như một cái chong chóng.
+ */
+function Canh({ delay = 0 }: { delay?: number }) {
+  return (
+    <g className="kg-dua-canh" style={{ animationDelay: `${delay}s` }}>
+      <path
+        d="M0 66C26 64 44 54 62 38"
+        stroke="var(--color-decor-than)"
+        strokeWidth="10"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M22 65C34 78 48 88 62 96"
+        stroke="var(--color-decor-than)"
+        strokeWidth="7"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="44" cy="22" r="15" fill="var(--color-decor-la-dam)" />
+      <circle cx="86" cy="48" r="14" fill="var(--color-decor-la-dam)" />
+      <circle cx="64" cy="34" r="22" fill="var(--color-decor-la)" />
+      <circle cx="88" cy="88" r="12" fill="var(--color-decor-la-dam)" />
+      <circle cx="66" cy="100" r="18" fill="var(--color-decor-la)" />
+    </g>
+  );
+}
+
+/** Một cành đặt ở mép trái hoặc mép phải, tại một độ cao cho trước. */
+function CanhVien({ ben, top, delay }: { ben: 'trai' | 'phai'; top: string; delay: number }) {
+  return (
+    <svg
+      viewBox="0 0 110 130"
+      style={{ top }}
+      className={`absolute w-20 2xl:w-28 ${ben === 'trai' ? 'left-0' : 'right-0 -scale-x-100'}`}
+      fill="none"
+      focusable="false"
+    >
+      <Canh delay={delay} />
+    </svg>
+  );
+}
+
 function May({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`} fill="var(--color-decor-may)">
@@ -88,6 +140,21 @@ export function SiteDecor() {
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden xl:block"
     >
+      {/*
+        Cành mọc ra từ hai mép, rải theo chiều cao.
+        Đặt bằng phần trăm chứ không phải pixel: màn hình cao thấp khác nhau, mà
+        chốt cứng theo pixel thì trên màn 1080 các cành dồn hết lên nửa trên và
+        nửa dưới trơ ra.
+        Hai bên lệch độ cao nhau (26/50/72 với 34/58/78) — trùng nhau là hai mép
+        thành một cặp ngoặc đơn chứ không ra hàng cây.
+      */}
+      <CanhVien ben="trai" top="26%" delay={0} />
+      <CanhVien ben="trai" top="50%" delay={-3} />
+      <CanhVien ben="trai" top="72%" delay={-6} />
+      <CanhVien ben="phai" top="34%" delay={-1.5} />
+      <CanhVien ben="phai" top="58%" delay={-4.5} />
+      <CanhVien ben="phai" top="78%" delay={-7.5} />
+
       {/* --- Trời, góc trên bên phải --- */}
       <svg
         viewBox="0 0 120 150"
@@ -139,7 +206,7 @@ export function SiteDecor() {
       {/* --- Mây, góc trên bên trái. Ban đêm thay bằng sao. --- */}
       <svg
         viewBox="0 0 120 130"
-        className="absolute left-1 top-32 w-24 2xl:left-6 2xl:w-32"
+        className="absolute left-1 top-14 w-24 2xl:left-6 2xl:w-32"
         fill="none"
         focusable="false"
       >

@@ -401,6 +401,31 @@ body {
   animation: kg-du-dua 8s ease-in-out infinite;
 }
 
+/*
+ * Cành mọc ngang ra từ mép màn hình: đu quanh CHỖ NÓ DÍNH VÀO MÉP, không quanh
+ * chính giữa mình.
+ *
+ * `transform-box: fill-box` là phần bắt buộc. Thiếu nó thì phần trăm của
+ * `transform-origin` tính theo hệ toạ độ của cả thẻ <svg> chứ không theo hộp bao
+ * của nhóm, nên gốc quay rơi ra ngoài cành và cả chùm lá quét thành một vòng cung
+ * to — trông như cành bị gãy đang rơi chứ không phải gió thổi.
+ */
+.kg-dua-canh {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+  animation: kg-du-dua-canh 9s ease-in-out infinite;
+}
+
+@keyframes kg-du-dua-canh {
+  0%,
+  100% {
+    transform: rotate(-0.9deg);
+  }
+  50% {
+    transform: rotate(0.9deg);
+  }
+}
+
 .kg-may-troi {
   animation: kg-troi 34s ease-in-out infinite;
 }
@@ -416,6 +441,7 @@ body {
  */
 @media (prefers-reduced-motion: reduce) {
   .kg-dua,
+  .kg-dua-canh,
   .kg-may-troi {
     animation: none !important;
   }
