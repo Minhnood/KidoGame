@@ -1,0 +1,52 @@
+# Lan can tự động cho mỗi lần push và mỗi Pull Request.
+#
+# CHỈ chạy những bộ KHÔNG cần Postgres và KHÔNG cần server đang bật. Bảy bộ e2e còn
+# lại cần cả dev server lẫn DB có dữ liệu seed, nên chúng vẫn phải chạy bằng tay —
+# xem mục "Kiểm thử" trong README.md. Thà có một bộ CI nhỏ mà luôn xanh đúng, còn
+# hơn một bộ lớn hay đỏ vì hạ tầng, vì bộ hay đỏ oan là bộ người ta thôi không đọc.
+name: Kiểm tra
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  kiem-tra:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      # Sinh Prisma Client trước khi typecheck, không thì `tsc` không biết kiểu của
+      # model nào cả. Bước này KHÔNG cần một Postgres đang chạy, nhưng schema vẫn đòi
+      # biến DATABASE_URL phải tồn tại — nên đặt một giá trị giả.
+      - name: Sinh Prisma Client
+        run: pnpm --filter @kidogame/web db:generate
+        env:
+          DATABASE_URL: postgresql://ci@localhost:5432/kidogame?schema=public
+
+      - name: Unit test của packages/sb3
+        run: pnpm --filter @kidogame/sb3 test
+
+      - name: Typecheck apps/web
+        run: pnpm --filter @kidogame/web typecheck
+
+      # Đọc token màu thẳng từ globals.css, không cần server. Nó canh đúng thứ dễ
+      # tuột nhất: ai đó chỉnh một màu cho "nhìn dịu hơn" và vô tình kéo tương phản
+      # xuống dưới ngưỡng đọc được của mắt trẻ.
+      - name: Tương phản bảng màu
+        run: node infra/contrast-check.mjs
