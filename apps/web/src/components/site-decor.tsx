@@ -31,28 +31,111 @@
  * đổi cảnh ngày/đêm nằm ở `.kg-ngay` / `.kg-dem` trong `globals.css`.
  */
 
-/** Cây tán tròn. `kg-dua` cho tán đu nhẹ, thân đứng yên. */
-function CayTron({ x, y, s = 1, delay = 0 }: { x: number; y: number; s?: number; delay?: number }) {
+/**
+ * Một MẢNG tán lá: nhiều hình tròn chồng lên nhau, cùng một màu.
+ *
+ * Vì sao không vẽ một đường path có viền răng cưa: mép lá lởm chởm cần vài chục
+ * cung tròn nối nhau, viết tay thì dài và sửa một chỗ là lệch cả mảng. Chồng hình
+ * tròn cho ra đúng cái silhouette gợn sóng ấy, mà mỗi hình chỉ là ba con số — thêm
+ * bớt một cụm lá là thêm bớt một dòng.
+ */
+function MangLa({ c, mau }: { c: Array<[number, number, number]>; mau: string }) {
   return (
-    <g transform={`translate(${x} ${y}) scale(${s})`}>
-      <rect x="-7" y="-46" width="14" height="52" rx="7" fill="var(--color-decor-than)" />
-      <g className="kg-dua" style={{ animationDelay: `${delay}s` }}>
-        <circle cx="18" cy="-62" r="20" fill="var(--color-decor-la-dam)" />
-        <circle cx="-20" cy="-58" r="23" fill="var(--color-decor-la)" />
-        <circle cx="2" cy="-84" r="28" fill="var(--color-decor-la)" />
-      </g>
+    <g fill={mau}>
+      {c.map(([cx, cy, r], i) => (
+        <circle key={i} cx={cx} cy={cy} r={r} />
+      ))}
     </g>
   );
 }
 
-/** Cây thông — dáng nhọn, để hai bên lề không chỉ toàn một kiểu cây tròn. */
-function CayThong({ x, y, s = 1, delay = 0 }: { x: number; y: number; s?: number; delay?: number }) {
+/**
+ * Cây tán rộng, dựng theo BA LỚP lá — đây là toàn bộ khác biệt so với bản cũ.
+ *
+ * Bản cũ là ba hình tròn xanh trên một cái que: đúng là "cây" nhưng phẳng lì, không
+ * có khối. Cây thật (và tranh vẽ cây) có lớp lá tối ở sau và dưới, lớp giữa, rồi
+ * những mảng bắt nắng sáng nhất nằm trên đỉnh. Ba lớp đó mới làm ra chiều sâu.
+ *
+ * Thân cũng vậy: một hình chữ nhật bo góc không ra cái cây nào cả. Ở đây thân thon
+ * dần lên trên, xoè bạnh ở gốc, có nhánh chĩa vào trong tán, và một vệt sáng dọc
+ * một bên để thân tròn ra chứ không dẹt.
+ */
+function Cay({ x, y, s = 1, delay = 0 }: { x: number; y: number; s?: number; delay?: number }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
-      <rect x="-5" y="-16" width="10" height="22" rx="5" fill="var(--color-decor-than)" />
-      <g className="kg-dua" style={{ animationDelay: `${delay}s` }}>
-        <path d="M0-86 24-44H-24Z" fill="var(--color-decor-la)" />
-        <path d="M0-58 28-14H-28Z" fill="var(--color-decor-la-dam)" />
+      {/* Vạt cỏ dưới gốc: cây phải đứng TRÊN cái gì đó, không thì nó lơ lửng. */}
+      <ellipse cx="0" cy="4" rx="62" ry="13" fill="var(--color-decor-co)" />
+
+      {/* Thân: bạnh gốc xoè hai bên rồi thon dần lên. */}
+      <path
+        d="M-30 4c6-10 12-16 14-34 2-16 2-38 1-62h30c-1 24-1 46 1 62 2 18 8 24 14 34Z"
+        fill="var(--color-decor-than)"
+      />
+      {/* Vệt sáng dọc thân. Lệch sang một bên, không đặt giữa: đặt giữa thì thành
+          một cái sọc chứ không phải ánh sáng hắt từ một phía. */}
+      <path
+        d="M4 0c4-10 7-16 8-32 1-14 1-34 0-56h9c-1 22-1 42 1 56 2 16 5 22 9 32Z"
+        fill="var(--color-decor-than-sang)"
+        opacity="0.55"
+      />
+
+      {/*
+        Nhánh chĩa lên, đâm vào trong tán — và phải LỘ RA một khúc dưới tán.
+        Bản đầu vẽ tán trùm xuống tận chỗ nhánh nên cả bộ nhánh biến mất, cây lại
+        thành một cục lá đặt trên cái que. Cây trong tranh nhìn ra là cây chính nhờ
+        khúc nhánh trần nằm giữa thân và tán.
+      */}
+      <g stroke="var(--color-decor-than)" strokeWidth="7" strokeLinecap="round" fill="none">
+        <path d="M-8-96C-20-112-34-124-52-134" />
+        <path d="M8-100C20-116 38-128 56-136" />
+        <path d="M0-104v-32" />
+      </g>
+      <g stroke="var(--color-decor-than)" strokeWidth="4.5" strokeLinecap="round" fill="none">
+        <path d="M-34-120C-44-130-54-136-66-140" />
+        <path d="M34-122C44-134 56-140 68-144" />
+      </g>
+
+      {/* Ba lớp lá. Lớp tối vẽ TRƯỚC và rộng nhất, lớp sáng vẽ SAU và nhỏ nhất —
+          đảo thứ tự là mất hết chiều sâu, tán thành một mảng bẹt. */}
+      <g
+        className="kg-dua"
+        style={{ animationDelay: `${delay}s` }}
+        transform="translate(0 -34)"
+      >
+        <MangLa
+          mau="var(--color-decor-la-dam)"
+          c={[
+            [-72, -112, 30],
+            [-40, -132, 34],
+            [0, -142, 38],
+            [40, -132, 34],
+            [72, -112, 30],
+            [-58, -92, 26],
+            [58, -92, 26],
+            [0, -104, 32],
+          ]}
+        />
+        <MangLa
+          mau="var(--color-decor-la)"
+          c={[
+            [-52, -122, 26],
+            [-20, -140, 30],
+            [16, -140, 30],
+            [48, -122, 26],
+            [-32, -106, 24],
+            [32, -106, 24],
+            [0, -120, 28],
+          ]}
+        />
+        <MangLa
+          mau="var(--color-decor-la-sang)"
+          c={[
+            [-26, -142, 20],
+            [4, -150, 23],
+            [30, -138, 18],
+            [-46, -128, 14],
+          ]}
+        />
       </g>
     </g>
   );
@@ -213,12 +296,10 @@ export function SiteDecor() {
         Hai bên lệch độ cao nhau (26/50/72 với 34/58/78) — trùng nhau là hai mép
         thành một cặp ngoặc đơn chứ không ra hàng cây.
       */}
-      <CanhVien ben="trai" top="26%" delay={0} />
-      <CanhVien ben="trai" top="50%" delay={-3} />
-      <CanhVien ben="trai" top="72%" delay={-6} />
-      <CanhVien ben="phai" top="34%" delay={-1.5} />
-      <CanhVien ben="phai" top="58%" delay={-4.5} />
-      <CanhVien ben="phai" top="78%" delay={-7.5} />
+      <CanhVien ben="trai" top="24%" delay={0} />
+      <CanhVien ben="trai" top="46%" delay={-3} />
+      <CanhVien ben="phai" top="32%" delay={-1.5} />
+      <CanhVien ben="phai" top="54%" delay={-4.5} />
 
       {/* --- Trời, góc trên bên phải --- */}
       <svg
@@ -286,41 +367,47 @@ export function SiteDecor() {
         </g>
       </svg>
 
-      {/* --- Mặt đất bên trái: đồi, hai cây, bụi cỏ, hoa --- */}
+      {/* --- Mặt đất bên trái: đồi, một cây tán rộng, bụi cỏ, hoa --- */}
       <svg
-        viewBox="0 0 150 200"
-        className="absolute bottom-0 left-0 w-[min(calc((100vw-64rem)/2),320px)]"
+        viewBox="0 0 200 230"
+        className="absolute bottom-0 left-0 w-[min(calc((100vw-64rem)/2),300px)]"
         fill="none"
         focusable="false"
       >
         {/* Đồi vẽ TRƯỚC để nằm sau cây. Bo tròn rộng hơn khung để hai mép không
             thành hai đầu cụt lơ lửng. */}
-        <ellipse cx="60" cy="215" rx="130" ry="60" fill="var(--color-decor-doi)" />
-        <CayTron x={44} y={168} s={1} delay={0} />
-        <CayThong x={104} y={176} s={0.85} delay={-3.5} />
-        <circle cx="16" cy="184" r="15" fill="var(--color-decor-co)" />
-        <circle cx="130" cy="190" r="12" fill="var(--color-decor-co)" />
-        <Hoa x={76} y={190} mau="var(--color-decor-hoa-hong)" />
-        <Hoa x={92} y={196} mau="var(--color-decor-hoa-vang)" />
-        <Hoa x={34} y={196} mau="var(--color-decor-hoa-hong)" />
+        <ellipse cx="80" cy="248" rx="170" ry="66" fill="var(--color-decor-doi)" />
+        {/*
+          MỘT cây thôi, không phải hai.
+          Bên lề chỉ rộng vài trăm pixel; nhét hai cây vào là hai cái đều bé lại và
+          không cái nào ra hình. Một cây tán rộng chiếm trọn bề ngang thì mới có chỗ
+          cho ba lớp lá và bộ nhánh — tức là mới ra cái cây trong ảnh mẫu.
+        */}
+        <Cay x={96} y={214} s={0.94} delay={0} />
+        <circle cx="16" cy="212" r="14" fill="var(--color-decor-co)" />
+        <circle cx="184" cy="218" r="12" fill="var(--color-decor-co)" />
+        <Hoa x={40} y={218} mau="var(--color-decor-hoa-hong)" />
+        <Hoa x={58} y={224} mau="var(--color-decor-hoa-vang)" />
+        <Hoa x={158} y={222} mau="var(--color-decor-hoa-hong)" />
       </svg>
 
       {/* --- Mặt đất bên phải. Khác cỡ, khác dáng, khác thứ tự cây: hai bên đối
              xứng y hệt thì thành ảnh soi gương chứ không ra khung cảnh. --- */}
       <svg
-        viewBox="0 0 150 200"
-        className="absolute bottom-0 right-0 w-[min(calc((100vw-64rem)/2),320px)]"
+        viewBox="0 0 200 230"
+        className="absolute bottom-0 right-0 w-[min(calc((100vw-64rem)/2),300px)]"
         fill="none"
         focusable="false"
       >
-        <ellipse cx="90" cy="215" rx="130" ry="58" fill="var(--color-decor-doi)" />
-        <CayThong x={40} y={180} s={1} delay={-1.5} />
-        <CayTron x={104} y={172} s={0.8} delay={-5} />
-        <circle cx="136" cy="186" r="13" fill="var(--color-decor-co)" />
-        <circle cx="14" cy="192" r="11" fill="var(--color-decor-co)" />
-        <Hoa x={66} y={194} mau="var(--color-decor-hoa-vang)" />
-        <Hoa x={80} y={188} mau="var(--color-decor-hoa-hong)" />
-        <Hoa x={124} y={198} mau="var(--color-decor-hoa-vang)" />
+        <ellipse cx="120" cy="248" rx="170" ry="62" fill="var(--color-decor-doi)" />
+        {/* Nhỏ hơn bên trái một chút và lệch chỗ đứng: hai bên bằng nhau y hệt thì
+            thành ảnh soi gương chứ không ra khung cảnh. */}
+        <Cay x={108} y={218} s={0.87} delay={-4} />
+        <circle cx="188" cy="214" r="13" fill="var(--color-decor-co)" />
+        <circle cx="14" cy="220" r="11" fill="var(--color-decor-co)" />
+        <Hoa x={44} y={224} mau="var(--color-decor-hoa-vang)" />
+        <Hoa x={168} y={220} mau="var(--color-decor-hoa-hong)" />
+        <Hoa x={30} y={216} mau="var(--color-decor-hoa-vang)" />
       </svg>
     </div>
   );

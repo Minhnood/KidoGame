@@ -83,8 +83,10 @@
    * lách qua đúng cái hàng rào mà cả bảng màu kia dựng lên.
    */
   --color-decor-la: #74c184;
-  --color-decor-la-dam: #4f9a63;
-  --color-decor-than: #b0793f;
+  --color-decor-la-dam: #3f8253;
+  --color-decor-la-sang: #a5d97c;
+  --color-decor-than: #8f5f34;
+  --color-decor-than-sang: #c68f52;
   --color-decor-co: #8ecb95;
   --color-decor-troi: #ffc861;
   --color-decor-may: #eef0f4;
@@ -175,8 +177,10 @@
      Ban đêm mà để nguyên xanh lá tươi thì hai bên lề sáng hơn cả nội dung, và mắt
      bị kéo ra rìa màn hình đúng lúc đang cần nhìn vào giữa. */
   --toi-decor-la: #2f5c3c;
-  --toi-decor-la-dam: #24462e;
-  --toi-decor-than: #55402a;
+  --toi-decor-la-dam: #1e3b28;
+  --toi-decor-la-sang: #3f7350;
+  --toi-decor-than: #4a381f;
+  --toi-decor-than-sang: #6b5133;
   --toi-decor-co: #356641;
   /* Ban đêm "mặt trời" là mặt TRĂNG — xem `.kg-ngay` / `.kg-dem` ở cuối file. */
   --toi-decor-troi: #d8d3c0;
@@ -216,7 +220,9 @@
     --color-chrome: var(--toi-chrome);
     --color-decor-la: var(--toi-decor-la);
     --color-decor-la-dam: var(--toi-decor-la-dam);
+    --color-decor-la-sang: var(--toi-decor-la-sang);
     --color-decor-than: var(--toi-decor-than);
+    --color-decor-than-sang: var(--toi-decor-than-sang);
     --color-decor-co: var(--toi-decor-co);
     --color-decor-troi: var(--toi-decor-troi);
     --color-decor-may: var(--toi-decor-may);
@@ -253,7 +259,9 @@
   --color-chrome: var(--toi-chrome);
   --color-decor-la: var(--toi-decor-la);
   --color-decor-la-dam: var(--toi-decor-la-dam);
+  --color-decor-la-sang: var(--toi-decor-la-sang);
   --color-decor-than: var(--toi-decor-than);
+  --color-decor-than-sang: var(--toi-decor-than-sang);
   --color-decor-co: var(--toi-decor-co);
   --color-decor-troi: var(--toi-decor-troi);
   --color-decor-may: var(--toi-decor-may);
