@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
-import { PageTitle } from '@/components/page';
+import { FormColumn, PageTitle } from '@/components/page';
 import { registerParentAction } from '@/lib/actions';
 import { getActor } from '@/lib/session';
 
@@ -13,7 +13,7 @@ export default async function RegisterPage() {
   if (actor?.kind === 'child') redirect('/');
 
   return (
-    <>
+    <FormColumn>
       <PageTitle
         title="Đăng ký cho phụ huynh"
         lead="Bố mẹ đăng ký tài khoản trước, rồi tạo tài khoản riêng cho từng bé."
@@ -49,6 +49,6 @@ export default async function RegisterPage() {
           Đăng nhập
         </Link>
       </p>
-    </>
+    </FormColumn>
   );
 }

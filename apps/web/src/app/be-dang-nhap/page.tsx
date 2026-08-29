@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
-import { PageTitle } from '@/components/page';
+import { FormColumn, PageTitle } from '@/components/page';
 import { loginChildAction } from '@/lib/actions';
 import { getActor } from '@/lib/session';
 
@@ -10,7 +10,7 @@ export default async function LoginChildPage() {
   if (await getActor()) redirect('/');
 
   return (
-    <>
+    <FormColumn>
       <PageTitle
         title="Bé đăng nhập"
         lead="Dùng tên đăng nhập và mật khẩu mà bố mẹ đã tạo cho bé nhé."
@@ -49,6 +49,6 @@ export default async function LoginChildPage() {
         </Link>
         .
       </p>
-    </>
+    </FormColumn>
   );
 }

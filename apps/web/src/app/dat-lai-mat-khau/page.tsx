@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { Notice } from '@/components/notice';
-import { PageTitle } from '@/components/page';
+import { FormColumn, PageTitle } from '@/components/page';
 import { resetPasswordAction } from '@/lib/actions';
 
 export const dynamic = 'force-dynamic';
@@ -22,20 +22,20 @@ export default async function ResetPasswordPage({
    */
   if (!token) {
     return (
-      <>
+      <FormColumn>
         <PageTitle title="Đặt lại mật khẩu" />
-        <div className="mb-12 max-w-125">
+        <div className="mb-12">
           <Notice tone="error" role="alert">
             Link không hợp lệ — thiếu mã xác nhận. Hãy mở đúng link trong email, hoặc{' '}
             <Link href="/quen-mat-khau">yêu cầu link mới</Link>.
           </Notice>
         </div>
-      </>
+      </FormColumn>
     );
   }
 
   return (
-    <>
+    <FormColumn>
       <PageTitle title="Đặt lại mật khẩu" lead="Đặt mật khẩu mới cho tài khoản phụ huynh." />
 
       <AuthForm action={resetPasswordAction} submitLabel="Đổi mật khẩu" busyLabel="Đang đổi…">
@@ -59,6 +59,6 @@ export default async function ResetPasswordPage({
         Đổi xong, mọi thiết bị đang đăng nhập tài khoản này sẽ phải đăng nhập lại. Tài khoản của
         các bé không bị ảnh hưởng.
       </p>
-    </>
+    </FormColumn>
   );
 }

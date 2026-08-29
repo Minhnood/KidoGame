@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
-import { PageTitle } from '@/components/page';
+import { FormColumn, PageTitle } from '@/components/page';
 import { requestPasswordResetAction } from '@/lib/actions';
 
 export const dynamic = 'force-dynamic';
 
 export default function ForgotPasswordPage() {
   return (
-    <>
+    <FormColumn>
       <PageTitle
         title="Quên mật khẩu"
         lead="Nhập email bạn đã dùng để đăng ký. Chúng tôi sẽ gửi link đặt lại mật khẩu."
@@ -36,6 +36,6 @@ export default function ForgotPasswordPage() {
           Đăng nhập
         </Link>
       </p>
-    </>
+    </FormColumn>
   );
 }

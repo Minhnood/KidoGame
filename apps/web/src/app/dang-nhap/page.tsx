@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { Notice } from '@/components/notice';
-import { PageTitle } from '@/components/page';
+import { FormColumn, PageTitle } from '@/components/page';
 import { loginParentAction } from '@/lib/actions';
 import { getActor } from '@/lib/session';
 
@@ -19,11 +19,11 @@ export default async function LoginParentPage({
   const justReset = (await searchParams)['dat-lai'] === 'xong';
 
   return (
-    <>
+    <FormColumn>
       <PageTitle title="Đăng nhập cho phụ huynh" />
 
       {justReset && (
-        <div className="mb-5 max-w-125">
+        <div className="mb-5">
           <Notice tone="info" role="status">
             Đã đổi mật khẩu xong. Đăng nhập lại bằng mật khẩu mới nhé.
           </Notice>
@@ -45,21 +45,30 @@ export default async function LoginParentPage({
         </Field>
       </AuthForm>
 
-      <p className="mb-12 text-ink-soft">
-        <Link href="/quen-mat-khau" className="font-bold text-accent-text underline">
-          Quên mật khẩu?
-        </Link>
-        {' · '}
-        Bé đăng nhập để đăng game?{' '}
-        <Link href="/be-dang-nhap" className="font-bold text-accent-text underline">
-          Vào đây
-        </Link>
-        {' · '}
-        Chưa có tài khoản?{' '}
-        <Link href="/dang-ky" className="font-bold text-accent-text underline">
-          Đăng ký
-        </Link>
-      </p>
-    </>
+      {/*
+        Ba đường đi khác nhau, nên xuống dòng chứ không nối bằng dấu "·".
+        Nối lại thành một dòng dài thì mắt phải đọc hết cả câu mới biết có ba lựa
+        chọn, mà người đang mắc ở màn hình đăng nhập thường chỉ liếc.
+      */}
+      <div className="mb-12 space-y-1 text-ink-soft">
+        <p>
+          <Link href="/quen-mat-khau" className="font-bold text-accent-text underline">
+            Quên mật khẩu?
+          </Link>
+        </p>
+        <p>
+          Bé đăng nhập để đăng game?{' '}
+          <Link href="/be-dang-nhap" className="font-bold text-accent-text underline">
+            Vào đây
+          </Link>
+        </p>
+        <p>
+          Chưa có tài khoản?{' '}
+          <Link href="/dang-ky" className="font-bold text-accent-text underline">
+            Đăng ký
+          </Link>
+        </p>
+      </div>
+    </FormColumn>
   );
 }

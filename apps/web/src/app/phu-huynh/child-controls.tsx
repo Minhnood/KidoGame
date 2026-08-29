@@ -62,7 +62,16 @@ export function GameVisibilityToggle({ gameId, hidden }: { gameId: string; hidde
       action={setGameHiddenAction}
       fields={{ gameId, hidden: String(!hidden) }}
       label={hidden ? 'Hiện lại' : 'Ẩn game'}
-      variant={hidden ? 'primary' : 'danger'}
+      /*
+       * `ghost` chứ KHÔNG phải `danger`, và điều này nhất quán chứ không phải nhẹ tay.
+       *
+       * Ngay bên trên, "Tạm khoá tài khoản" — việc NẶNG hơn hẳn, cắt bé khỏi cả trang —
+       * đã là `ghost`. Để việc nhẹ hơn và đảo lại được bằng một cú bấm mang màu đỏ là
+       * xếp hạng ngược. Hệ quả nhìn thấy được: mỗi bé có bao nhiêu game thì trang của
+       * bố mẹ có bấy nhiêu nút đỏ xếp thành một cột, và một trang toàn màu cảnh báo thì
+       * chẳng cảnh báo được gì nữa — lúc có chuyện thật, màu đỏ không còn nghĩa.
+       */
+      variant={hidden ? 'primary' : 'ghost'}
       testId="game-visibility"
     />
   );

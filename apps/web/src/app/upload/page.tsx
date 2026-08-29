@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { PageTitle } from '@/components/page';
+import { FormColumn, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
@@ -36,9 +36,9 @@ export default async function UploadPage() {
   });
 
   return (
-    <>
+    <FormColumn rong="to">
       <PageTitle title="Đăng game của bé" lead={`Game sẽ hiện tên ${actor.displayName}`} />
       <UploadForm tags={tags} />
-    </>
+    </FormColumn>
   );
 }
