@@ -87,6 +87,11 @@
   --color-decor-than: #b0793f;
   --color-decor-co: #8ecb95;
   --color-decor-troi: #ffc861;
+  --color-decor-may: #eef0f4;
+  --color-decor-doi: #a8d9ac;
+  --color-decor-hoa-hong: #f2a0be;
+  --color-decor-hoa-vang: #ffd979;
+  --color-decor-chim: #9aa3b8;
 
   --color-warn-bg: #fff6e8;
   --color-warn-border: #ffd9a8;
@@ -171,7 +176,13 @@
   --toi-decor-la-dam: #24462e;
   --toi-decor-than: #55402a;
   --toi-decor-co: #356641;
-  --toi-decor-troi: #6b532a;
+  /* Ban đêm "mặt trời" là mặt TRĂNG — xem `.kg-ngay` / `.kg-dem` ở cuối file. */
+  --toi-decor-troi: #d8d3c0;
+  --toi-decor-may: #262636;
+  --toi-decor-doi: #1e3b28;
+  --toi-decor-hoa-hong: #6b3d51;
+  --toi-decor-hoa-vang: #7a6634;
+  --toi-decor-chim: #3a3f52;
 
   --toi-warn-bg: #392b14;
   --toi-warn-border: #6b4d1c;
@@ -204,6 +215,11 @@
     --color-decor-than: var(--toi-decor-than);
     --color-decor-co: var(--toi-decor-co);
     --color-decor-troi: var(--toi-decor-troi);
+    --color-decor-may: var(--toi-decor-may);
+    --color-decor-doi: var(--toi-decor-doi);
+    --color-decor-hoa-hong: var(--toi-decor-hoa-hong);
+    --color-decor-hoa-vang: var(--toi-decor-hoa-vang);
+    --color-decor-chim: var(--toi-decor-chim);
     --color-warn-bg: var(--toi-warn-bg);
     --color-warn-border: var(--toi-warn-border);
     --color-warn-ink: var(--toi-warn-ink);
@@ -234,6 +250,11 @@
   --color-decor-than: var(--toi-decor-than);
   --color-decor-co: var(--toi-decor-co);
   --color-decor-troi: var(--toi-decor-troi);
+  --color-decor-may: var(--toi-decor-may);
+  --color-decor-doi: var(--toi-decor-doi);
+  --color-decor-hoa-hong: var(--toi-decor-hoa-hong);
+  --color-decor-hoa-vang: var(--toi-decor-hoa-vang);
+  --color-decor-chim: var(--toi-decor-chim);
   --color-warn-bg: var(--toi-warn-bg);
   --color-warn-border: var(--toi-warn-border);
   --color-warn-ink: var(--toi-warn-ink);
@@ -316,6 +337,89 @@ body {
  * packages/sb3/src/touch-controls.ts). Trải nghiệm tốt nhất trên điện thoại vẫn
  * là bấm nút toàn màn hình.
  */
+
+/* ---------------------------------------------------------------------------
+ * Tranh trang trí hai bên lề: ngày và đêm
+ *
+ * Giao diện sáng thì có mặt trời, mây, chim. Giao diện tối thì có trăng và sao.
+ * Đổi cả CẢNH chứ không chỉ làm tối màu, vì một mặt trời bị dim đi vào ban đêm
+ * trông không ra cái gì cả — nó vẫn là mặt trời, chỉ là mặt trời tắt điện.
+ *
+ * Phải viết ĐÚNG hai lần, y hệt lý do đã ghi ở khối "Giao diện tối" bên trên: CSS
+ * không cho gộp `@media` với một selector khác trong cùng một rule, và người đã tự
+ * chọn giao diện sáng phải thắng cài đặt của máy.
+ * ------------------------------------------------------------------------- */
+.kg-dem {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .kg-ngay {
+    display: none;
+  }
+  :root:not([data-theme='light']) .kg-dem {
+    display: block;
+  }
+}
+
+:root[data-theme='dark'] .kg-ngay {
+  display: none;
+}
+:root[data-theme='dark'] .kg-dem {
+  display: block;
+}
+
+/*
+ * Chuyển động RẤT chậm và rất nhẹ. Cây đu 8 giây một nhịp, mây trôi 34 giây.
+ *
+ * Nhanh hơn hoặc rõ hơn là thành thứ kéo mắt khỏi nội dung — mà nội dung ở đây là
+ * game của một đứa trẻ khác. Trang trí được phép có mặt, không được phép giành
+ * sự chú ý.
+ */
+@keyframes kg-du-dua {
+  0%,
+  100% {
+    transform: rotate(-1.1deg);
+  }
+  50% {
+    transform: rotate(1.1deg);
+  }
+}
+
+@keyframes kg-troi {
+  0%,
+  100% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+}
+
+.kg-dua {
+  transform-origin: 50% 100%;
+  animation: kg-du-dua 8s ease-in-out infinite;
+}
+
+.kg-may-troi {
+  animation: kg-troi 34s ease-in-out infinite;
+}
+
+/*
+ * Tắt HẲN chuyển động khi người dùng xin ít chuyển động.
+ *
+ * Khối `prefers-reduced-motion` chung ở cuối file chỉ ép thời lượng về 0.01ms —
+ * với một animation `infinite` thì đó là chạy xong hàng vạn vòng mỗi giây chứ
+ * không phải dừng. Trình duyệt thường vẽ ra trạng thái cuối nên nhìn thì đứng yên,
+ * nhưng "thường" không phải là một lời hứa, và người tắt chuyển động là người dễ
+ * bị chóng mặt nhất. Nói thẳng `animation: none` thì không phải đoán.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .kg-dua,
+  .kg-may-troi {
+    animation: none !important;
+  }
+}
 
 /* Viền focus rõ ràng — trẻ dùng bàn phím và điều hướng bằng tab nhiều hơn ta tưởng. */
 :where(a, button, input, textarea, select):focus-visible {
