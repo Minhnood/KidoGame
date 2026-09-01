@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { Sb3Error } from './errors.js';
 import { detectTouchKeys, type TouchKey } from './keys.js';
+import { buildStageDecor } from './stage-decor.js';
 import { buildTouchControls } from './touch-controls.js';
 import type { ProjectJson } from './validate.js';
 
@@ -119,8 +120,15 @@ export async function packageToHtml(sb3: Buffer, opts: PackageOptions): Promise<
    */
   const touchKeys = opts.projectJson ? detectTouchKeys(opts.projectJson) : [];
   const controls = buildTouchControls(touchKeys);
-  p.options.custom.js = controls.js;
-  p.options.custom.css = controls.css;
+
+  /*
+   * Trang trí hai viền trống hai bên stage. Nối SAU bộ nút cảm ứng chứ không thay
+   * chỗ: `buildTouchControls` trả về chuỗi rỗng khi game không dùng phím nào, nên
+   * gán trực tiếp thì game không phím sẽ mất luôn trang trí.
+   */
+  const decor = buildStageDecor();
+  p.options.custom.js = [controls.js, decor.js].filter(Boolean).join('\n');
+  p.options.custom.css = [controls.css, decor.css].filter(Boolean).join('\n');
 
   let out: { data: ArrayBuffer | Uint8Array };
   try {
