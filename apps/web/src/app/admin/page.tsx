@@ -8,6 +8,7 @@ import { reasonLabel } from '@/lib/report-reasons';
 import { objectUrl } from '@/lib/storage';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
+import { MAT_THE } from '@/components/card';
 import { slaDueAt } from '@/lib/operator';
 import {
   ChildLockButton,
@@ -343,7 +344,7 @@ export default async function AdminPage({
           {games.map((game) => (
             <li
               key={game.id}
-              className="rounded-card border border-border bg-surface p-5"
+              className={`p-5 ${MAT_THE}`}
               data-testid="admin-game"
               data-game-id={game.id}
             >

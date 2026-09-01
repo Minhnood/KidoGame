@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react';
 import { Button } from '@/components/button';
 import { Field, TextArea, TextInput } from '@/components/field';
+import { GocCo, THE_FORM } from '@/components/card';
 import { Notice } from '@/components/notice';
 import { submitTakedownAction } from '@/lib/actions';
 import {
@@ -55,8 +56,9 @@ export function TakedownForm({ defaultGameRef }: { defaultGameRef: string }) {
     <form
       action={formAction}
       data-testid="takedown-form"
-      className="mb-12 max-w-150 rounded-card border border-border bg-surface p-6"
+      className={`max-w-150 ${THE_FORM}`}
     >
+      <GocCo />
       <Field
         id="gameRef"
         label="Game nào?"

@@ -32,12 +32,55 @@ export function FormColumn({
   );
 }
 
+/**
+ * Nét gạch tay dưới tiêu đề trang.
+ *
+ * Hai nét, không phải một, và nét thứ hai ngắn hơn lệch sang phải: một nét đơn kẻ
+ * thẳng thì thành cái gạch chân của trình xử lý văn bản. Hai nét lệch nhau là cách
+ * người ta gạch dưới một chữ bằng bút thật — nhấc bút rồi gạch thêm một lần.
+ *
+ * `w-16` chốt cứng, KHÔNG chạy theo bề rộng chữ. Gạch hết chiều dài tiêu đề thì nó
+ * thành đường kẻ ngăn trang, mà tiêu đề dài ngắn khác nhau (từ "Đăng ký" tới "Yêu
+ * cầu gỡ bản quyền") sẽ cho ra những nét dài ngắn hẳn khác nhau — nhìn ra là do máy
+ * kéo chứ không phải do tay vẽ. Một nét ngắn cố định thì đọc ra là dấu nhấn.
+ *
+ * Màu `accent` chứ không phải `accent-text`: đây là hình trang trí, không có chữ nào
+ * nằm trên nó, nên nó không phải qua ngưỡng tương phản của chữ.
+ */
+function GachTieuDe() {
+  return (
+    <svg
+      viewBox="0 0 64 10"
+      aria-hidden="true"
+      focusable="false"
+      className="mt-1.5 h-2.5 w-16 text-accent"
+      fill="none"
+    >
+      <path
+        d="M1 6C14 3 34 2.5 62 4"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <path
+        d="M24 9C34 7.5 44 7 56 8"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.45"
+      />
+    </svg>
+  );
+}
+
 export function PageTitle({ title, lead }: { title: string; lead?: ReactNode }) {
   return (
     <div className="mb-5 mt-7">
       <h1 className="text-3xl font-extrabold tracking-tight">{title}</h1>
+      <GachTieuDe />
       {lead && (
-        <p className="mt-1 text-ink-soft" data-testid="page-lead">
+        <p className="mt-2 text-ink-soft" data-testid="page-lead">
           {lead}
         </p>
       )}

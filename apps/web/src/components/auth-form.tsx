@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from './button';
 import { Notice } from './notice';
+import { GocCo, THE_FORM } from './card';
 import type { FormState } from '@/lib/actions';
 
 /*
@@ -120,8 +121,9 @@ export function AuthForm({
       data-testid="auth-form"
       action={formAction}
       onInput={ghiLai}
-      className="mb-12 max-w-125 rounded-card border border-border bg-surface p-6"
+      className={`max-w-125 ${THE_FORM}`}
     >
+      <GocCo />
       {children}
 
       {state && 'error' in state && (

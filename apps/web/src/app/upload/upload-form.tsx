@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/button';
 import { Field, TextArea, TextInput } from '@/components/field';
 import { FilePicker } from '@/components/file-picker';
+import { GocCo, THE_FORM } from '@/components/card';
 import { Notice } from '@/components/notice';
 interface UploadOk {
   gameId: string;
@@ -77,8 +78,9 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
     <form
       data-testid="upload-form"
       onSubmit={onSubmit}
-      className="mb-12 max-w-140 rounded-card border border-border bg-surface p-6"
+      className={`max-w-140 ${THE_FORM}`}
     >
+      <GocCo />
         <Field id="title" label="Tên game">
           <TextInput id="title" name="title" maxLength={80} required placeholder="Mèo phiêu lưu" />
         </Field>
