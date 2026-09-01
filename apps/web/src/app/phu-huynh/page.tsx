@@ -8,6 +8,7 @@ import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
+import { MAT_THE } from '@/components/card';
 import { GameVisibilityToggle, LockToggle, ResetPasswordForm } from './child-controls';
 import { VerifyEmailButton } from './verify-email-button';
 
@@ -69,8 +70,9 @@ export default async function ParentDashboard() {
           <Notice tone="warn">
             <p className="font-semibold">Bạn cần xác minh email trước khi tạo tài khoản cho con.</p>
             <p className="mt-1">
-              Một lá thư đã được gửi tới <strong>{actor.email}</strong> lúc bạn đăng ký — bấm link
-              trong thư là xong. Không thấy thư (kể cả trong thư rác) thì bấm nút dưới đây.
+              Cách xác minh là bấm link trong lá thư gửi tới <strong>{actor.email}</strong>. Chưa
+              thấy thư, kể cả trong thư rác, thì bấm nút dưới đây để gửi lại — nút đó báo ngay nếu
+              việc gửi bị lỗi.
             </p>
             <p className="mt-1">
               Việc này cần thiết vì tạo tài khoản cho con chính là lúc bạn thay con đồng ý với điều
@@ -82,6 +84,13 @@ export default async function ParentDashboard() {
               thì việc đăng ký vẫn thành công (cố ý — xem `registerParentAction`), nên câu
               đó có thể là nói sai với đúng những người đang mắc kẹt. Nút bên dưới mới là
               đường thoát thật, và nó HIỆN LỖI nếu gửi tiếp tục trượt.
+
+              Ghi chú này đã từng KHÔNG khớp với câu chữ ngay trên nó: bản cũ viết "Một lá
+              thư đã được gửi tới … lúc bạn đăng ký", tức khẳng định đúng cái điều đoạn này
+              cấm khẳng định. Đã dựng lại được trên stack production với key Resend giữ chỗ:
+              phụ huynh đăng ký xong, đọc câu đó, và ngồi chờ một lá thư không tồn tại.
+              Một ghi chú nói ngược với đoạn chữ nó đang canh thì tệ hơn là không có ghi chú,
+              vì lần đọc sau người ta tin ghi chú và không đọc lại câu chữ.
             */}
             <VerifyEmailButton />
           </Notice>
@@ -95,7 +104,7 @@ export default async function ParentDashboard() {
       ) : (
         <ul className="mb-9 list-none space-y-4 p-0">
           {children.map((child) => (
-            <li key={child.id} className="rounded-card border border-border bg-surface p-5">
+            <li key={child.id} className={`p-5 ${MAT_THE}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-lg font-bold">

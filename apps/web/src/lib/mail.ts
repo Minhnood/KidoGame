@@ -75,6 +75,33 @@ async function sendViaResend(message: MailMessage, apiKey: string): Promise<void
 }
 
 /**
+ * Key Resend thật hay chỉ là chỗ giữ chỗ.
+ *
+ * VÌ SAO CẦN HÀM NÀY. Chốt an toàn bên dưới chỉ kêu khi `RESEND_API_KEY` VẮNG MẶT.
+ * Mà `infra/.env.example` và mọi bản .env chép từ nó đều có sẵn một giá trị giả kiểu
+ * `re_xxx`, nên trên thực tế biến luôn CÓ MẶT và chốt đó không bao giờ chạy. Cái xảy
+ * ra thay vào đó, đã dựng lại nguyên vẹn trên stack Docker: đăng ký một phụ huynh thì
+ * tài khoản tạo xong, trang hiện "Một lá thư đã được gửi tới …", ngay dưới là "Bạn cần
+ * xác minh email trước khi tạo tài khoản cho con", và không có lá thư nào. Lỗi thật
+ * `Resend trả về 401: API key is invalid` chỉ nằm trong log container.
+ *
+ * Tức là một cấu hình chưa xong bị kể lại thành một hệ thống đang chạy. Phụ huynh chờ
+ * mãi, không tạo được tài khoản cho con, và đứa trẻ không có gì để đăng.
+ *
+ * Key thật của Resend là `re_` cộng một chuỗi dài. Ngưỡng 20 ký tự chọn thấp hơn hẳn
+ * độ dài thật để không bao giờ từ chối oan một key thật, nhưng vẫn bắt được mọi giá
+ * trị giữ chỗ đã thấy: `re_xxx`, `re_your_api_key`, `re_local`.
+ *
+ * KHÔNG kiểm bằng cách gọi thử API: `sendMail` nằm trên đường đi của đăng ký và đặt
+ * lại mật khẩu, thêm một vòng đi Internet vào đó là thêm một chỗ để chậm và để hỏng.
+ * Kiểm key dùng được thật là việc của `infra/mail-check.mjs`.
+ */
+function laKeyGiuCho(apiKey: string): boolean {
+  const k = apiKey.trim();
+  return !k.startsWith('re_') || k.length < 20;
+}
+
+/**
  * Gửi một email.
  *
  * Ném lỗi khi gửi thất bại. Người gọi tự quyết định có nuốt lỗi hay không —
@@ -82,16 +109,34 @@ async function sendViaResend(message: MailMessage, apiKey: string): Promise<void
  */
 export async function sendMail(message: MailMessage): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
-  if (apiKey) {
-    await sendViaResend(message, apiKey);
+  const coKeyThat = Boolean(apiKey) && !laKeyGiuCho(apiKey as string);
+
+  if (coKeyThat) {
+    await sendViaResend(message, apiKey as string);
     return;
   }
 
   if (process.env.NODE_ENV === 'production') {
-    // Ở production mà thiếu cấu hình thì phải kêu to. In mail ra log server của
-    // production là rò token vào một nơi hoàn toàn không mong đợi.
-    throw new Error('Thiếu RESEND_API_KEY: không gửi được mail ở môi trường production.');
+    /*
+     * Ở production mà thiếu cấu hình thì phải kêu to. In mail ra log server của
+     * production là rò token vào một nơi hoàn toàn không mong đợi.
+     *
+     * Nói rõ key ĐANG CÓ nhưng là giữ chỗ, chứ không gộp vào cùng một câu với thiếu
+     * hẳn key: hai tình huống này sửa khác nhau, mà người đọc dòng lỗi thường là
+     * người vừa tưởng mình đã cấu hình xong.
+     */
+    throw new Error(
+      apiKey
+        ? 'RESEND_API_KEY đang là giá trị giữ chỗ, chưa phải key thật: không gửi được mail ở môi trường production. Lấy key ở https://resend.com/api-keys rồi kiểm bằng `node infra/mail-check.mjs`.'
+        : 'Thiếu RESEND_API_KEY: không gửi được mail ở môi trường production.'
+    );
   }
 
+  /*
+   * Dev: key giữ chỗ cũng rơi về transport `console` như khi không có key. Cố ý —
+   * `re_xxx` trong .env của máy dev là chuyện bình thường, mà đi Resend với nó thì
+   * mất luôn link xác minh trong log, và bốn bộ e2e đọc link từ đó sẽ đổ ở bước đầu
+   * với triệu chứng trông như luồng xác minh email bị hỏng.
+   */
   sendViaConsole(message);
 }

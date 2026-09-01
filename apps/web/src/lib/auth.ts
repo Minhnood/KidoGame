@@ -52,10 +52,30 @@ async function recordFailure(identity: string): Promise<void> {
   }
 }
 
+/**
+ * Xoá bộ đếm sai mật khẩu sau khi đăng nhập thành công.
+ *
+ * `updateMany` chứ KHÔNG phải `update`, và đây là một lỗi đã đo được chứ không phải
+ * chuyện phong cách.
+ *
+ * Người chưa từng nhập sai lần nào thì KHÔNG có dòng `LoginAttempt` nào cả — tức là
+ * đường đi phổ biến NHẤT. `update` với where không khớp thì Prisma NÉM, và cái
+ * `.catch(() => {})` cũ nuốt đúng nên hành vi không sai. Nhưng Prisma đã kịp in lỗi
+ * ra stderr TRƯỚC khi bị nuốt, nên mỗi lần đăng nhập sạch là một khối `prisma:error`
+ * đỏ trong log. Đo được: tài khoản demo có 0 dòng `LoginAttempt`, đăng nhập một lần
+ * thành công thì số khối `prisma:error` trong log tăng đúng 1.
+ *
+ * Tác hại không phải chức năng, mà là log đỏ trên đúng đường đi thành công sẽ che mất
+ * lỗi thật, và trên VPS có cảnh báo log thì nó báo động vào lúc không có gì xảy ra.
+ *
+ * `updateMany` không khớp gì thì trả về `{ count: 0 }`, không ném, không in gì —
+ * cùng idiom đã dùng và đã ghi rõ lý do ở `api/games/[id]/play/route.ts`.
+ */
 async function clearFailures(identity: string): Promise<void> {
-  await prisma.loginAttempt
-    .update({ where: { identity }, data: { failedCount: 0, lockedUntil: null } })
-    .catch(() => {});
+  await prisma.loginAttempt.updateMany({
+    where: { identity },
+    data: { failedCount: 0, lockedUntil: null },
+  });
 }
 
 /**
