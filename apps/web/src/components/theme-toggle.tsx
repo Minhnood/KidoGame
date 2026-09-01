@@ -85,7 +85,12 @@ export function ThemeToggle() {
          mà chỉ nghe "đổi giao diện" thì không biết đang ở giao diện nào. */
       aria-label={`Đổi giao diện — đang dùng: ${nhan.chu}`}
       title={`Giao diện: ${nhan.chu}`}
-      className="min-h-touch inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 font-semibold text-chrome-ink/80 hover:text-chrome-ink sm:px-3"
+      /* Cùng kiểu với các mục chữ khác trên thanh nav (xem `MUC_CHU` trong
+         `site-nav.tsx`): trỏ vào thì hiện nền bo tròn, không chỉ đậm chữ lên. Chép
+         lại chuỗi class chứ không import: nút này là client component, còn `SiteNav`
+         là server component — import qua lại giữa hai bên chỉ để lấy một chuỗi thì
+         kéo cả module sang bundle của client. */
+      className="min-h-touch inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 font-semibold text-chrome-ink/80 transition-colors hover:bg-chrome-lift hover:text-chrome-ink sm:px-3"
     >
       <span aria-hidden="true">{nhan.icon}</span>
       <span className="hidden text-sm sm:inline">{nhan.chu}</span>

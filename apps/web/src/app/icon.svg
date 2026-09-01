@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    Icon tab trinh duyet. Next tu nhan file `app/icon.svg` roi chen
+    <link rel="icon"> vao moi trang, nho the trinh duyet thoi doan mo
+    `/favicon.ico`, tuc het luon cai 404 lang le o moi lan mo trang.
+
+    KHONG DUOC VIET HAI DAU GACH NGANG LIEN NHAU TRONG COMMENT NAY. File .svg
+    doc lap duoc parse theo luat XML, ma XML cam chuoi hai gach ngang ben trong
+    comment. Da hong that mot lan: comment cu goi ten token mau kieu CSS (co hai
+    gach o dau) va ca file thanh "error on line 7" y nguyen, trong khi server van
+    tra 200 va Next van chen link icon vao HTML. Tuc la KHONG CO GI BAO RA, chi
+    co cai tab trong tron. Nen o day goi token khong kem hai gach dau: mau lay tu
+    `color-accent`, `color-accent-dark` va `color-chrome` trong globals.css.
+
+    Mau CHOT CUNG, khong dung bien CSS: file nay duoc nap nhu mot anh doc lap,
+    khong co :root nao cua trang de ma doc bien. Doi token mau thuong hieu thi
+    sua ca day.
+
+    Hinh vuong TRAN KIN khung 32x32 chu khong co le nhu dau hieu tren thanh nav:
+    tab trinh duyet ve icon o 16px va tu chen le rieng, them le cua minh vao thi
+    con meo con chung 9px.
+  -->
+  <defs>
+    <linearGradient id="nen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff8c1a"/>
+      <stop offset="1" stop-color="#e57200"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7.5" fill="url(#nen)"/>
+  <!--
+    Dau meo, cung mot path voi `site-logo.tsx`. Hai lo mat la LO THAT
+    (fill-rule evenodd) nen dai chuyen sac phia sau lo qua dung cho ay.
+    translate va scale dua hop bao THAT cua con meo (16.8x17.4 don vi, KHONG
+    phai ca khung 24x24, vi hai tai chia len nen hop bao lech tam) vao giua
+    khung 32.
+  -->
+  <path transform="translate(2.2 1.855) scale(1.15)"
+    d="M6.2 8.6 5.4 3.6 9.8 6.4A9 9 0 0 1 14.2 6.4L18.6 3.6 17.8 8.6A7.4 7.4 0 0 1 20.4 14.2 8.4 8.4 0 0 1 12 21 8.4 8.4 0 0 1 3.6 14.2A7.4 7.4 0 0 1 6.2 8.6ZM9.4 12.6a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5ZM14.6 12.6a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Z"
+    fill-rule="evenodd" fill="#1b1b32" stroke="#1b1b32" stroke-width="0.9"
+    stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

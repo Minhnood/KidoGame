@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { Nunito } from 'next/font/google';
 import { headers } from 'next/headers';
-import Link from 'next/link';
 import { SiteNav } from '@/components/site-nav';
+import { SiteLogo } from '@/components/site-logo';
+import { NavDecor } from '@/components/nav-decor';
 import { SiteDecor } from '@/components/site-decor';
 import { SiteFooter } from '@/components/site-footer';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -130,7 +131,37 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             trong cây DOM không ảnh hưởng gì tới bố cục — điều đáng quan tâm là nó
             không chen vào thứ tự Tab, và nó không hề focus được. */}
         <SiteDecor />
-        <header className="bg-chrome py-3 text-chrome-ink">
+        {/*
+          Nền thanh điều hướng xếp BA LỚP, và thứ tự là thứ tự trong DOM.
+
+          1. `bg-nav-1` — màu đặc, tối nhất. Phải có: hai lớp trên đều là
+             `background-image` có chỗ trong suốt, không có nền đặc lót dưới thì chỗ
+             đó lộ ra nền trang.
+          2. Dải chuyển sắc ngang, tím đêm ở phía logo sang xanh đen ở phía các nút.
+             Đi về phía tím chứ không về phía cam, vì nút chính là nút cam: cam trên
+             tím đêm thì nổi hẳn, còn kéo nền về phía cam là nút chìm vào nền đúng ở
+             chỗ nó cần nổi nhất.
+          3. Vệt sáng loang quanh logo, bắt đầu từ 14% ngang trên mép trên. Chỗ sáng
+             nhất của thanh nên là chỗ ta muốn mắt đến trước.
+
+          Cả ba lớp `absolute inset-0` nên KHÔNG chiếm chỗ trong bố cục — chiều cao
+          thanh vẫn do `Wrap` bên dưới quyết định, thêm hay bớt một lớp không làm
+          thanh cao lên hay thấp đi.
+
+          `overflow-hidden` là BẮT BUỘC, không phải cho gọn: nhánh lá trang trí vẽ
+          tràn qua mép trên và mép dưới thanh (cố ý — nhánh chạy tiếp ra ngoài chứ
+          không cụt lại ở đúng mép), thiếu nó là lá đổ xuống đè lên nội dung trang.
+        */}
+        <header className="relative overflow-hidden bg-nav-1 text-chrome-ink">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-linear-to-r from-nav-3 via-nav-2 to-nav-1"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(120%_170%_at_14%_-30%,var(--color-nav-glow)_0%,transparent_55%)]"
+          />
+          <NavDecor />
           {/*
             Cho phép xuống dòng ở ĐÂY, và chỉ ở đây.
             Thanh điều hướng bên trong thì `flex-nowrap` — nhờ vậy trên máy rất hẹp
@@ -139,20 +170,33 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             khoá cứng cả hai tầng: khoá cả hai là trang tràn ngang ở 320px, đã đo
             thấy tràn 31px.
           */}
-          <Wrap className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 min-[360px]:flex-nowrap sm:gap-4">
-            {/* `shrink-0`: logo là mốc nhận diện, thà để phần bên phải chật còn hơn
-                để chữ "KidoGame" bị bóp méo hay xuống dòng giữa chừng. */}
-            <Link
-              href="/"
-              className="shrink-0 text-lg font-extrabold tracking-tight no-underline sm:text-xl"
-            >
-              Kido<span className="text-accent">Game</span>
-            </Link>
+          {/* `relative` để nó nằm TRÊN ba lớp nền và nhánh lá. Hai phần tử đều được
+              định vị thì cái sau trong DOM vẽ sau — không cần `z-index` nào. */}
+          <Wrap className="relative flex flex-wrap items-center justify-between gap-x-2 gap-y-1 py-2.5 min-[360px]:flex-nowrap sm:gap-4 sm:py-3.5">
+            <SiteLogo />
             <div className="ml-auto flex items-center gap-0.5 sm:gap-2">
               <SiteNav />
               <ThemeToggle />
             </div>
           </Wrap>
+          {/*
+            Vạch cam mảnh dưới chân thanh điều hướng.
+
+            Nó làm hai việc: đóng cạnh dưới của khối tối lại cho ra một thanh chứ
+            không phải một mảng màu bị cắt ngang, và nhắc lại đúng màu thương hiệu ở
+            chỗ mắt đi qua nhiều nhất.
+
+            Nhạt dần về bên phải chứ không cam đều cả vạch: một vạch cam đặc suốt
+            1920px là một cái gạch chân, nó cắt trang làm hai và kéo mắt chạy ngang
+            theo nó. Nhạt dần thì nó chỉ còn là một mép sáng bắt đầu từ phía logo.
+
+            Cao 3px, `aria-hidden`, không chữ không link — nên nó không thêm một điểm
+            Tab nào (`a11y-check` đếm số điểm Tab mỗi trang).
+          */}
+          <div
+            aria-hidden="true"
+            className="relative h-0.75 bg-linear-to-r from-accent via-accent/40 to-transparent"
+          />
         </header>
         {/*
          * `tabIndex={-1}` để link nhảy ở trên thật sự MANG FOCUS tới đây.
@@ -162,7 +206,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
          * phím lại đi đúng con đường vừa muốn bỏ qua. Đây là lý do phần lớn link
          * nhảy trên mạng chỉ *trông như* hoạt động.
          */}
-        <main id="noi-dung" tabIndex={-1} className="flex-1">
+        {/*
+         * `overflow-x-clip` — hàng rào cho mọi thứ TRANG TRÍ CHÌA RA NGOÀI.
+         *
+         * Cành mọc ra khỏi thẻ game khi trỏ chuột vào (xem `game-card.tsx`) là hình
+         * vẽ nằm ngoài hộp của thẻ. Ở thẻ cột ngoài cùng, phần chìa ra vượt khỏi khung
+         * nhìn và trang phải vuốt ngang — mà nó CHỈ xảy ra lúc trỏ chuột, nên bộ đo
+         * tràn ngang trong `a11y-check` không bao giờ thấy: nó không hover.
+         *
+         * `clip` chứ KHÔNG phải `hidden`: `hidden` tạo ra một vùng cuộn được, làm chết
+         * `position: sticky` của mọi thứ bên trong và đổi cả hành vi cuộn. `clip` chỉ
+         * cắt, không tạo vùng cuộn.
+         *
+         * Cắt ở đây, không cắt ở lưới thẻ: mép của `<main>` là mép KHUNG NHÌN, nên
+         * cành bị cắt đúng ở rìa màn hình — đọc ra là "nó chạy tiếp ra ngoài". Cắt ở
+         * lưới thì vết cắt nằm giữa trang, đúng cái lỗi đã phải sửa ở tranh hai bên lề.
+         *
+         * Tranh trang trí hai bên lề KHÔNG bị ảnh hưởng: nó là thẻ anh em của
+         * `<main>`, không phải con.
+         */}
+        <main id="noi-dung" tabIndex={-1} className="flex-1 overflow-x-clip">
           <Wrap>{children}</Wrap>
         </main>
         <SiteFooter />
