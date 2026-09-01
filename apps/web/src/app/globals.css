@@ -30,6 +30,27 @@
   /* Viền TRANG TRÍ: mép thẻ, đường kẻ. Nhạt là có chủ đích. */
   --color-border: #d9d9e4;
 
+  /* --- NĂM TÔNG NỀN THẺ GAME ---
+   *
+   * Mỗi game một tông, chọn theo mã game (xem `tongCuaThe` trong `game-card.tsx`).
+   * Một lưới hai chục thẻ cùng màu trắng thì mắt không có mốc nào để nhớ "cái game
+   * mình vừa xem nằm đâu"; màu khác nhau cho mỗi thẻ một danh tính.
+   *
+   * NĂM tông, không phải mười lăm: quá nhiều màu thì lưới thành cầu vồng và không
+   * còn màu nào là mốc nữa. Năm cái là đủ để hai thẻ cạnh nhau hầu như luôn khác
+   * màu, mà vẫn ít để mắt nhận ra "à, cái xanh mint".
+   *
+   * NHẠT HẾT MỨC. Chữ tiêu đề game nằm thẳng trên nền này, nên tông càng đậm thì
+   * tương phản càng tụt; và mười thẻ màu đậm cạnh nhau sẽ hút mắt khỏi thứ đáng nhìn
+   * nhất trên thẻ, là ảnh game. Cả năm cặp đều có phép đo riêng trong
+   * `contrast-check` — cho `ink` và `ink-soft`, ở cả hai giao diện.
+   */
+  --color-the-1: #fff1dd;
+  --color-the-2: #e8f5ec;
+  --color-the-3: #ecf1fd;
+  --color-the-4: #fdecf1;
+  --color-the-5: #f6eefc;
+
   /* Viền Ô NHẬP — phải là token riêng, không dùng chung với viền trang trí.
      WCAG 1.4.11 đòi 3:1 cho ranh giới của thành phần cần nhận diện được, mà viền
      trang trí ở trên chỉ đạt ~1.4:1. Ô nhập là chỗ trẻ phải TÌM ra để bấm vào; một
@@ -66,6 +87,43 @@
    * Hai vai đó chỉ cần đúng một cặp màu, nên gộp thành `chrome` / `chrome-ink`.
    */
   --color-chrome: #1b1b32;
+  /* Nền TỐI NHẤC LÊN một bậc — nền lúc trỏ chuột vào các mục chữ trên thanh nav.
+     Vì sao là token chứ không phải `bg-chrome-ink/10`: nền pha alpha thì
+     `contrast-check` không đo được (nó đo alpha của CHỮ, không đo alpha của nền),
+     nên cái nền có chữ nằm trên sẽ lọt khỏi hàng rào. Một màu đặc thì đo được. */
+  --color-chrome-lift: #2e2e52;
+
+  /* --- Thanh điều hướng: nền chuyển sắc và mấy chi tiết trang trí trên nó ---
+   *
+   * Cố định, KHÔNG đảo theo giao diện, cùng lý do như `chrome`: thanh nav tối ở cả
+   * hai giao diện nên mọi thứ nằm trên nó cũng phải cố định.
+   *
+   * BA CHẶNG NỀN đi từ tím đêm (phía logo) sang xanh đen (phía các nút). Không phải
+   * ba màu bất kỳ: chúng chỉ lệch nhau chút sắc và chút độ sáng, vì chữ trắng phải
+   * đọc được trên CẢ BA. Chặng sáng nhất là `nav-3` và vệt sáng `nav-glow` — cả hai
+   * đều có cặp riêng trong `contrast-check`, và đó mới là trường hợp xấu nhất của
+   * thanh nav, không phải `chrome`.
+   *
+   * Tại sao đi về phía tím mà không về phía cam: nút chính trên thanh là cam, và cam
+   * trên tím đêm thì nổi hẳn lên (hai màu đối nhau). Kéo nền về phía cam là nút cam
+   * chìm dần vào nền đúng ở chỗ nó cần nổi nhất.
+   *
+   * MẤY MÀU TRANG TRÍ (`nav-la`, `nav-canh`, `nav-tao`, `nav-sao`) là bản hạ tông của
+   * màu tranh hai bên lề — cùng một cành lá, nhưng nhìn trong ánh sáng tối. Không
+   * dùng thẳng `--color-decor-*`: bảng đó sáng, đặt lên nền tối thì mấy chiếc lá nhảy
+   * lên trước cả tên trang.
+   */
+  --color-nav-1: #191930;
+  --color-nav-2: #221f40;
+  --color-nav-3: #2c2150;
+  --color-nav-glow: #3a2b52;
+  --color-nav-la: #476b53;
+  --color-nav-la-dam: #32503e;
+  --color-nav-canh: #5b452f;
+  --color-nav-tao: #8e4442;
+  --color-nav-sao: #6b6ba0;
+  --color-nav-hoa: #b4738f;
+  --color-nav-hoa-tam: #c9a05a;
   /* Trắng DỊU, không phải #ffffff. Trên nền gần đen, chữ trắng tinh bị loang viền
      (halation) — rõ nhất với người loạn thị, mà loạn thị ở trẻ em thì phổ biến và
      thường chưa được phát hiện. Dịu đi vẫn còn 15.3:1 ở giao diện sáng và 17.6:1 ở
@@ -158,6 +216,16 @@
   --toi-bg: #12121c;
   --toi-surface: #1c1c2b;
   --toi-border: #2f2f45;
+
+  /* Năm tông nền thẻ game, bản TỐI. Cùng năm sắc với bản sáng nhưng tối hơn nền
+     trang một bậc, để thẻ vẫn nổi lên. Không có nhóm này thì ở giao diện tối các thẻ
+     giữ nguyên màu pastel sáng, và chữ `--toi-ink` (gần trắng) đặt lên đó là không
+     đọc được — đúng cái bẫy mà mọi token khác trong file này tồn tại để tránh. */
+  --toi-the-1: #2b2117;
+  --toi-the-2: #14261a;
+  --toi-the-3: #191d31;
+  --toi-the-4: #2a1a21;
+  --toi-the-5: #221a2e;
   /* Viền ô nhập ở giao diện tối phải SÁNG hơn nền, ngược chiều với giao diện sáng.
      Dùng chung `--toi-border` (1.29:1) là ô nhập biến mất trên nền tối. */
   --toi-field-border: #6a6a85;
@@ -212,6 +280,11 @@
     --color-bg: var(--toi-bg);
     --color-surface: var(--toi-surface);
     --color-border: var(--toi-border);
+    --color-the-1: var(--toi-the-1);
+    --color-the-2: var(--toi-the-2);
+    --color-the-3: var(--toi-the-3);
+    --color-the-4: var(--toi-the-4);
+    --color-the-5: var(--toi-the-5);
     --color-field-border: var(--toi-field-border);
     --color-accent: var(--toi-accent);
     --color-accent-dark: var(--toi-accent-dark);
@@ -251,6 +324,11 @@
   --color-bg: var(--toi-bg);
   --color-surface: var(--toi-surface);
   --color-border: var(--toi-border);
+  --color-the-1: var(--toi-the-1);
+  --color-the-2: var(--toi-the-2);
+  --color-the-3: var(--toi-the-3);
+  --color-the-4: var(--toi-the-4);
+  --color-the-5: var(--toi-the-5);
   --color-field-border: var(--toi-field-border);
   --color-accent: var(--toi-accent);
   --color-accent-dark: var(--toi-accent-dark);
@@ -447,6 +525,120 @@ body {
 }
 
 /*
+ * Sao lấp lánh trên thanh điều hướng.
+ *
+ * CHỈ đổi `opacity`, không đổi `transform` — và đây là một ràng buộc kỹ thuật chứ
+ * không phải lựa chọn thẩm mỹ. Ngôi sao đặt chỗ bằng thuộc tính `transform` trên
+ * chính thẻ <path> (`translate(...) scale(...)`), mà CSS `transform` thì GHI ĐÈ
+ * thuộc tính đó. Cho keyframes chạm vào `transform` là ngôi sao nhảy về gốc toạ độ
+ * của thẻ <svg> ngay khung hình đầu — một cái lỗi trông như "sao biến mất".
+ *
+ * Mờ nhất còn 0.45 chứ không về 0: sao tắt hẳn rồi hiện lại là nhấp nháy, mà nhấp
+ * nháy trên trang cho trẻ con thì kéo mắt khỏi nội dung — và với vài đứa là kéo cả
+ * cơn động kinh. Đây là lấp lánh, không phải đèn báo.
+ */
+@keyframes kg-lap-lanh {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.kg-lap-lanh {
+  animation: kg-lap-lanh 4.5s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+ * Cành mọc ra từ thẻ game khi trỏ chuột vào: rung cành và rớt lá.
+ *
+ * Hai hoạt ảnh này CHỈ chạy khi trỏ vào thẻ, và đó là quyết định về hiệu năng chứ
+ * không phải về thẩm mỹ. Trang chủ hiện tới 24 thẻ, mỗi thẻ 3 cành và 4 chiếc lá
+ * rơi — cho chúng chạy sẵn là hơn 160 hoạt ảnh vô hạn quay liên tục sau lưng một
+ * trang mà người dùng chưa chạm vào. Trên máy tính bảng cũ, đó là quạt chạy hết công
+ * suất và pin tụt.
+ *
+ * Vì vậy luật viết bằng CSS tay với `:hover` của thẻ cha, không phải bằng class
+ * `group-hover:` của Tailwind: Tailwind không sinh được biến thể `group-hover` cho
+ * một class tự đặt như `.kg-rung-canh`.
+ * ------------------------------------------------------------------------ */
+
+/*
+ * Rung: lắc quanh GỐC CÀNH, biên độ giảm dần rồi lặp lại.
+ *
+ * `transform-box: fill-box` + `transform-origin: 0% 100%` — gốc quay ở góc dưới bên
+ * trái hộp bao của nhóm, tức đúng chỗ cành dính vào thẻ. Thiếu `fill-box` thì phần
+ * trăm tính theo cả thẻ <svg> và cành quét thành một vòng cung to, trông như cành
+ * đang rụng chứ không phải rung.
+ */
+@keyframes kg-rung-canh {
+  0% {
+    transform: rotate(0deg);
+  }
+  18% {
+    transform: rotate(-2.6deg);
+  }
+  38% {
+    transform: rotate(1.8deg);
+  }
+  58% {
+    transform: rotate(-1deg);
+  }
+  78% {
+    transform: rotate(0.5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.kg-rung-canh {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+}
+
+.kg-the-game:hover .kg-rung-canh {
+  animation: kg-rung-canh 2.6s ease-in-out infinite;
+}
+
+/*
+ * Lá rớt: trôi xuống, xoay, và mờ dần ở hai đầu.
+ *
+ * Mờ ở CẢ hai đầu (0% và 100% đều `opacity: 0`) chứ không chỉ ở cuối: lá phải hiện ra
+ * từ trong chùm lá rồi tan đi, không phải bật ra từ hư không rồi biến mất giữa không
+ * khí. `opacity: 0` mặc định ở dưới là để lúc chưa trỏ vào thì không thấy lá nào.
+ *
+ * Trôi CHÉO chứ không thẳng đứng: lá rụng thì gió đưa ngang. Rơi thẳng đọc ra là một
+ * viên đá.
+ */
+@keyframes kg-la-roi {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-22px, 104px) rotate(190deg);
+    opacity: 0;
+  }
+}
+
+.kg-la-roi {
+  opacity: 0;
+}
+
+.kg-the-game:hover .kg-la-roi {
+  animation: kg-la-roi 2.8s ease-in infinite;
+}
+
+/*
  * Tắt HẲN chuyển động khi người dùng xin ít chuyển động.
  *
  * Khối `prefers-reduced-motion` chung ở cuối file chỉ ép thời lượng về 0.01ms —
@@ -458,7 +650,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .kg-dua,
   .kg-dua-canh,
-  .kg-may-troi {
+  .kg-may-troi,
+  .kg-lap-lanh,
+  /* Hai cái này còn phải THẮNG luật `:hover` ở trên, nên `!important` ở đây không
+     phải cho chắc — thiếu nó là luật hover cùng độ ưu tiên vẫn thắng và cành vẫn
+     rung với đúng người đã xin đừng có gì chuyển động. */
+  .kg-rung-canh,
+  .kg-la-roi {
     animation: none !important;
   }
 }

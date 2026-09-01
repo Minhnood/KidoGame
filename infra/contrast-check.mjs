@@ -82,9 +82,40 @@ const CAP = [
   { ten: 'Chữ chính trên thẻ/khung', fg: 'ink', bg: 'surface', min: 7 },
   { ten: 'Chữ phụ trên nền trang', fg: 'ink-soft', bg: 'bg', min: 4.5 },
   { ten: 'Chữ phụ trên thẻ/khung', fg: 'ink-soft', bg: 'surface', min: 4.5 },
+  /* NĂM TÔNG NỀN THẺ GAME. Tiêu đề game và tên bé nằm thẳng trên nền này, nên mỗi
+     tông phải qua cả hai ngưỡng — và phải qua ở CẢ HAI giao diện, vì tông thẻ có bản
+     tối riêng. Đây là 10 phép đo, và chúng tồn tại để không ai đổi một tông cho "đẹp
+     hơn" rồi vô tình đẩy chữ xuống dưới ngưỡng đọc được. */
+  { ten: 'Tiêu đề game trên thẻ tông 1', fg: 'ink', bg: 'the-1', min: 7 },
+  { ten: 'Tiêu đề game trên thẻ tông 2', fg: 'ink', bg: 'the-2', min: 7 },
+  { ten: 'Tiêu đề game trên thẻ tông 3', fg: 'ink', bg: 'the-3', min: 7 },
+  { ten: 'Tiêu đề game trên thẻ tông 4', fg: 'ink', bg: 'the-4', min: 7 },
+  { ten: 'Tiêu đề game trên thẻ tông 5', fg: 'ink', bg: 'the-5', min: 7 },
+  { ten: 'Tên bé trên thẻ tông 1', fg: 'ink-soft', bg: 'the-1', min: 4.5 },
+  { ten: 'Tên bé trên thẻ tông 2', fg: 'ink-soft', bg: 'the-2', min: 4.5 },
+  { ten: 'Tên bé trên thẻ tông 3', fg: 'ink-soft', bg: 'the-3', min: 4.5 },
+  { ten: 'Tên bé trên thẻ tông 4', fg: 'ink-soft', bg: 'the-4', min: 4.5 },
+  { ten: 'Tên bé trên thẻ tông 5', fg: 'ink-soft', bg: 'the-5', min: 4.5 },
   { ten: 'Chữ placeholder trong ô nhập', fg: 'ink-faint', bg: 'surface', min: 4.5 },
   { ten: 'Chữ trên nút cam (nút chính)', fg: 'chrome', bg: 'accent', min: 4.5 },
+  /* Dấu hiệu logo tô bằng dải chuyển sắc `accent` → `accent-dark`, nên hình nút chơi
+     bên trong nó nằm một phần trên chặng TỐI. Chặng tối mới là trường hợp xấu cho
+     một hình màu tối, không phải chặng sáng. */
+  { ten: 'Hình tối trên chặng tối của dải cam', fg: 'chrome', bg: 'accent-dark', min: 4.5 },
+  /* Nhãn loại game trên thẻ game: chữ cam trên viên thuốc nền tối. Đây là chỗ DUY
+     NHẤT được dùng `accent` làm màu chữ — trên nền tối nó đạt ngưỡng, còn trên nền
+     sáng thì chỉ 2.18:1, nên chỗ khác phải dùng `accent-text`. */
+  { ten: 'Chữ cam trên viên thuốc nền tối', fg: 'accent', bg: 'chrome', min: 4.5 },
   { ten: 'Chữ trên thanh điều hướng', fg: 'chrome-ink', bg: 'chrome', min: 7 },
+  /* Nền nhấc lên: vệt sáng ở góc thanh điều hướng, và nền lúc trỏ vào một mục.
+     Chữ vẫn nằm trên nó nên vẫn phải đo — nền sáng hơn thì chữ sáng tương phản
+     KÉM đi, tức đây mới là trường hợp xấu nhất của thanh điều hướng. */
+  { ten: 'Chữ trên nền nhấc của thanh điều hướng', fg: 'chrome-ink', bg: 'chrome-lift', min: 7 },
+  /* Nền thanh nav là một dải chuyển sắc, nên phải đo ở CHẶNG SÁNG NHẤT chứ không
+     phải ở `chrome`. Đo chặng tối thì cả dải coi như không được kiểm — và chỗ sáng
+     nhất lại đúng là chỗ đặt logo với tên trang. */
+  { ten: 'Chữ trên chặng sáng nhất của nền nav', fg: 'chrome-ink', bg: 'nav-3', min: 7 },
+  { ten: 'Chữ trên vệt sáng quanh logo', fg: 'chrome-ink', bg: 'nav-glow', min: 7 },
   { ten: 'Link cam trên nền trang', fg: 'accent-text', bg: 'bg', min: 4.5 },
   { ten: 'Link cam trên thẻ/khung', fg: 'accent-text', bg: 'surface', min: 4.5 },
   { ten: 'Chữ lỗi trong hộp lỗi', fg: 'danger', bg: 'danger-bg', min: 4.5 },
@@ -107,6 +138,39 @@ const CAP = [
 const CAP_ALPHA = [
   { ten: 'Chữ mờ 80% trên thanh điều hướng', fg: 'chrome-ink', bg: 'chrome', alpha: 0.8, min: 4.5 },
   { ten: 'Chữ mờ 70% trên thanh điều hướng', fg: 'chrome-ink', bg: 'chrome', alpha: 0.7, min: 4.5 },
+  /* Cùng hai mức mờ đó nhưng trên nền đã nhấc lên — đây là lúc trỏ chuột vào mục,
+     và cũng là nền tối nhất mà chữ mờ phải sống trên đó. */
+  {
+    ten: 'Chữ mờ 80% trên nền nhấc của thanh điều hướng',
+    fg: 'chrome-ink',
+    bg: 'chrome-lift',
+    alpha: 0.8,
+    min: 4.5,
+  },
+  {
+    ten: 'Chữ mờ 70% trên nền nhấc của thanh điều hướng',
+    fg: 'chrome-ink',
+    bg: 'chrome-lift',
+    alpha: 0.7,
+    min: 4.5,
+  },
+  /* Và trên vệt sáng quanh logo — nền sáng nhất của cả thanh. Mục "Bố mẹ" (chữ mờ
+     80%) trên màn rộng nằm ngoài vùng vệt sáng, nhưng vệt loang tới đâu thì phụ
+     thuộc bề rộng màn hình, nên cứ đo như thể nó chạm tới. */
+  {
+    ten: 'Chữ mờ 80% trên vệt sáng quanh logo',
+    fg: 'chrome-ink',
+    bg: 'nav-glow',
+    alpha: 0.8,
+    min: 4.5,
+  },
+  {
+    ten: 'Chữ mờ 70% trên vệt sáng quanh logo',
+    fg: 'chrome-ink',
+    bg: 'nav-glow',
+    alpha: 0.7,
+    min: 4.5,
+  },
 ];
 
 let hong = 0;

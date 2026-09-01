@@ -27,9 +27,37 @@
  * nên tranh phải hẹp hơn thế; tới 1536px thì lề rộng 256px và tranh mới được to ra.
  * Bản đầu tiên vẽ cứng 144px và đã lấn vào nội dung ở đúng mốc 1280px.
  *
+ * KHUNG VẼ RỘNG 300 ĐƠN VỊ, KHÔNG PHẢI 200 — và đây là chỗ đã sai một lần.
+ *
+ * Bản trước vẽ trên khung 200 đơn vị rồi chặn bề rộng ở 300px. Trên màn 1920 lề
+ * rộng 448px, nên tranh dừng ở 300px và còn trơ ra một dải trống 148px cạnh nội
+ * dung; tệ hơn, cả ba hình đều VẼ RA NGOÀI khung của chính nó (đồi tới đơn vị 208,
+ * ngọn cành tới 208) nên thẻ <svg> xén phăng phần thừa thành một nhát dọc giữa
+ * trang — sườn đồi đứt ngang, ngọn cành mất mấy chiếc lá.
+ *
+ * Cách sửa KHÔNG phải là bỏ trần cho tranh phóng to: 448/200 = tỉ lệ 2.24, quả táo
+ * to gấp rưỡi hôm nay. Lề rộng thêm thì phải vẽ NHIỀU hơn chứ không vẽ TO hơn. Nên
+ * khung nới ra 300 đơn vị và cành được vẽ dài thêm cho kín chỗ: 448/300 = 1.49,
+ * đúng bằng tỉ lệ cũ, từng chiếc lá và quả táo giữ nguyên cỡ trên màn hình.
+ *
+ * Trần 32rem = 512px, vừa kín lề của mọi khung nhìn tới 2048px. Rộng hơn nữa thì
+ * dải trống quay lại — chấp nhận, vì bỏ trần là quay về đúng cái đã phải sửa.
+ *
+ * MỌI HÌNH PHẢI VẼ GỌN TRONG KHUNG CỦA NÓ. Mép ngoài (x≈0) thì tràn ra được, vì
+ * chỗ đó là mép màn hình, phần thừa nằm ngoài tầm mắt — cành cố ý mọc từ đó ra.
+ * Mép TRONG thì không: tràn một đơn vị là một nhát cắt dọc nằm giữa trang.
+ *
  * Màu lấy từ nhóm token `--color-decor-*`, tách hẳn khỏi bảng màu giao diện. Việc
  * đổi cảnh ngày/đêm nằm ở `.kg-ngay` / `.kg-dem` trong `globals.css`.
  */
+
+/**
+ * Bề rộng của mọi hình trang trí: đúng bề rộng bên lề, có trần.
+ *
+ * Một chỗ duy nhất cho cả bốn cành và hai mặt đất — ba hình cùng nằm trên một lề
+ * thì phải cùng một bề rộng, không thì cái nọ thò ra khỏi cái kia.
+ */
+const RONG_LE = 'w-[min(calc((100vw-64rem)/2),32rem)]';
 
 /**
  * Một MẢNG tán lá: nhiều hình tròn chồng lên nhau, cùng một màu.
@@ -59,10 +87,28 @@ function MangLa({ c, mau }: { c: Array<[number, number, number]>; mau: string })
  * Thân cũng vậy: một hình chữ nhật bo góc không ra cái cây nào cả. Ở đây thân thon
  * dần lên trên, xoè bạnh ở gốc, có nhánh chĩa vào trong tán, và một vệt sáng dọc
  * một bên để thân tròn ra chứ không dẹt.
+ *
+ * `lat` LẬT NGANG cả cây. Cần nó vì một bên lề giờ có ba cây: ba cái cùng một dáng
+ * đứng cạnh nhau thì không ra bụi cây, ra một cây bị dán ba lần — cỡ khác nhau vẫn
+ * không cứu được, vì mắt nhận ra hình dáng trước khi nhận ra kích thước. Lật thì
+ * tán lệch sang phía khác, vệt sáng thân đổi bên, cặp nhánh chĩa ngược lại; cùng
+ * một cái cây mà đọc ra là hai cây khác nhau.
  */
-function Cay({ x, y, s = 1, delay = 0 }: { x: number; y: number; s?: number; delay?: number }) {
+function Cay({
+  x,
+  y,
+  s = 1,
+  delay = 0,
+  lat = false,
+}: {
+  x: number;
+  y: number;
+  s?: number;
+  delay?: number;
+  lat?: boolean;
+}) {
   return (
-    <g transform={`translate(${x} ${y}) scale(${s})`}>
+    <g transform={`translate(${x} ${y}) scale(${lat ? -s : s} ${s})`}>
       {/* Vạt cỏ dưới gốc: cây phải đứng TRÊN cái gì đó, không thì nó lơ lửng. */}
       <ellipse cx="0" cy="4" rx="62" ry="13" fill="var(--color-decor-co)" />
 
@@ -141,29 +187,148 @@ function Cay({ x, y, s = 1, delay = 0 }: { x: number; y: number; s?: number; del
   );
 }
 
-/** Bông hoa năm cánh. Chi tiết nhỏ nhất trong tranh, và là thứ làm nó bớt trơ. */
-function Hoa({ x, y, mau }: { x: number; y: number; mau: string }) {
+/**
+ * Bông hoa năm cánh. Chi tiết nhỏ nhất trong tranh, và là thứ làm nó bớt trơ.
+ *
+ * `cuong` và `tam` cho phép đổi màu cuống và nhị, để thanh điều hướng dùng lại được
+ * bông hoa NÀY ở tông tối hơn — cùng lý do như nút `mau` của chiếc lá.
+ */
+export function Hoa({
+  x,
+  y,
+  mau,
+  s = 1,
+  cuong = 'var(--color-decor-la-dam)',
+  tam = 'var(--color-decor-troi)',
+}: {
+  x: number;
+  y: number;
+  mau: string;
+  s?: number;
+  cuong?: string;
+  tam?: string;
+}) {
   return (
-    <g transform={`translate(${x} ${y})`}>
-      <path d="M0 0v-9" stroke="var(--color-decor-la-dam)" strokeWidth="2" strokeLinecap="round" />
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <path d="M0 0v-9" stroke={cuong} strokeWidth="2" strokeLinecap="round" />
       {[0, 72, 144, 216, 288].map((g) => (
         <circle key={g} cx={0} cy={-13} r="3.4" fill={mau} transform={`rotate(${g} 0 -9)`} />
       ))}
-      <circle cx="0" cy="-9" r="2.6" fill="var(--color-decor-troi)" />
+      <circle cx="0" cy="-9" r="2.6" fill={tam} />
     </g>
   );
 }
 
-/** Chiếc lá: một hình thoi bo tròn, xoay theo hướng cành. */
-function La({ x, y, g, dam }: { x: number; y: number; g: number; dam?: boolean }) {
+const TONG_LA = [
+  'var(--color-decor-la-dam)',
+  'var(--color-decor-la)',
+  'var(--color-decor-la-sang)',
+] as const;
+
+/**
+ * Chiếc lá: một hình thoi bo tròn, xoay theo hướng cành.
+ *
+ * `mau` ghi đè tông lá, và nó tồn tại để thanh điều hướng dùng lại được chiếc lá
+ * NÀY thay vì vẽ một chiếc thứ hai. Lá trên thanh nav phải hạ tông (nền tối), nhưng
+ * phải là cùng một hình: hai bản vẽ tay của cùng một chiếc lá thì sớm muộn lệch
+ * nhau, và lúc đó trang có hai loại lá mà không ai biết vì sao.
+ */
+export function La({
+  x,
+  y,
+  g,
+  t = 1,
+  s = 1,
+  mau,
+}: {
+  x: number;
+  y: number;
+  g: number;
+  t?: 0 | 1 | 2;
+  s?: number;
+  mau?: string;
+}) {
   return (
     <path
       d="M0 0c9-8 20-8 26 0-6 8-17 8-26 0Z"
-      transform={`translate(${x} ${y}) rotate(${g})`}
-      fill={dam ? 'var(--color-decor-la-dam)' : 'var(--color-decor-la)'}
+      transform={`translate(${x} ${y}) rotate(${g}) scale(${s})`}
+      fill={mau ?? TONG_LA[t]}
     />
   );
 }
+
+/**
+ * Vị trí lá trên cành: [x, y, góc xoay, tông màu, cỡ].
+ *
+ * Liệt kê thẳng ra thay vì rải theo công thức, vì cành là một đường cong bậc ba và
+ * lấy điểm trên nó lúc render thì phải có DOM (`getPointAtLength`) — thứ không tồn
+ * tại khi trang dựng ở server. Bù lại, đặt tay thì chỉnh được từng chiếc cho tán
+ * dày thưa đúng ý.
+ *
+ * Bản trước chỉ có 8 chiếc và cành trông trụi. Ba tông màu xen kẽ chứ không một
+ * màu: cùng một màu thì 27 chiếc lá chồng nhau thành một vệt xanh liền, đông mà
+ * vẫn không thấy có lá.
+ *
+ * CHIẾC LÁ MỌC VỀ BÊN PHẢI CHỖ NÓ ĐƯỢC ĐẶT, dài chừng 26×cỡ đơn vị. Nên lá cuối
+ * cùng phải đặt ở x ≤ 300 − 26×cỡ, không thì nó bị mép trong khung xén dọc —
+ * đúng cái lỗi đã phải sửa. Ở đây lá xa nhất là x=280 cỡ 0.65, tới 297.
+ */
+const LA_TREN_CANH: Array<[number, number, number, 0 | 1 | 2, number]> = [
+  // Dọc cành chính, so le trên dưới.
+  [8, 52, -34, 0, 0.8],
+  [18, 62, 26, 1, 0.7],
+  [26, 48, -40, 1, 0.85],
+  [36, 60, 20, 0, 0.75],
+  [44, 46, -30, 2, 0.8],
+  [54, 56, 28, 1, 0.7],
+  [62, 42, -38, 1, 0.9],
+  [72, 52, 22, 0, 0.75],
+  [80, 38, -26, 2, 0.8],
+  [90, 48, 30, 1, 0.7],
+  [98, 34, -34, 0, 0.85],
+  [108, 44, 24, 1, 0.75],
+  [116, 30, -28, 2, 0.8],
+  [126, 40, 26, 0, 0.7],
+  [134, 26, -36, 1, 0.85],
+  [144, 36, 22, 1, 0.7],
+  [152, 22, -24, 2, 0.8],
+  [162, 32, 28, 0, 0.7],
+  [170, 18, -32, 1, 0.85],
+  [180, 28, 20, 1, 0.7],
+  [188, 16, -26, 2, 0.75],
+  // Nhánh con vươn lên.
+  [66, 40, -54, 0, 0.75],
+  [76, 30, -48, 1, 0.8],
+  [86, 22, -42, 2, 0.7],
+  [94, 14, -50, 1, 0.75],
+  // Nhánh con rủ xuống.
+  [100, 52, 44, 0, 0.75],
+  [110, 62, 40, 1, 0.8],
+  [120, 70, 36, 1, 0.7],
+  [128, 78, 42, 2, 0.75],
+  // Khúc ngọn vẽ thêm khi khung nới từ 200 lên 300 đơn vị. Vẫn so le trên dưới,
+  // và cỡ nhỏ dần ra ngoài ngọn — cành thon lại thì lá cũng phải nhỏ theo.
+  [198, 26, 24, 1, 0.75],
+  [206, 14, -30, 0, 0.8],
+  [216, 25, 22, 2, 0.7],
+  [224, 13, -28, 1, 0.8],
+  [234, 24, 26, 0, 0.7],
+  [242, 12, -26, 2, 0.75],
+  [252, 23, 24, 1, 0.7],
+  [260, 11, -30, 0, 0.75],
+  [270, 22, 22, 2, 0.7],
+  [276, 10, -26, 1, 0.7],
+  [280, 20, 24, 0, 0.65],
+  // Nhánh con vươn lên ở khúc ngọn.
+  [218, 20, -48, 1, 0.7],
+  [228, 13, -44, 2, 0.75],
+  [238, 8, -40, 0, 0.7],
+  [246, 6, -46, 1, 0.7],
+  // Nhánh con rủ xuống ở khúc ngọn, mang quả.
+  [240, 30, 42, 0, 0.7],
+  [248, 38, 40, 1, 0.75],
+  [256, 44, 38, 2, 0.7],
+];
 
 /** Quả táo treo dưới cành: cuống, quả, một vệt sáng và một chiếc lá con. */
 function Tao({ x, y }: { x: number; y: number }) {
@@ -184,6 +349,33 @@ function Tao({ x, y }: { x: number; y: number }) {
 }
 
 /**
+ * Quả táo trên cành: [x, độ cao CHỖ DÍNH vào cành, chiều dài cuống tới tâm quả].
+ *
+ * Ghi bằng chỗ dính chứ không bằng tâm quả, và đây là chỗ đã làm sai một lần. Hồi
+ * `ru` còn lật cả thẻ <svg>, quả lật theo thành ra dựng ngược lên trời với cái
+ * cuống chĩa xuống đất. Ai nhìn cũng thấy sai ngay, không cần biết gì về cây: quả
+ * chín thì trĩu xuống, đó là trọng lực chứ không phải một lựa chọn vẽ.
+ *
+ * Tách làm hai số thì cả hai chiều cành đều đúng: chỗ dính soi gương theo cành,
+ * còn quả luôn treo xuống khỏi chỗ đó đúng một đoạn cuống.
+ */
+const TAO_TREN_CANH: Array<[number, number, number]> = [
+  [46, 55, 23], // trên thân cành chính
+  [132, 74, 14], // ở ngọn nhánh con rủ xuống
+  [176, 27, 21], // trên thân cành, khúc đã thon
+  [262, 48, 16], // ở ngọn nhánh con thứ tư
+];
+
+/** Hoa trên cành: [x, độ cao, màu]. Cũng soi gương chỗ đứng nhưng không lật hoa. */
+const HOA_TREN_CANH: Array<[number, number, string]> = [
+  [70, 30, 'var(--color-decor-hoa-hong)'],
+  [140, 26, 'var(--color-decor-hoa-hong)'],
+  [112, 62, 'var(--color-decor-hoa-vang)'],
+  [204, 32, 'var(--color-decor-hoa-vang)'],
+  [238, 16, 'var(--color-decor-hoa-hong)'],
+];
+
+/**
  * CÀNH có hoa và táo mọc ngang ra từ mép màn hình.
  *
  * Vẽ cho mép TRÁI; bên phải dùng lại chính nó rồi lật bằng `scaleX(-1)` chứ không
@@ -194,22 +386,58 @@ function Tao({ x, y }: { x: number; y: number }) {
  * đúng ở x=0, tức đúng chỗ cành dính vào mép, nên nó đu quanh gốc như gió thổi chứ
  * không quay quanh giữa chùm lá như một cái chong chóng.
  *
- * Khung 200×110 — DÀI và THẤP, cố ý. Cành phải rộng bằng cả bên lề, mà lề trên màn
+ * Khung 300×112 — DÀI và THẤP, cố ý. Cành phải rộng bằng cả bên lề, mà lề trên màn
  * 1920 rộng gần 450px; khung vuông thì cành cũng cao ngần ấy và ba cành chồng lên
  * nhau. Dài ngang thì nới rộng bao nhiêu cũng không đội cao lên.
+ *
+ * Cành chính là BA khúc cong nối nhau, không phải hai: khúc thứ ba (194 → 292) là
+ * phần vẽ thêm khi khung nới ra 300 đơn vị, và nó phải nối TIẾP TUYẾN với khúc
+ * trước — điểm điều khiển đầu của nó nằm trên đường thẳng kéo dài từ điểm điều
+ * khiển cuối của khúc trước, không thì chỗ nối gãy một góc nhìn ra ngay.
  */
-function Canh({ delay = 0 }: { delay?: number }) {
+function Canh({ delay = 0, ru = false }: { delay?: number; ru?: boolean }) {
+  // Soi gương một độ cao qua trục y=45, tức chính giữa khung `0 -13 300 116`:
+  // đúng trục đó thì −13 hoá 103 và 103 hoá −13, cành lật xong vẫn vừa khít khung.
+  const guong = (y: number) => (ru ? 90 - y : y);
   return (
     <g className="kg-dua-canh" style={{ animationDelay: `${delay}s` }}>
-      {/* Cành chính, thon dần ra đầu ngọn. */}
+      {/* Thân, nhánh và lá — lật được cả nhóm, vì lá nằm kiểu nào cũng ra lá. */}
+      <g transform={ru ? 'translate(0 90) scale(1 -1)' : undefined}>
+      {/*
+        Cành chính, thon dần ra đầu ngọn — BA nét chồng nhau, không phải một.
+        Một nét `stroke` thì dày đều từ gốc ra ngọn, và trước đây ngọn cụt ngang
+        bằng gốc; cành dài tới 292 đơn vị rồi thì cái đầu cụt ấy chỉa thẳng vào
+        nội dung, nhìn ra ngay. SVG không có nét dày thay đổi được, nên cắt thành
+        ba khúc 9 → 7 → 5.
+
+        Ba khúc phải CHỒNG LÊN NHAU vài đơn vị và cùng nằm trên một đường cong.
+        Chồng thì đầu tròn của khúc mảnh lọt vào trong khúc dày, chỗ nối chỉ còn
+        một cái vai lượn 1 đơn vị; hở ra là thành ba đoạn cành rời.
+      */}
       <path
-        d="M0 60C36 58 74 50 108 40 136 32 164 27 194 25"
+        d="M0 60C36 58 74 50 108 40 136 32 164 27 194 25 202 24.5 210 23.9 218 23.3"
         stroke="var(--color-decor-than)"
         strokeWidth="9"
         strokeLinecap="round"
         fill="none"
       />
-      {/* Hai nhánh con: một vươn lên, một rủ xuống mang táo. */}
+      <path
+        d="M214 23.6C230 22.5 246 21.3 262 20.1"
+        stroke="var(--color-decor-than)"
+        strokeWidth="7"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M258 20.4C272 19.5 282 18.9 294 18.2"
+        stroke="var(--color-decor-than)"
+        strokeWidth="5"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Bốn nhánh con, xen kẽ lên xuống dọc thân cành. Hai cái ngoài ngọn mảnh
+          hơn hai cái trong gốc, vì nhánh mọc ở khúc cành đã thon thì không thể to
+          bằng nhánh mọc ở khúc gốc. */}
       <path
         d="M62 54C74 40 88 31 104 25"
         stroke="var(--color-decor-than)"
@@ -224,23 +452,41 @@ function Canh({ delay = 0 }: { delay?: number }) {
         strokeLinecap="round"
         fill="none"
       />
+      <path
+        d="M212 24C224 14 238 8 252 5"
+        stroke="var(--color-decor-than)"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M232 22C240 34 250 42 262 48"
+        stroke="var(--color-decor-than)"
+        strokeWidth="4"
+        strokeLinecap="round"
+        fill="none"
+      />
 
-      <La x={26} y={48} g={-24} dam />
-      <La x={54} y={38} g={-38} />
-      <La x={78} y={30} g={-18} dam />
-      <La x={116} y={22} g={-26} />
-      <La x={150} y={16} g={-14} dam />
-      <La x={104} y={52} g={38} />
-      <La x={40} y={64} g={22} />
-      <La x={168} y={30} g={26} />
+      {LA_TREN_CANH.map(([lx, ly, g, t, s], i) => (
+        <La key={i} x={lx} y={ly} g={g} t={t} s={s} />
+      ))}
+      </g>
 
-      <Hoa x={70} y={30} mau="var(--color-decor-hoa-hong)" />
-      <Hoa x={140} y={26} mau="var(--color-decor-hoa-hong)" />
-      <Hoa x={112} y={62} mau="var(--color-decor-hoa-vang)" />
+      {/*
+        HOA VÀ QUẢ NẰM NGOÀI NHÓM LẬT. Chúng có chiều đúng - sai, thân với lá thì
+        không: lá nằm kiểu nào cũng ra lá, còn quả táo lật ngược là quả dựng đứng
+        với cái cuống chĩa xuống đất, và hoa lật ngược là hoa nở úp mặt xuống.
 
-      <Tao x={46} y={78} />
-      <Tao x={134} y={88} />
-      <Tao x={176} y={48} />
+        Nên chỗ DÍNH vào cành thì soi gương theo cành (`guong`), còn bản thân bông
+        hoa với quả táo thì vẽ đứng nguyên chiều. Quả luôn treo XUỐNG khỏi chỗ dính
+        một đoạn cuống, dù cành chĩa lên hay rủ xuống.
+      */}
+      {HOA_TREN_CANH.map(([hx, hy, mau], i) => (
+        <Hoa key={i} x={hx} y={guong(hy)} mau={mau} />
+      ))}
+      {TAO_TREN_CANH.map(([tx, yGan, dai], i) => (
+        <Tao key={i} x={tx} y={guong(yGan) + dai} />
+      ))}
     </g>
   );
 }
@@ -252,21 +498,44 @@ function Canh({ delay = 0 }: { delay?: number }) {
  * `max-w-5xl` = 64rem. Chốt cứng theo pixel thì trên màn rộng cành chỉ chiếm một
  * góc và bên lề lại trơ ra — đúng cái đã phải sửa.
  *
- * Có TRẦN 300px: màn siêu rộng thì lề lên tới 450px+, mà cành phóng to theo là chữ
- * "hoa" với "táo" to bằng nắm tay, kéo mắt hẳn khỏi nội dung.
+ * viewBox bắt đầu ở y = −13 chứ không phải 0: chiếc lá ngả lên cao nhất trên nhánh
+ * ngọn nhô lên trên đường cành 10 đơn vị, và khung bắt đầu đúng ở 0 thì nó bị cắt
+ * cụt đỉnh. Con số 13 là đo ra rồi chừa thêm 3, không phải chừa cho chắc.
+ *
+ * `ru` cho ra cành RỦ XUỐNG. Cành vẽ ra là cành chĩa lên — gốc ở y=60 rồi vươn lên
+ * 18 ở ngọn. Bảy cành cùng chĩa lên xếp thành một chồng thì ra cái lược, không ra
+ * tán cây. Cành rủ lại là cành thật: cành nào trĩu quả thì nó cong xuống. Xen kẽ
+ * lên xuống thì bảy cành đọc ra là bảy cành.
+ *
+ * Việc lật làm BÊN TRONG `Canh`, không phải bằng `-scale-y-100` ở thẻ <svg> này —
+ * lật cả thẻ là lật luôn quả táo với bông hoa, mà hai thứ đó có chiều đúng - sai.
  */
-function CanhVien({ ben, top, delay }: { ben: 'trai' | 'phai'; top: string; delay: number }) {
+function CanhVien({
+  ben,
+  top,
+  delay,
+  co = 1,
+  ru = false,
+}: {
+  ben: 'trai' | 'phai';
+  top: string;
+  delay: number;
+  co?: number;
+  ru?: boolean;
+}) {
   return (
     <svg
-      viewBox="0 0 200 110"
-      style={{ top }}
-      className={`absolute w-[min(calc((100vw-64rem)/2),300px)] ${
-        ben === 'trai' ? 'left-0' : 'right-0 -scale-x-100'
-      }`}
+      viewBox="0 -13 300 116"
+      // Bề rộng đặt thẳng bằng style chứ không dùng RONG_LE: `co` là một con số
+      // chạy, mà Tailwind sinh class lúc BIÊN DỊCH — `w-[calc(...*${co})]` thì
+      // class ấy không tồn tại và cành mất tăm. Cùng công thức với RONG_LE, chỉ
+      // nhân thêm `co`.
+      style={{ top, width: `calc(min((100vw - 64rem) / 2, 32rem) * ${co})` }}
+      className={`absolute ${ben === 'trai' ? 'left-0' : 'right-0 -scale-x-100'}`}
       fill="none"
       focusable="false"
     >
-      <Canh delay={delay} />
+      <Canh delay={delay} ru={ru} />
     </svg>
   );
 }
@@ -289,21 +558,24 @@ export function SiteDecor() {
       className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden xl:block"
     >
       {/*
-        Cành mọc ra từ hai mép, rải theo chiều cao.
-        Đặt bằng phần trăm chứ không phải pixel: màn hình cao thấp khác nhau, mà
-        chốt cứng theo pixel thì trên màn 1080 các cành dồn hết lên nửa trên và
-        nửa dưới trơ ra.
-        Hai bên lệch độ cao nhau (26/50/72 với 34/58/78) — trùng nhau là hai mép
-        thành một cặp ngoặc đơn chứ không ra hàng cây.
-      */}
-      <CanhVien ben="trai" top="24%" delay={0} />
-      <CanhVien ben="trai" top="46%" delay={-3} />
-      <CanhVien ben="phai" top="32%" delay={-1.5} />
-      <CanhVien ben="phai" top="54%" delay={-4.5} />
+        THỨ TỰ TRONG KHỐI NÀY LÀ THỨ TỰ XA GẦN, đừng đảo: trời trước, rồi mặt đất,
+        rồi cành. SVG vẽ theo thứ tự trong DOM nên cái sau nằm trên cái trước, tức
+        là mây với mặt trời ở xa nhất, đồi và cây ở giữa, cành sát mặt người xem
+        nhất.
 
-      {/* --- Trời, góc trên bên phải --- */}
+        Bản trước xếp cành LÊN ĐẦU và cả hai chuyện sai đều từ đó: cành nào hạ thấp
+        quá là bị quả đồi che mất một khúc, nên không dám xếp cành xuống dưới 47%;
+        còn đám mây thì nổi lên trước chùm lá, mây bay trước cành cây. Đưa cành ra
+        sau cùng thì cành thành lớp tiền cảnh thật — hạ xuống 56% vẫn thấy nguyên
+        vì nó vắt qua trước tán cây, và chính chỗ đó mới là chỗ để thêm cành.
+      */}
+
+      {/* --- Trời, góc trên bên phải ---
+             viewBox chừa 8 đơn vị phía trên: tia nắng thẳng đứng vươn tới y=−3 và
+             nét vẽ dày 6 nên nó chạm −6. Khung bắt đầu ở 0 thì tia trên cùng bị
+             cắt bằng đầu, mặt trời hoá ra thiếu một tia. --- */}
       <svg
-        viewBox="0 0 120 150"
+        viewBox="0 -8 120 152"
         className="absolute right-1 top-24 w-24 2xl:right-6 2xl:w-32"
         fill="none"
         focusable="false"
@@ -369,46 +641,138 @@ export function SiteDecor() {
 
       {/* --- Mặt đất bên trái: đồi, một cây tán rộng, bụi cỏ, hoa --- */}
       <svg
-        viewBox="0 0 200 230"
-        className="absolute bottom-0 left-0 w-[min(calc((100vw-64rem)/2),300px)]"
+        viewBox="0 0 300 290"
+        className={`absolute bottom-0 left-0 ${RONG_LE}`}
         fill="none"
         focusable="false"
       >
-        {/* Đồi vẽ TRƯỚC để nằm sau cây. Bo tròn rộng hơn khung để hai mép không
-            thành hai đầu cụt lơ lửng. */}
-        <ellipse cx="80" cy="248" rx="170" ry="66" fill="var(--color-decor-doi)" />
         {/*
-          MỘT cây thôi, không phải hai.
-          Bên lề chỉ rộng vài trăm pixel; nhét hai cây vào là hai cái đều bé lại và
-          không cái nào ra hình. Một cây tán rộng chiếm trọn bề ngang thì mới có chỗ
-          cho ba lớp lá và bộ nhánh — tức là mới ra cái cây trong ảnh mẫu.
+          Đồi là một đường XUÔI XUỐNG, không phải hình elip.
+          Elip thì mép trong của nó bị khung SVG cắt phăng thành một nhát thẳng
+          đứng giữa trang — nhìn ra ngay là hình bị xén. Vẽ thành sườn đồi tự hạ
+          xuống chạm đáy ở phía trong thì không còn chỗ nào để cắt: đất kết thúc
+          vì nó thoải hết, chứ không vì hết khung.
+
+          Sườn phải CHẠM ĐÁY ĐÚNG Ở GÓC (300, 290), không phải ở đơn vị 208 như
+          bản trước — dừng sớm thì phần thừa bị xén thành một nhát dọc cao chừng
+          25px, mà đó chính là chỗ mắt đang nhìn vì nó nằm ngay cạnh nội dung.
+
+          Đầu ngoài chạy quá mép (−10) cho cạnh sát mép màn hình cũng không lộ
+          vết cắt; chỗ đó tràn ra được vì nó nằm ngoài tầm mắt.
         */}
-        <Cay x={96} y={214} s={0.94} delay={0} />
-        <circle cx="16" cy="212" r="14" fill="var(--color-decor-co)" />
-        <circle cx="184" cy="218" r="12" fill="var(--color-decor-co)" />
-        <Hoa x={40} y={218} mau="var(--color-decor-hoa-hong)" />
-        <Hoa x={58} y={224} mau="var(--color-decor-hoa-vang)" />
-        <Hoa x={158} y={222} mau="var(--color-decor-hoa-hong)" />
+        <path
+          d="M-10 290V222c54-26 128-28 186-6 58 22 92 46 124 74Z"
+          fill="var(--color-decor-doi)"
+        />
+        {/*
+          BA cây, và thứ tự vẽ là một phần của hình.
+          Hồi khung còn 200 đơn vị thì ở đây chỉ vẽ được một cây: nhét hai cái vào
+          là cả hai đều bé lại và không cái nào ra hình. Khung 300 đơn vị đổi hẳn
+          chuyện đó — cây to chiếm 14 tới 206, còn lại cả khúc sườn thoải phía
+          trong bỏ không.
+
+          BA LUẬT khi thêm cây, sai một cái là ra rừng cây dán chồng lên nhau:
+
+          1. Cây NHỎ vẽ TRƯỚC, cây to vẽ SAU. Tán có chồng nhau thì cây to phải
+             che cây nhỏ; đảo lại là cây con nổi lên trên cây lớn, mắt đọc ra ngay
+             là hình sai mà không chỉ được sai ở đâu.
+          2. Cây càng nhỏ thì gốc càng CAO trên sườn — nhỏ và ở xa đi cùng nhau.
+             Cây bé mà gốc thấp hơn cây lớn thì nó thành cây gần mà lại tí xíu.
+          3. Gốc phải LÚN vào sườn đồi chừng mươi đơn vị. Đặt đúng trên đường viền
+             đồi thì cây như dán lên, mà lún sâu quá thì thành cây đứng trước đồi.
+
+          Cỡ 0.32 / 0.4 / 0.6 / 0.94 — chênh nhau hẳn một bậc. Bốn cây xấp xỉ cỡ
+          nhau thì không ra bụi cây, chỉ ra một cây bị nhân bản bốn lần.
+
+          BỐN cây bên này, bên phải chỉ HAI. Số lượng lệch nhau là chủ ý: hai bên
+          bằng nhau thì thành ảnh soi gương, mà cảnh soi gương thì đọc ra là hoa
+          văn viền trang chứ không phải một khung cảnh.
+        */}
+        <Cay x={44} y={214} s={0.4} delay={-5} lat />
+        <Cay x={262} y={268} s={0.32} delay={-7} />
+        <Cay x={206} y={236} s={0.6} delay={-2.5} />
+        <Cay x={110} y={215} s={0.94} delay={0} />
+        <circle cx="20" cy="262" r="15" fill="var(--color-decor-co)" />
+        <circle cx="176" cy="268" r="12" fill="var(--color-decor-co)" />
+        <Hoa x={48} y={268} mau="var(--color-decor-hoa-hong)" />
+        <Hoa x={70} y={274} mau="var(--color-decor-hoa-vang)" />
+        <Hoa x={152} y={272} mau="var(--color-decor-hoa-hong)" />
+        {/* Khúc sườn thoải phía trong, chỗ trước đây là dải trống. Bụi cỏ nhỏ dần
+            và hoa thưa dần ra mép trong: đất hết thì cảnh cũng phải nhạt dần đi
+            chứ không đứt đột ngột. */}
+        <circle cx="236" cy="252" r="13" fill="var(--color-decor-co)" />
+        {/* Bụi cỏ này trước ở x=272, đúng chỗ cây nhỏ thứ tư giờ đứng. Dời ra 292
+            cho nó đừng mọc chồm lên gốc cây. */}
+        <circle cx="292" cy="282" r="8" fill="var(--color-decor-co)" />
+        <Hoa x={252} y={258} mau="var(--color-decor-hoa-vang)" />
+        <Hoa x={282} y={282} mau="var(--color-decor-hoa-hong)" />
       </svg>
 
       {/* --- Mặt đất bên phải. Khác cỡ, khác dáng, khác thứ tự cây: hai bên đối
              xứng y hệt thì thành ảnh soi gương chứ không ra khung cảnh. --- */}
       <svg
-        viewBox="0 0 200 230"
-        className="absolute bottom-0 right-0 w-[min(calc((100vw-64rem)/2),300px)]"
+        viewBox="0 0 300 290"
+        className={`absolute bottom-0 right-0 ${RONG_LE}`}
         fill="none"
         focusable="false"
       >
-        <ellipse cx="120" cy="248" rx="170" ry="62" fill="var(--color-decor-doi)" />
-        {/* Nhỏ hơn bên trái một chút và lệch chỗ đứng: hai bên bằng nhau y hệt thì
-            thành ảnh soi gương chứ không ra khung cảnh. */}
-        <Cay x={108} y={218} s={0.87} delay={-4} />
-        <circle cx="188" cy="214" r="13" fill="var(--color-decor-co)" />
-        <circle cx="14" cy="220" r="11" fill="var(--color-decor-co)" />
-        <Hoa x={44} y={224} mau="var(--color-decor-hoa-vang)" />
-        <Hoa x={168} y={220} mau="var(--color-decor-hoa-hong)" />
-        <Hoa x={30} y={216} mau="var(--color-decor-hoa-vang)" />
+        {/* Cùng một quả đồi, lật lại: sườn cao ở mép NGOÀI (bên phải) và thoải
+            xuống chạm đáy đúng ở góc (0, 290) phía nội dung. */}
+        <path
+          d="M310 290V218c-54-26-128-28-186-6-58 22-92 48-124 78Z"
+          fill="var(--color-decor-doi)"
+        />
+        {/* HAI cây thôi, bên trái bốn — xem ghi chú bên đó về luật thứ tự vẽ.
+            Bên này thưa nên bù bằng bốn cành ở trên, và cây to cũng nhỏ hơn bên
+            kia (0.87 so với 0.94). Cây to lật, cây vừa không: hai cái cạnh nhau
+            mà cùng dáng thì lộ ra là một hình dùng hai lần. */}
+        <Cay x={78} y={242} s={0.55} delay={-1} />
+        <Cay x={190} y={220} s={0.87} delay={-4} lat />
+        <circle cx="284" cy="262" r="14" fill="var(--color-decor-co)" />
+        <circle cx="118" cy="268" r="11" fill="var(--color-decor-co)" />
+        <Hoa x={250} y={270} mau="var(--color-decor-hoa-vang)" />
+        <Hoa x={228} y={276} mau="var(--color-decor-hoa-hong)" />
+        <Hoa x={142} y={272} mau="var(--color-decor-hoa-vang)" />
+        {/* Khúc sườn thoải phía trong — bên này là phía TRÁI của hình. */}
+        <circle cx="64" cy="250" r="12" fill="var(--color-decor-co)" />
+        <circle cx="30" cy="272" r="10" fill="var(--color-decor-co)" />
+        <Hoa x={48} y={258} mau="var(--color-decor-hoa-hong)" />
+        <Hoa x={20} y={280} mau="var(--color-decor-hoa-vang)" />
       </svg>
+
+      {/*
+        Cành mọc ra từ hai mép, rải theo chiều cao — LỚP GẦN NHẤT, nên vẽ sau cùng.
+
+        Đặt bằng phần trăm chứ không phải pixel: màn hình cao thấp khác nhau, mà
+        chốt cứng theo pixel thì trên màn 1080 các cành dồn hết lên nửa trên và
+        nửa dưới trơ ra.
+
+        HAI BÊN KHÁC NHAU MỌI ĐƯỜNG — khác số cành, khác độ cao, khác cỡ, khác
+        chiều lật. Bằng nhau y hệt thì hai mép thành một cặp ngoặc đơn đóng lấy
+        nội dung chứ không ra khung cảnh.
+
+        Bên nào nhiều CÂY thì ít CÀNH: bên trái đã có 4 cây nên nặng ở dưới, để
+        3 cành; bên phải 2 cây nên bù bằng 4 cành. Cả hai bên đều rậm thì mắt bị
+        kéo hẳn ra khỏi nội dung — trang trí đầy chỗ trống là việc của nó, giành
+        chỗ với nội dung thì không.
+
+        CÀNH BÊN PHẢI KHÔNG CÁI NÀO LÊN TRÊN 26%. Mặt trời (và vầng trăng ban đêm)
+        nằm ở góc trên bên phải, khoảng 96–256px; cành giờ là lớp gần nhất nên đặt
+        cành lên đó là lá phủ kín mặt trời, mất luôn cái cảnh ngày đổi thành đêm.
+        Bên trái không có ràng buộc đó, chỉ có mấy đám mây nhạt, cành vắt qua mây
+        thì lại đúng — mây ở xa.
+
+        Cỡ 0.7 / 0.8 / 0.95 / 1 xen nhau: bốn cành cùng cỡ xếp dọc một mép thì ra
+        cái lược. Cành nhỏ đọc ra là cành ở xa, và nó vừa đủ nhét vào khoảng giữa
+        hai cành lớn.
+      */}
+      <CanhVien ben="trai" top="8%" delay={0} co={0.7} ru />
+      <CanhVien ben="trai" top="24%" delay={-3} />
+      <CanhVien ben="trai" top="44%" delay={-6} co={0.85} />
+      <CanhVien ben="phai" top="26%" delay={-1.5} />
+      <CanhVien ben="phai" top="38%" delay={-4.5} co={0.7} ru />
+      <CanhVien ben="phai" top="50%" delay={-7.5} co={0.95} />
+      <CanhVien ben="phai" top="64%" delay={-2.2} co={0.8} ru />
     </div>
   );
 }
