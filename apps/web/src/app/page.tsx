@@ -63,7 +63,13 @@ export default async function HomePage({
       where,
       orderBy: { createdAt: 'desc' },
       take: PAGE_SIZE,
-      include: { child: { select: { displayName: true } } },
+      include: {
+        child: { select: { displayName: true } },
+        // Nhãn loại để hiện trên thẻ game. `take: 1` vì thẻ chỉ hiện nhãn đầu
+        // tiên — xem `NhanLoai` trong `game-card.tsx`; lấy cả hai rồi bỏ một cái
+        // là bắt Postgres làm việc không ai dùng, trên mọi lần tải trang chủ.
+        tags: { take: 1, include: { tag: { select: { label: true } } } },
+      },
     }),
   ]);
 
@@ -241,6 +247,7 @@ export default async function HomePage({
                 authorName: game.child.displayName,
                 thumbUrl: objectUrl('thumb', game.thumbSha256),
                 playCount: game.playCount,
+                tagLabels: game.tags.map((t) => t.tag.label),
               }}
             />
           ))}
