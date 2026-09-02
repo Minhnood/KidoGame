@@ -2,8 +2,9 @@
 
 Nền tảng để trẻ em đăng tải và chia sẻ game Scratch.
 
-Trẻ upload file `.sb3`, server kiểm tra rồi đóng gói thành HTML standalone và
-phục vụ nó trên **một origin riêng, trong iframe sandbox**.
+Trẻ upload file `.sb3`, server kiểm tra rồi đóng gói thành HTML và phục vụ nó trên
+**một origin riêng, trong iframe sandbox**. Runtime scratch-vm nằm ở một file dùng
+chung cho mọi game — xem "Cân nặng".
 
 ## Chạy ở máy local
 
@@ -52,7 +53,7 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                     # 44 kiểm tra
+SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                     # 51 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 58
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 43
@@ -876,6 +877,52 @@ devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoả
 | `apps/web/src/components` | Bộ component dùng chung (button, field, notice, card, file-picker) |
 | `infra` | Server tĩnh cho dev, Caddyfile + Dockerfile + compose + backup.sh cho production, script e2e |
 | `storage` | File theo địa chỉ nội dung: `sb3/`, `html/`, `thumb/` |
+
+## Cân nặng — runtime dùng chung, không nhúng vào từng game
+
+`@turbowarp/packager` nhúng nguyên bộ scratch-vm vào **từng** file HTML. Đo trên
+storage thật trước khi sửa: mọi game đều **1796 KB**, không phụ thuộc vào game, và
+`.sb3` của bé chỉ 1 KB. Trên 3G yếu (~400 kbps) là **~19 giây mỗi game** chỉ để tải.
+Cache đúng nên chơi **lại** game cũ là miễn phí — nhưng đổi sang game **khác** phải
+trả lại từ đầu, mà đó đúng là cách một đứa trẻ dùng trang này.
+
+`tachRuntime` trong [`packages/sb3/src/package.ts`](packages/sb3/src/package.ts) cắt
+khối script lớn nhất ra khỏi HTML sau khi đóng gói, lưu nó thành
+`/runtime/<sha256>.js` và thay bằng một thẻ `<script src>`. Khối đó **giống hệt từng
+byte** giữa các game, nên storage địa-chỉ-hoá-theo-nội-dung tự dedupe: một bản
+runtime cho toàn bộ site.
+
+Số đo sau khi sửa, qua chính `infra/Caddyfile`:
+
+| | Trước | Sau |
+|---|---|---|
+| HTML mỗi game | 1796 KB (930 KB gzip) | **55 KB (10.6 KB gzip)** |
+| Runtime | nhúng trong từng file | 1772 KB (936 KB gzip), **tải một lần** |
+| Game thứ hai trong cùng phiên | ~930 KB | **10.6 KB** |
+| Đĩa cho 1000 game | ~1.8 GB | ~55 MB + một runtime 1.7 MB |
+
+**Cái mất:** HTML không còn chạy độc lập một mình, tức không lưu về máy rồi mở
+offline bằng một cú nháy đúp. Lý lẽ bảo mật **không** dựa vào tính chất đó — nó dựa
+vào origin riêng, iframe sandbox và CSP, cả ba không đổi. Runtime nằm cùng origin nên
+`default-src 'self'` đã cho phép, không phải chọc lỗ CSP nào.
+
+**Bốn điều dễ làm hỏng:**
+
+1. **Đường dẫn nhúng KHÔNG kèm origin.** HTML là file tĩnh bất biến; nhúng
+   `http://127.0.0.1:3001` vào lúc đóng gói ở máy dev là file ấy hỏng trên
+   production, và hỏng im lặng — trang mở ra, khung game hiện, runtime 404.
+2. **Thẻ script không được có `defer`/`async`.** Không có hai thuộc tính đó thì
+   script ngoài chạy xong trước đoạn khởi động nội tuyến đứng sau nó. Thêm vào là
+   stage trắng, không phải một lỗi đọc được.
+3. **Không tìm thấy khối runtime thì NÉM lỗi**, không âm thầm trả HTML nguyên vẹn.
+   Nếu một bản packager mới đổi cách nhúng, cách hỏng im lặng là mọi game lại nặng
+   1.8 MB và không ai biết.
+4. **Game cũ phải `db:repackage`.** HTML là file tĩnh immutable, nên game đăng trước
+   bản này giữ nguyên file 1.8 MB mãi. Cột `Game.runtimeSha256` rỗng là dấu hiệu.
+
+`e2e-check` canh cả bốn, và có một phép kiểm đo **byte thật** khi mở game thứ hai
+trong cùng phiên — nếu runtime lặng lẽ quay vào HTML thì con số đó vọt lên và bộ kiểm
+đỏ.
 
 ## Biết khi web hỏng — lỗi vào DB của chính mình
 

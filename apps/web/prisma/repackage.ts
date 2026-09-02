@@ -26,7 +26,7 @@ async function main() {
 
   const games = await prisma.game.findMany({
     where: chiMot ? { id: chiMot } : {},
-    select: { id: true, title: true, sb3Sha256: true, htmlSha256: true },
+    select: { id: true, title: true, sb3Sha256: true, htmlSha256: true, runtimeSha256: true },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -60,7 +60,16 @@ async function main() {
         projectJson: norm.projectJson,
       });
 
-      if (out.sha256 === game.htmlSha256) {
+      /*
+       * Runtime ghi TRƯỚC khi cập nhật DB, và ghi cả khi HTML không đổi.
+       *
+       * Không đổi HTML mà thiếu file runtime là game trắng màn hình — thứ tự này
+       * bảo đảm không bao giờ có một khoảnh khắc nào DB trỏ tới một HTML mà file
+       * runtime của nó chưa nằm trên đĩa.
+       */
+      await putObject('runtime', out.runtime.sha256, out.runtime.js);
+
+      if (out.sha256 === game.htmlSha256 && out.runtime.sha256 === game.runtimeSha256) {
         nguyen++;
         continue;
       }
@@ -68,7 +77,11 @@ async function main() {
       await putObject('html', out.sha256, out.html);
       await prisma.game.update({
         where: { id: game.id },
-        data: { htmlSha256: out.sha256, usesMusic: out.usesMusic },
+        data: {
+          htmlSha256: out.sha256,
+          runtimeSha256: out.runtime.sha256,
+          usesMusic: out.usesMusic,
+        },
       });
       console.log(
         `  ✓ ${game.title}: ${game.htmlSha256.slice(0, 12)} -> ${out.sha256.slice(0, 12)}`,

@@ -297,6 +297,96 @@ check(
   }
 }
 
+/* ---------- Runtime tách riêng: cân nặng của sản phẩm ----------
+ *
+ * Packager nhúng nguyên bộ scratch-vm vào TỪNG file HTML, nên trước bản tách thì
+ * mọi game đều ~1800 KB — một đứa trẻ mở 5 game tải 5 lần cùng một thứ, ~19 giây
+ * mỗi game trên 3G yếu. Runtime giờ là một file dùng chung, cache vĩnh viễn.
+ *
+ * Mục này canh đúng cái hỏng IM LẶNG: nếu runtime lặng lẽ quay vào HTML, hoặc URL
+ * nhúng bị đổi thành có origin, hoặc cache-control mất `immutable` — thì mọi thứ
+ * vẫn chạy, chỉ là chậm lại gấp ba mươi lần và không ai biết.
+ */
+{
+  const htmlRes = await fetch(frameSrc);
+  const htmlText = await htmlRes.text();
+
+  check(
+    'HTML game nhẹ — runtime KHÔNG nằm trong file',
+    htmlText.length < 200_000,
+    `${(htmlText.length / 1024).toFixed(1)} KB`
+  );
+
+  const src = htmlText.match(/<script\s+src="([^"]+)"><\/script>/)?.[1] ?? '';
+  check(
+    'HTML trỏ tới runtime dùng chung',
+    /^\/runtime\/[0-9a-f]{2}\/[0-9a-f]{64}\.js$/.test(src),
+    src || '(không có thẻ script src nào)'
+  );
+
+  /*
+   * Đường dẫn phải tính từ gốc origin, KHÔNG kèm http://…
+   * HTML là file tĩnh bất biến: nhúng origin của máy dev vào là file ấy hỏng trên
+   * production, và hỏng im lặng — trang mở ra, khung game hiện, runtime 404.
+   */
+  check('Đường dẫn runtime không kèm origin', !/src="https?:\/\//.test(htmlText));
+
+  const rtRes = await fetch(`${PLAYER}${src}`, { method: 'HEAD' });
+  const rt = { status: rtRes.status, h: {} };
+  rtRes.headers.forEach((v, k) => {
+    rt.h[k] = v;
+  });
+  check('Runtime phát được từ player origin', rt.status === 200, `HTTP ${rt.status}`);
+  check(
+    // nosniff bật, nên sai Content-Type là trình duyệt từ chối chạy và stage trắng.
+    'Runtime trả về text/javascript',
+    /text\/javascript/i.test(rt.h['content-type'] ?? ''),
+    rt.h['content-type'] ?? '(thiếu)'
+  );
+  check(
+    'Runtime cache vĩnh viễn (immutable) — đây là điều làm game thứ hai gần như miễn phí',
+    /immutable/.test(rt.h['cache-control'] ?? ''),
+    rt.h['cache-control'] ?? '(thiếu)'
+  );
+
+  /*
+   * Phép kiểm quan trọng nhất của mục này: mở một game KHÁC trong cùng phiên và
+   * đếm byte thật tải về từ player origin. Runtime đã nằm trong cache nên tổng phải
+   * nhỏ; nếu ai đó làm runtime quay lại nằm trong HTML thì con số này vọt lên ~1800
+   * KB và dòng dưới đây đỏ.
+   */
+  const home = await context.newPage();
+  await home.goto(APP, { waitUntil: 'networkidle' });
+  const links = await home
+    .locator('[data-testid=game-card]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('href') ?? ''));
+  const other = links.find((h) => h && !frameSrc.includes(h.split('/').pop() ?? ''));
+  await home.close();
+
+  if (!other || links.length < 2) {
+    check('Có ít nhất hai game để đo hiệu quả của runtime dùng chung', false, `${links.length} game`);
+  } else {
+    const p2 = await context.newPage();
+    let bytes = 0;
+    p2.on('requestfinished', async (req) => {
+      try {
+        if (!req.url().startsWith(PLAYER)) return;
+        bytes += (await req.sizes()).responseBodySize;
+      } catch {
+        /* request bị huỷ lúc đóng trang — bỏ qua */
+      }
+    });
+    await p2.goto(`${APP}${other}`, { waitUntil: 'load' });
+    await p2.waitForTimeout(4000);
+    check(
+      'Game THỨ HAI trong cùng phiên không tải lại runtime',
+      bytes < 200_000,
+      `${(bytes / 1024).toFixed(1)} KB từ player origin`
+    );
+    await p2.close();
+  }
+}
+
 // ---------- Cách ly cookie ----------
 check(
   'Cookie phiên KHÔNG rò sang player origin',

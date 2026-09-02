@@ -68,7 +68,7 @@ export interface IngestInput {
 export interface IngestResult {
   gameId: string;
   warnings: { code: string; message: string }[];
-  /** Bao nhiêu file thật sự được ghi mới (0-3) — phần còn lại là dedupe. */
+  /** Bao nhiêu file thật sự được ghi mới (0-4) — phần còn lại là dedupe. */
   bytesWritten: number;
 }
 
@@ -117,11 +117,19 @@ export async function ingestGame(input: IngestInput): Promise<IngestResult> {
   const thumb = await renderThumbnail(entries, normalized.projectJson);
   const thumbSha = await sha256(thumb);
 
-  // 4. Ghi đĩa. Nội dung trùng thì tự dedupe.
+  /*
+   * 4. Ghi đĩa. Nội dung trùng thì tự dedupe.
+   *
+   * Runtime PHẢI ghi ở đây cùng lượt, dù nó gần như luôn đã có sẵn: HTML vừa đóng
+   * gói đã mang đường dẫn tới nó, nên nếu game vào DB mà file runtime chưa nằm trên
+   * đĩa thì game đó mở ra là stage trắng — và chỉ đúng game ĐẦU TIÊN sau mỗi lần
+   * nâng packager mới gặp, tức lỗi hiếm nhất và khó dựng lại nhất.
+   */
   const writes = await Promise.all([
     putObject('sb3', normalized.sha256, normalized.sb3),
     putObject('html', packaged.sha256, packaged.html),
     putObject('thumb', thumbSha, thumb),
+    putObject('runtime', packaged.runtime.sha256, packaged.runtime.js),
   ]);
 
   // 5. Ghi DB.
@@ -135,6 +143,7 @@ export async function ingestGame(input: IngestInput): Promise<IngestResult> {
       sb3Size: normalized.sb3.length,
       htmlSha256: packaged.sha256,
       thumbSha256: thumbSha,
+      runtimeSha256: packaged.runtime.sha256,
       usesMusic: packaged.usesMusic,
       // Sb3Warning[] -> Prisma Json. Cấu trúc do ta kiểm soát nên cast là an toàn.
       warnings: normalized.warnings as unknown as Prisma.InputJsonValue,

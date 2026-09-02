@@ -97,8 +97,25 @@
 		Access-Control-Allow-Origin "*"
 	}
 
+	# --- Runtime scratch-vm dùng chung cho mọi game -------------------------
+	# Tách khỏi HTML để một đứa trẻ mở nhiều game không tải lại 1.75 MB mỗi lần.
+	# Content-Type phải đúng: `nosniff` ở trên tắt việc trình duyệt tự đoán kiểu,
+	# nên sai kiểu là trình duyệt từ chối chạy và game ra stage trắng.
+	#
+	# KHÔNG mở CORS ở đây: file này chỉ được nạp bằng thẻ <script> từ HTML nằm
+	# trên chính origin này.
+	@runtime path /runtime/*
+	header @runtime {
+		Content-Type "text/javascript; charset=utf-8"
+	}
+
 	# Chỉ cho phép đúng dạng đường dẫn địa chỉ-hoá-theo-nội-dung, chặn mọi thứ khác.
-	@valid path_regexp ^/(sb3|html|thumb)/[0-9a-f]{2}/[0-9a-f]{64}\.(sb3|html|webp)$
+	#
+	# Ghép cặp thùng-với-đuôi thay vì hai nhóm rời nhau: bản trước cho phép mọi tổ
+	# hợp, tức `/html/<sha>.js` cũng là đường dẫn "hợp lệ" và nó nhận Content-Type
+	# `text/html` từ khối @html ở trên. Chưa có file nào như thế nên chưa hại, nhưng
+	# ràng buộc chặt hơn không tốn gì.
+	@valid path_regexp ^/(sb3/[0-9a-f]{2}/[0-9a-f]{64}\.sb3|html/[0-9a-f]{2}/[0-9a-f]{64}\.html|thumb/[0-9a-f]{2}/[0-9a-f]{64}\.webp|runtime/[0-9a-f]{2}/[0-9a-f]{64}\.js)$
 	handle @valid {
 		file_server
 	}

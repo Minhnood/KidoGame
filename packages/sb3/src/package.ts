@@ -39,14 +39,105 @@ interface PackagerModule {
 
 const pkg = (): PackagerModule => nodeRequire('@turbowarp/packager') as PackagerModule;
 
+export interface PackagedRuntime {
+  js: Buffer;
+  sha256: string;
+}
+
 export interface PackagedHtml {
   html: Buffer;
   sha256: string;
+  /**
+   * Runtime scratch-vm, đã TÁCH khỏi HTML.
+   *
+   * Giống hệt từng byte giữa mọi game (đã kiểm sha256 trên 3 project khác nhau),
+   * nên nó là một file dùng chung — xem `tachRuntime`.
+   */
+  runtime: PackagedRuntime;
   /** true nếu project dùng music -> runtime lớn hơn (3.8MB thay vì 1.8MB). */
   usesMusic: boolean;
   extensions: string[];
   /** Các nút cảm ứng đã nhúng. Rỗng nghĩa là game không dùng phím nào. */
   touchKeys: TouchKey[];
+}
+
+/**
+ * Đường dẫn công khai của runtime trên player origin.
+ *
+ * KHÔNG kèm origin, cố ý. HTML là file tĩnh bất biến, đóng gói một lần rồi phục vụ
+ * mãi — nhúng `http://127.0.0.1:3001` vào lúc đóng gói ở máy dev thì file ấy hỏng
+ * trên production, và hỏng theo kiểu tệ nhất: trang mở ra, khung game hiện, runtime
+ * không tải được, không lỗi nào nói vì sao. Đường dẫn từ gốc thì đúng ở mọi origin.
+ *
+ * Phải khớp với `objectPath`/`objectUrl` bên `apps/web/src/lib/storage.ts` — cùng
+ * một quy ước `<bucket>/<2 ký tự đầu>/<sha256><ext>`.
+ */
+export function runtimePath(sha256: string): string {
+  return `/runtime/${sha256.slice(0, 2)}/${sha256}.js`;
+}
+
+/**
+ * Ngưỡng để nhận ra khối script nào là runtime.
+ *
+ * Runtime đo được là ~1754 KB; khối lớn thứ hai là ~9 KB. Khoảng cách hai trăm lần
+ * nên ngưỡng 500 KB không thể chọn nhầm.
+ */
+const RUNTIME_MIN_BYTES = 500_000;
+
+/**
+ * Cắt runtime ra khỏi HTML, thay bằng một thẻ `<script src>` trỏ tới file dùng chung.
+ *
+ * VÌ SAO: packager nhúng nguyên bộ scratch-vm vào TỪNG file HTML. Đo trên storage
+ * thật: mọi game đều ~1800 KB, trong đó 1754 KB là khối script đầu tiên và khối ấy
+ * GIỐNG HỆT TỪNG BYTE giữa các game. Nghĩa là một đứa trẻ mở 5 game phải tải 5 lần
+ * cùng một thứ — ~19 giây mỗi game trên 3G yếu — và VPS giữ 1.79 MB cho mỗi game.
+ * Tách ra thì game thứ hai trở đi chỉ còn phần của riêng nó, và đĩa tự dedupe vì
+ * tên file là hash nội dung.
+ *
+ * CÁI MẤT: HTML không còn là một file chạy độc lập, tức không còn lưu về máy rồi mở
+ * offline bằng một cú nháy đúp. Lý lẽ bảo mật KHÔNG dựa vào tính chất đó — nó dựa
+ * vào origin riêng, iframe sandbox và CSP, cả ba đều không đổi. Runtime nằm cùng
+ * origin nên `default-src 'self'` đã cho phép, không phải chọc lỗ nào.
+ *
+ * NÉM LỖI KHI KHÔNG TÌM THẤY, không âm thầm trả HTML nguyên vẹn. Nếu một bản
+ * packager mới đổi cách nhúng thì cách hỏng im lặng là mọi game lại nặng 1.8 MB và
+ * KHÔNG AI BIẾT — đúng loại lỗi mà dự án này đã mất nhiều thời gian nhất để tìm.
+ */
+function tachRuntime(html: string): { html: string; runtime: string; runtimeSha256: string } {
+  let best: { open: number; close: number; body: string } | null = null;
+
+  const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/g;
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) {
+    // Thẻ đã có `src` thì không phải khối nhúng.
+    if (/\bsrc\s*=/.test(m[1])) continue;
+    if (!best || m[2].length > best.body.length) {
+      best = { open: m.index, close: m.index + m[0].length, body: m[2] };
+    }
+  }
+
+  if (!best || best.body.length < RUNTIME_MIN_BYTES) {
+    throw new Sb3Error(
+      'PACKAGE_FAILED',
+      'Không đóng gói được game này.',
+      `không tìm thấy khối runtime để tách (khối lớn nhất ${best?.body.length ?? 0} byte, cần ít nhất ${RUNTIME_MIN_BYTES}). Bản @turbowarp/packager có thể đã đổi cách nhúng runtime.`
+    );
+  }
+
+  const sha256 = crypto.createHash('sha256').update(best.body, 'utf8').digest('hex');
+
+  /*
+   * KHÔNG `async`, KHÔNG `defer`. Script ngoài không mang hai thuộc tính đó thì chặn
+   * bộ phân tích và chạy xong trước script nội tuyến đứng sau nó — giữ đúng thứ tự
+   * mà bản nhúng đang có. Thêm `defer` vào là runtime chạy SAU đoạn khởi động, và
+   * biểu hiện là stage trắng chứ không phải một lỗi đọc được.
+   */
+  const the = `<script src="${runtimePath(sha256)}"></script>`;
+
+  return {
+    html: html.slice(0, best.open) + the + html.slice(best.close),
+    runtime: best.body,
+    runtimeSha256: sha256,
+  };
 }
 
 export interface PackageOptions {
@@ -137,10 +228,22 @@ export async function packageToHtml(sb3: Buffer, opts: PackageOptions): Promise<
     throw new Sb3Error('PACKAGE_FAILED', 'Không đóng gói được game này.', (e as Error).message);
   }
 
-  const html = Buffer.from(out.data as ArrayBuffer);
+  const tach = tachRuntime(Buffer.from(out.data as ArrayBuffer).toString('utf8'));
+
+  const html = Buffer.from(tach.html, 'utf8');
+
   return {
     html,
     sha256: crypto.createHash('sha256').update(html).digest('hex'),
+    /*
+     * Hash của runtime lấy nguyên từ `tachRuntime`, KHÔNG tính lại ở đây. Đường dẫn
+     * nhúng trong HTML sinh từ con số đó, nên nó chỉ được có một nguồn — tính lại
+     * lần thứ hai là mở cửa cho HTML trỏ tới một file không tồn tại.
+     */
+    runtime: {
+      js: Buffer.from(tach.runtime, 'utf8'),
+      sha256: tach.runtimeSha256,
+    },
     usesMusic: project.analysis.usesMusic,
     extensions: project.analysis.extensions,
     touchKeys,

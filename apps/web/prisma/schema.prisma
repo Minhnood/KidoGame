@@ -143,11 +143,21 @@ model Game {
   title       String
   description String @default("")
 
-  /// Ba nội dung đều địa chỉ hoá theo nội dung — cùng sha256 thì dùng chung file.
+  /// Bốn nội dung đều địa chỉ hoá theo nội dung — cùng sha256 thì dùng chung file.
   sb3Sha256   String
   sb3Size     Int
   htmlSha256  String
   thumbSha256 String
+
+  /// Runtime scratch-vm mà HTML của game này trỏ tới, đã tách ra thành file riêng.
+  ///
+  /// Giống hệt nhau giữa mọi game đóng gói bởi cùng một bản packager, nên trên đĩa
+  /// nó chỉ có một bản. Lưu cột này KHÔNG để phục vụ — HTML tự mang đường dẫn — mà
+  /// để trả lời được câu "file runtime nào còn game nào dùng" lúc dọn đĩa sau này.
+  ///
+  /// Rỗng nghĩa là game đóng gói TRƯỚC bản tách runtime, tức HTML của nó vẫn nhúng
+  /// nguyên 1.75 MB. Chạy `db:repackage` để đưa nó sang bản mới.
+  runtimeSha256 String @default("")
 
   /// Mặc định PUBLISHED theo quyết định "public ngay".
   /// Đổi default sang HIDDEN là bật được chế độ duyệt-trước.
