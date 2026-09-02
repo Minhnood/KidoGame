@@ -14,3 +14,10 @@ infra/ssh/*
 dist/
 *.log
 *.tsbuildinfo
+# Ghi chú làm việc: bàn giao, trạng thái, kịch bản quay. Chúng ghi thẳng mật khẩu
+# tài khoản demo, email thật của người đang thử, và đường dẫn tuyệt đối trên máy
+# này — đúng loại thứ commit vào là nằm lại trong lịch sử git mãi. README.md và
+# infra/*.md là tài liệu cho người khác đọc, vẫn theo repo.
+BANGIAO*.md
+TODO.md
+KICHBAN-VIDEO.md
