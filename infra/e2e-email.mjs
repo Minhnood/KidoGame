@@ -284,6 +284,55 @@ if (resetLink) {
   await again.close();
 }
 
+/* ---------- Hộp thư dev: /dev/thu ----------
+ *
+ * Trang này bày lại chính những lá thư mà transport `console` in ra log, và tách sẵn
+ * link thành nút bấm được — để một CON NGƯỜI thử hoặc quay video được luồng "mở hòm
+ * thư rồi bấm link", thay vì phải mò trong log của Next.
+ *
+ * Bài này kiểm nó ở CUỐI, sau khi mọi luồng mail đã chạy, nên hộp thư chắc chắn có
+ * thư thật để soi.
+ */
+{
+  const ctx = await newSession();
+  const p = await ctx.newPage();
+  await p.goto(`${APP}/dev/thu`, { waitUntil: 'networkidle' });
+
+  check('Hộp thư dev mở được', p.url().includes('/dev/thu'), p.url());
+
+  const soThu = await p.locator('[data-testid=dev-mail]').count();
+  check('Hộp thư dev có thư của những luồng vừa chạy', soThu > 0, `${soThu} thư`);
+
+  const tieuDe = await p.locator('[data-testid=dev-mail-subject]').allInnerTexts();
+  check(
+    'Hộp thư dev hiện cả thư xác minh và thư đặt lại mật khẩu',
+    tieuDe.some((t) => /xác minh/i.test(t)) && tieuDe.some((t) => /mật khẩu/i.test(t)),
+    tieuDe.slice(0, 3).join(' · ')
+  );
+
+  /*
+   * Phép kiểm quan trọng nhất của mục này: link trong thư phải thành NÚT BẤM ĐƯỢC.
+   * Đó là cả lý do trang tồn tại — token dài, đọc bằng mắt rồi gõ lại là không thể.
+   */
+  const link = await p.locator('[data-testid=dev-mail-link]').first().getAttribute('href');
+  check(
+    'Link trong thư thành nút bấm được, và không dính dấu câu ở đuôi',
+    !!link && /^https?:\/\//.test(link) && !/[).,;:]$/.test(link),
+    link ?? '(không có link nào)'
+  );
+
+  // Dọn: nút xoá là thứ dùng trước mỗi lần quay lại từ đầu.
+  await p.locator('[data-testid=dev-mail-clear]').click();
+  await p.waitForTimeout(1200);
+  check(
+    'Nút xoá dọn sạch hộp thư dev',
+    (await p.locator('[data-testid=dev-mail]').count()) === 0,
+    await p.locator('[data-testid=dev-mail-total]').innerText()
+  );
+
+  await ctx.close();
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

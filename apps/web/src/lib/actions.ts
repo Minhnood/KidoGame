@@ -30,6 +30,7 @@ import {
 import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
 import { resolveAllErrors, setErrorResolved } from './error-log';
 import { rateKey, tooMany } from './rate-limit';
+import { xoaHopThuDev } from './mail';
 import { clientFingerprint, destroySession, getActor } from './session';
 import { prisma } from './db';
 
@@ -492,6 +493,28 @@ export async function adminSetErrorResolvedAction(
     await setErrorResolved(String(form.get('id') ?? ''), String(form.get('resolved')) === 'true');
   });
   revalidatePath('/admin/loi');
+  return state;
+}
+
+/**
+ * Dọn hộp thư dev.
+ *
+ * KHÔNG đòi admin, nhưng CÓ chốt production — đúng như trang `/dev/thu`: đường đi
+ * cần thử nhất là phụ huynh vừa đăng ký, chưa xác minh, chưa là gì cả. Còn chốt
+ * `NODE_ENV` là bắt buộc: một action là một điểm vào riêng, người ta gọi được nó mà
+ * không cần mở trang nào, nên `notFound()` bên trang không che cho nó.
+ */
+export async function xoaHopThuDevAction(
+  _prev: FormState,
+  _form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    if (process.env.NODE_ENV === 'production') {
+      throw new AuthError('Hộp thư dev không tồn tại ở môi trường này.');
+    }
+    xoaHopThuDev();
+  });
+  revalidatePath('/dev/thu');
   return state;
 }
 

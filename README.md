@@ -58,7 +58,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 58
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 43
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 17
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 12, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 26, không cần .sb3
 ```
@@ -605,6 +605,14 @@ curl -skI https://play.localhost/sb3/<xx>/<sha>.sb3
 
 ### Mail thật — điều kiện bắt buộc để mở cửa
 
+**Chỉ khi deploy thật.** Trên máy dev không cần nhà cung cấp mail nào: `sendMail`
+dùng transport `console`, in nguyên lá thư kèm link xác minh ra stdout, và trang
+`/dev/thu` bày lại đúng những lá thư đó thành một hộp thư bấm được — xem mục
+[Hộp thư dev](#hộp-thư-dev--devthu). Cả luồng xác minh email và quên mật khẩu chạy
+đủ, thử được, quay video được, không cần API key.
+
+Phần dưới đây là cho lúc đưa lên VPS thật.
+
 Từ khi bắt xác minh email, mail hỏng **chặn hẳn người dùng mới**: phụ huynh không
 xác minh được thì không tạo được tài khoản cho con, tức đứa trẻ không có gì để
 đăng game. Trước đó `RESEND_API_KEY` sai chỉ hỏng luồng quên mật khẩu; giờ nó
@@ -923,6 +931,35 @@ vào origin riêng, iframe sandbox và CSP, cả ba không đổi. Runtime nằm
 `e2e-check` canh cả bốn, và có một phép kiểm đo **byte thật** khi mở game thứ hai
 trong cùng phiên — nếu runtime lặng lẽ quay vào HTML thì con số đó vọt lên và bộ kiểm
 đỏ.
+
+## Hộp thư dev — `/dev/thu`
+
+Ở dev, `sendMail` không gửi ra Internet. Nó in nguyên lá thư kèm link xác minh ra
+stdout, và `/dev/thu` bày lại đúng những lá thư đó, **tách sẵn link thành nút bấm
+được**.
+
+Vì sao cần khi đã in ra log: log đủ cho bộ kiểm tự động (bốn bộ e2e đọc link từ đó),
+nhưng kém cho một *con người* đang thử hay đang quay video — link nằm lẫn giữa hàng
+nghìn dòng log của Next, mang token dài, và muốn bấm được thì phải mở terminal, tìm,
+bôi đen, copy, dán.
+
+- **Giữ trong RAM, không ghi đĩa, không vào DB.** Thư ở đây chứa token xác minh email
+  và token đặt lại mật khẩu; giữ trong bộ nhớ tiến trình là thứ tự nó biến mất. Ghi
+  ra file hay vào bảng là tạo một chỗ chứa token sống lâu hơn phiên làm việc, rồi có
+  người sao lưu nó đi. Đổi lại: mất khi restart, giữ tối đa 50 thư.
+- **`console.log` vẫn giữ nguyên**, không bị thay. Bốn bộ e2e đọc stdout, và tiến
+  trình khác không đọc được hộp thư trong RAM — bỏ dòng đó là 146 phép kiểm đổ ở bước
+  đầu.
+- **Hai lớp chặn ở production:** `notFound()` theo `NODE_ENV` trong trang, và hộp thư
+  chỉ được nạp bởi transport `console` — thứ không bao giờ chạy ở production. Server
+  action xoá hộp thư có chốt riêng, vì một action là một điểm vào riêng mà
+  `notFound()` của trang không che.
+- **Không đòi đăng nhập**, cố ý: đường cần thử nhất là phụ huynh vừa đăng ký và chưa
+  xác minh gì cả.
+
+`e2e-email.mjs` canh trang này ở năm phép kiểm cuối, trong đó phép quan trọng nhất là
+link phải thành `href` bấm được và **không dính dấu câu ở đuôi** — thư của dự án hay
+viết link ở cuối câu, và một dấu `.` dính vào URL cho ra 404 trông y như token hết hạn.
 
 ## Biết khi web hỏng — lỗi vào DB của chính mình
 

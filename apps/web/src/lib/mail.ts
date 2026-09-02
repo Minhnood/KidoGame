@@ -27,14 +27,63 @@ function mailFrom(): string {
   return process.env.MAIL_FROM ?? 'KidoGame <no-reply@kidogame.local>';
 }
 
+/** Một lá thư đã "gửi" ở môi trường dev, giữ để xem lại ở `/dev/thu`. */
+export interface ThuDaGui extends MailMessage {
+  /** Thời điểm gửi, để hộp thư xếp mới nhất trước. */
+  luc: Date;
+}
+
+/**
+ * Hộp thư giả của môi trường dev: giữ TRONG BỘ NHỚ, không ghi đĩa, không vào DB.
+ *
+ * VÌ SAO CẦN. Transport `console` in nguyên lá thư kèm link xác minh ra stdout, và
+ * điều đó đủ cho bộ kiểm tự động — chúng đọc log. Nhưng để một người XEM thì nó
+ * kém: link nằm lẫn trong hàng nghìn dòng log của Next, và muốn bấm được thì phải
+ * mở terminal, tìm, bôi đen, copy. `/dev/thu` bày đúng những lá thư đó thành một
+ * hộp thư bấm được.
+ *
+ * VÌ SAO KHÔNG GHI RA ĐĨA HAY VÀO DB, dù cả hai đều tiện hơn (thư sống qua restart):
+ * lá thư ở đây chứa token xác minh email và token đặt lại mật khẩu. Giữ trong RAM
+ * của tiến trình dev là thứ tự nó biến mất; ghi ra file hay vào bảng là tạo một chỗ
+ * chứa token có thời hạn sống lâu hơn phiên làm việc, rồi ai đó sao lưu nó đi.
+ *
+ * Chỉ nạp được từ `sendViaConsole`, mà hàm đó không bao giờ chạy khi
+ * `NODE_ENV=production` (xem `sendMail`). Nên ở production hộp thư này luôn rỗng —
+ * và `/dev/thu` vẫn chốt thêm một lớp `notFound()` nữa, không dựa vào điều đó.
+ */
+const MAX_THU = 50;
+
+const g = globalThis as unknown as { kidogameHopThuDev?: ThuDaGui[] };
+g.kidogameHopThuDev ??= [];
+
+/** Mới nhất trước. Trả bản sao để chỗ gọi không sửa được hộp thư. */
+export function docHopThuDev(): ThuDaGui[] {
+  return [...(g.kidogameHopThuDev ?? [])].reverse();
+}
+
+export function xoaHopThuDev(): number {
+  const n = g.kidogameHopThuDev?.length ?? 0;
+  g.kidogameHopThuDev = [];
+  return n;
+}
+
 /**
  * In mail ra console.
  *
  * Cố ý in cả nội dung, kể cả link chứa token: đây là transport dành riêng cho máy
  * dev, và người chạy nó chính là người cần bấm vào link để thử luồng. Trên
  * production thì `RESEND_API_KEY` phải được đặt, và nhánh này không chạy.
+ *
+ * VẪN IN RA CONSOLE dù đã có `/dev/thu`, không thay thế: bốn bộ e2e đọc link xác
+ * minh từ stdout, và hộp thư trong bộ nhớ thì tiến trình khác không đọc được. Bỏ
+ * `console.log` ở đây là 146 phép kiểm đổ ở bước đầu.
  */
 function sendViaConsole(message: MailMessage): void {
+  const hop = (g.kidogameHopThuDev ??= []);
+  hop.push({ ...message, luc: new Date() });
+  // Mảng vòng: một buổi thử có thể sinh hàng trăm thư, mà chẳng ai xem lại thư thứ 51.
+  if (hop.length > MAX_THU) hop.splice(0, hop.length - MAX_THU);
+
   console.log(
     [
       '',
