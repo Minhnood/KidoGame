@@ -311,10 +311,25 @@ check(
   const htmlRes = await fetch(frameSrc);
   const htmlText = await htmlRes.text();
 
+  /*
+   * Đo bằng DẤU HIỆU NỘI DUNG, không bằng kích thước file. Bản đầu của phép kiểm này
+   * viết `htmlText.length < 200_000` và nó SAI — đã trả giá hai lần bằng hai dòng đỏ
+   * không tái hiện được, xem TODO.md.
+   *
+   * Lý do: HTML còn nhúng cả ASSET của game (ảnh, âm thanh, mã base85). Game
+   * `siuuu` của chủ dự án nặng 9892 KB vì đúng lý do đó, và điều đó hoàn toàn ĐÚNG —
+   * runtime đã tách rồi. Nên ngưỡng kích thước không đo cái nó tưởng nó đang đo, mà
+   * đo xem game nào tình cờ đứng đầu trang chủ hôm ấy: một phép kiểm đỏ hay xanh
+   * theo dữ liệu, tức tệ hơn không có phép kiểm.
+   *
+   * Chuỗi dưới đây là dòng đầu của khối runtime do packager sinh. Còn nó trong HTML
+   * nghĩa là runtime vẫn nằm trong file, bất kể file nặng bao nhiêu.
+   */
+  const DAU_HIEU_RUNTIME = 'Parts of this script are from the TurboWarp Packager';
   check(
-    'HTML game nhẹ — runtime KHÔNG nằm trong file',
-    htmlText.length < 200_000,
-    `${(htmlText.length / 1024).toFixed(1)} KB`
+    'Runtime KHÔNG nằm trong file HTML',
+    !htmlText.includes(DAU_HIEU_RUNTIME),
+    `HTML ${(htmlText.length / 1024).toFixed(1)} KB (kích thước này là ASSET của game, không phải runtime)`
   );
 
   const src = htmlText.match(/<script\s+src="([^"]+)"><\/script>/)?.[1] ?? '';
@@ -350,10 +365,13 @@ check(
   );
 
   /*
-   * Phép kiểm quan trọng nhất của mục này: mở một game KHÁC trong cùng phiên và
-   * đếm byte thật tải về từ player origin. Runtime đã nằm trong cache nên tổng phải
-   * nhỏ; nếu ai đó làm runtime quay lại nằm trong HTML thì con số này vọt lên ~1800
-   * KB và dòng dưới đây đỏ.
+   * Phép kiểm quan trọng nhất của mục này: mở một game KHÁC trong cùng phiên và đếm
+   * byte thật của request tới `/runtime/` — phải gần bằng 0, vì nó lấy từ cache.
+   *
+   * Đếm RIÊNG runtime, không đếm tổng byte từ player origin. Bản đầu đếm tổng và so
+   * với 200 KB, và sai đúng như phép kiểm ở trên: asset của game nằm trong HTML, nên
+   * một game có nhiều ảnh và âm thanh làm tổng vọt lên hàng nghìn KB trong khi
+   * runtime vẫn được dùng chung đúng như thiết kế.
    */
   const home = await context.newPage();
   await home.goto(APP, { waitUntil: 'networkidle' });
@@ -367,21 +385,30 @@ check(
     check('Có ít nhất hai game để đo hiệu quả của runtime dùng chung', false, `${links.length} game`);
   } else {
     const p2 = await context.newPage();
-    let bytes = 0;
+    let runtimeBytes = 0;
+    let runtimeReqs = 0;
     p2.on('requestfinished', async (req) => {
       try {
-        if (!req.url().startsWith(PLAYER)) return;
-        bytes += (await req.sizes()).responseBodySize;
+        if (!req.url().startsWith(`${PLAYER}/runtime/`)) return;
+        runtimeReqs += 1;
+        runtimeBytes += (await req.sizes()).responseBodySize;
       } catch {
         /* request bị huỷ lúc đóng trang — bỏ qua */
       }
     });
     await p2.goto(`${APP}${other}`, { waitUntil: 'load' });
     await p2.waitForTimeout(4000);
+    /*
+     * Vẫn đòi CÓ request tới runtime: 0 request nghĩa là HTML không trỏ tới runtime
+     * nào cả, và khi ấy "0 byte" là con số đúng của một trang hỏng.
+     *
+     * Playwright báo `responseBodySize` âm hoặc rất nhỏ cho response lấy từ cache,
+     * nên ngưỡng 10 KB là "không đi qua mạng", không phải "tải một ít".
+     */
     check(
-      'Game THỨ HAI trong cùng phiên không tải lại runtime',
-      bytes < 200_000,
-      `${(bytes / 1024).toFixed(1)} KB từ player origin`
+      'Game THỨ HAI trong cùng phiên lấy runtime từ cache, không tải lại',
+      runtimeReqs > 0 && runtimeBytes < 10_000,
+      `${runtimeReqs} request runtime, ${(runtimeBytes / 1024).toFixed(1)} KB qua mạng`
     );
     await p2.close();
   }

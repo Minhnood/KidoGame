@@ -47,13 +47,16 @@ export function FormColumn({
  * Màu `accent` chứ không phải `accent-text`: đây là hình trang trí, không có chữ nào
  * nằm trên nó, nên nó không phải qua ngưỡng tương phản của chữ.
  */
-function GachTieuDe() {
+function GachTieuDe({ canhGiua = false }: { canhGiua?: boolean }) {
   return (
     <svg
       viewBox="0 0 64 10"
       aria-hidden="true"
       focusable="false"
-      className="mt-1.5 h-2.5 w-16 text-accent"
+      /* Bề rộng chốt cứng nên `text-center` của thẻ cha không chạm tới nó — phải
+         `mx-auto`. Đặt ở đây thay vì bọc thêm một <div>, để tám trang còn lại không
+         phải cõng một thẻ rỗng chỉ vì một trang cần canh giữa. */
+      className={`mt-1.5 h-2.5 w-16 text-accent ${canhGiua ? 'mx-auto' : ''}`}
       fill="none"
     >
       <path
@@ -74,13 +77,32 @@ function GachTieuDe() {
   );
 }
 
-export function PageTitle({ title, lead }: { title: string; lead?: ReactNode }) {
+/**
+ * `canhGiua` chỉ dành cho trang KHÔNG có nội dung trải rộng bên dưới.
+ *
+ * Mọi trang của site căn lề trái, và phải giữ như vậy: tiêu đề căn giữa trên một
+ * trang mà bên dưới là danh sách hay bảng thì tiêu đề không còn thẳng lề với thứ nó
+ * đang gọi tên, và mắt phải nhảy hai lần cho một cụm. Bật cờ này chỉ khi cả cột nội
+ * dung bên dưới cũng hẹp và cũng canh giữa — hiện tại là `/dev/thu`.
+ */
+export function PageTitle({
+  title,
+  lead,
+  canhGiua = false,
+}: {
+  title: string;
+  lead?: ReactNode;
+  canhGiua?: boolean;
+}) {
   return (
-    <div className="mb-5 mt-7">
+    <div className={`mb-5 mt-7 ${canhGiua ? 'text-center' : ''}`}>
       <h1 className="text-3xl font-extrabold tracking-tight">{title}</h1>
-      <GachTieuDe />
+      <GachTieuDe canhGiua={canhGiua} />
       {lead && (
-        <p className="mt-2 text-ink-soft" data-testid="page-lead">
+        <p
+          className={`mt-2 text-ink-soft ${canhGiua ? 'mx-auto max-w-160 text-lg' : ''}`}
+          data-testid="page-lead"
+        >
           {lead}
         </p>
       )}

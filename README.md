@@ -928,9 +928,15 @@ vào origin riêng, iframe sandbox và CSP, cả ba không đổi. Runtime nằm
 4. **Game cũ phải `db:repackage`.** HTML là file tĩnh immutable, nên game đăng trước
    bản này giữ nguyên file 1.8 MB mãi. Cột `Game.runtimeSha256` rỗng là dấu hiệu.
 
-`e2e-check` canh cả bốn, và có một phép kiểm đo **byte thật** khi mở game thứ hai
-trong cùng phiên — nếu runtime lặng lẽ quay vào HTML thì con số đó vọt lên và bộ kiểm
-đỏ.
+`e2e-check` canh cả bốn. Hai phép kiểm quan trọng nhất đo bằng **dấu hiệu**, không
+bằng kích thước file: HTML không được chứa dòng đầu của khối runtime, và mở game thứ
+hai trong cùng phiên thì request tới `/runtime/` phải lấy từ cache (đếm byte của
+riêng request đó).
+
+Ngưỡng kích thước ở đây là một cái bẫy đã trả giá: HTML còn nhúng cả **asset** của
+game, nên một game nhiều ảnh và âm thanh nặng vài nghìn KB là hoàn toàn đúng. Phép
+kiểm `htmlText.length < 200_000` vì thế không đo runtime — nó đo *game nào tình cờ
+đứng đầu trang chủ lượt đó*, và cho ra dòng đỏ ngẫu nhiên.
 
 ## Hộp thư dev — `/dev/thu`
 

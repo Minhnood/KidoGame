@@ -38,66 +38,131 @@ export default async function DevMailboxPage() {
 
   return (
     <>
-      <PageTitle
-        title="Hộp thư môi trường phát triển"
-        lead="Những lá thư mà hệ thống đã gửi trên máy này. Không có lá nào đi ra Internet."
-      />
+      {/*
+        CỘT HẸP CANH GIỮA, không dùng hết bề ngang 1024px.
+        Thư là văn bản để đọc: một dòng chữ dài 1000px thì mắt mất chỗ khi nhảy về đầu
+        dòng sau. 44rem ≈ 700px giữ mỗi dòng quanh 75–90 ký tự, và cột hẹp thì phần
+        trống hai bên biến cái danh sách thành một chồng thư đặt giữa bàn.
+      */}
+      <div className="mx-auto w-full max-w-176">
+        <PageTitle
+          canhGiua
+          title="Hộp thư trên máy này"
+          lead="Những lá thư mà hệ thống đã gửi khi chạy ở máy dev. Không có lá nào đi ra Internet."
+        />
 
-      <Notice tone="info">
-        Ở máy dev, <code className="font-bold">sendMail</code> in thư ra log thay vì gửi đi, nên
-        không cần tài khoản nhà cung cấp mail nào để thử hết luồng xác minh email và quên mật
-        khẩu. Trang này chỉ bày lại đúng những lá thư đó. Nó <strong>không tồn tại</strong> khi
-        chạy production — ở đó thư đi qua Resend và tới hòm thư thật.
-      </Notice>
+        <Notice tone="info">
+          Ở máy dev, <code className="font-bold">sendMail</code> in thư ra log thay vì gửi đi, nên
+          không cần tài khoản nhà cung cấp mail nào để thử hết luồng xác minh email và quên mật
+          khẩu. Trang này chỉ bày lại đúng những lá thư đó. Nó <strong>không tồn tại</strong> khi
+          chạy production — ở đó thư đi qua Resend và tới hòm thư thật.
+        </Notice>
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <p className="text-sm text-ink-soft" data-testid="dev-mail-total">
-          {thu.length} thư · giữ tối đa 50 · mất khi khởi động lại server
-        </p>
-        {thu.length > 0 && <XoaHopThuButton count={thu.length} />}
-      </div>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <p className="text-base text-ink-soft" data-testid="dev-mail-total">
+            {thu.length} thư · giữ tối đa 50 · mất khi khởi động lại server
+          </p>
+          {thu.length > 0 && <XoaHopThuButton count={thu.length} />}
+        </div>
 
-      {thu.length === 0 ? (
-        <EmptyState>
-          Chưa có thư nào. Thử đăng ký một phụ huynh ở <a href="/dang-ky">/dang-ky</a>, hoặc bấm
-          &quot;Quên mật khẩu&quot; ở <a href="/dang-nhap">/dang-nhap</a>, rồi quay lại đây.
-        </EmptyState>
-      ) : (
-        <ul className="mb-12 mt-4 list-none space-y-4 p-0" data-testid="dev-mail-list">
-          {thu.map((t, i) => (
-            <li key={`${t.luc.toISOString()}-${i}`} className={`p-5 ${MAT_THE}`} data-testid="dev-mail">
-              <p className="text-lg font-bold" data-testid="dev-mail-subject">
-                {t.subject}
-              </p>
-              <p className="text-sm text-ink-soft">
-                tới <span data-testid="dev-mail-to">{t.to}</span> ·{' '}
-                <time dateTime={t.luc.toISOString()}>{t.luc.toLocaleString('vi-VN')}</time>
-              </p>
-
-              {/*
-                `whitespace-pre-wrap`: thư là chữ thuần, xuống dòng LÀ một phần của nội
-                dung. Để React gộp dòng thì địa chỉ và link dồn vào một khối chữ liền,
-                đúng chỗ cần đọc rõ nhất.
-
-                `wrap-break-word` là BẮT BUỘC đi kèm, không phải cho đẹp. Link xác minh là
-                một chuỗi dài không có khoảng trắng nào, mà `pre-wrap` chỉ ngắt dòng ở
-                chỗ có sẵn — nên trên màn 414px cái link chạy quá mép thẻ và phần đuôi
-                bị cắt mất. Trang KHÔNG tràn ngang (đã đo scrollWidth), tức không có gì
-                báo ra: chỉ là token hiển thị thiếu, và người đọc không biết là thiếu.
-              */}
-              <p
-                className="mt-3 whitespace-pre-wrap wrap-break-word text-[0.95rem]"
-                data-testid="dev-mail-text"
+        {thu.length === 0 ? (
+          <EmptyState>
+            Chưa có thư nào. Thử đăng ký một phụ huynh ở <a href="/dang-ky">/dang-ky</a>, hoặc bấm
+            &quot;Quên mật khẩu&quot; ở <a href="/dang-nhap">/dang-nhap</a>, rồi quay lại đây.
+          </EmptyState>
+        ) : (
+          <ul className="mb-12 mt-5 list-none space-y-6 p-0" data-testid="dev-mail-list">
+            {thu.map((t, i) => (
+              <li
+                key={`${t.luc.toISOString()}-${i}`}
+                className={`px-6 py-7 ${MAT_THE}`}
+                data-testid="dev-mail"
               >
-                {t.text}
-              </p>
+                {/*
+                  ĐẦU THƯ canh giữa, THÂN THƯ canh trái — không phải nửa vời mà là hai
+                  loại chữ khác nhau. Tiêu đề và người nhận là nhãn của phong bì, mắt
+                  chỉ quét một lần nên canh giữa đọc ra là "đây là lá thư nào". Thân thư
+                  là văn bản nhiều dòng: canh giữa nó thì mỗi dòng bắt đầu ở một chỗ
+                  khác nhau, và mắt phải đi tìm đầu dòng sau mỗi lần xuống dòng.
+                */}
+                <div className="border-b border-border pb-5 text-center">
+                  <PhongBi />
+                  <p className="mt-2 text-2xl font-extrabold tracking-tight" data-testid="dev-mail-subject">
+                    {t.subject}
+                  </p>
+                  <p className="mt-1.5 text-base text-ink-soft">
+                    tới <span data-testid="dev-mail-to">{t.to}</span>
+                  </p>
+                  <p className="text-sm text-ink-soft">
+                    <time dateTime={t.luc.toISOString()}>{t.luc.toLocaleString('vi-VN')}</time>
+                  </p>
+                </div>
 
-              <MailLinks text={t.text} />
-            </li>
-          ))}
-        </ul>
-      )}
+                {/*
+                  `whitespace-pre-wrap`: thư là chữ thuần, xuống dòng LÀ một phần của nội
+                  dung. Để React gộp dòng thì địa chỉ và link dồn vào một khối chữ liền,
+                  đúng chỗ cần đọc rõ nhất.
+
+                  `wrap-break-word` là BẮT BUỘC đi kèm, không phải cho đẹp. Link xác minh là
+                  một chuỗi dài không có khoảng trắng nào, mà `pre-wrap` chỉ ngắt dòng ở
+                  chỗ có sẵn — nên trên màn 414px cái link chạy quá mép thẻ và phần đuôi
+                  bị cắt mất. Trang KHÔNG tràn ngang (đã đo scrollWidth), tức không có gì
+                  báo ra: chỉ là token hiển thị thiếu, và người đọc không biết là thiếu.
+                */}
+                <p
+                  className="mt-5 whitespace-pre-wrap wrap-break-word text-lg/8"
+                  data-testid="dev-mail-text"
+                >
+                  {t.text}
+                </p>
+
+                <MailLinks text={t.text} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </>
+  );
+}
+
+/**
+ * Phong bì nhỏ trên đầu mỗi lá thư.
+ *
+ * Một khối màu đặc nhận ra trước khi đọc, nên nó nói "đây là một lá thư" nhanh hơn
+ * bất cứ dòng chữ nào — cùng lý lẽ đã dùng cho đầu mèo trên thanh điều hướng.
+ *
+ * Nắp phong bì vẽ bằng hai nét chéo gặp nhau ở giữa, KHÔNG phải một chữ V: đường gấp
+ * của nắp thật chạy tới đúng hai góc trên, và cắt ngắn lại thì ở cỡ nhỏ nó đọc ra là
+ * một mũi nhọn nằm trong hộp chứ không ra cái nắp.
+ */
+function PhongBi() {
+  return (
+    <svg
+      viewBox="0 0 40 28"
+      aria-hidden="true"
+      focusable="false"
+      className="mx-auto h-7 w-10 text-accent"
+      fill="none"
+    >
+      <rect x="1.5" y="1.5" width="37" height="25" rx="3.5" fill="currentColor" opacity="0.14" />
+      <rect
+        x="1.5"
+        y="1.5"
+        width="37"
+        height="25"
+        rx="3.5"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+      <path
+        d="M2.5 3.5 20 16.5 37.5 3.5"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -118,17 +183,27 @@ function MailLinks({ text }: { text: string }) {
   if (links.length === 0) return null;
 
   return (
-    <ul className="mt-3 list-none space-y-2 p-0" data-testid="dev-mail-links">
+    <ul className="mt-6 list-none space-y-5 p-0" data-testid="dev-mail-links">
       {links.map((href) => (
-        <li key={href}>
+        <li key={href} className="text-center">
+          {/*
+            Nút to và canh giữa: trên trang này nó LÀ hành động duy nhất, và cả lý do
+            trang tồn tại. `min-h-14` chứ không `min-h-touch` (44px) — đây là nút bấm
+            trước ống kính, không phải một nút trong biểu mẫu.
+          */}
           <a
             href={href}
             data-testid="dev-mail-link"
-            className="min-h-touch inline-flex items-center rounded-full border-0 bg-accent px-5 font-bold text-chrome no-underline"
+            className="inline-flex min-h-14 items-center rounded-full border-0 bg-accent px-8 text-lg font-bold text-chrome no-underline"
           >
             Mở link trong thư →
-          </a>{' '}
-          <code className="break-all text-sm text-ink-soft">{href}</code>
+          </a>
+          {/*
+            URL đầy đủ vẫn hiện dưới nút, cỡ nhỏ hơn. Nó lặp lại thứ đã có trong thân
+            thư, nhưng đây là chỗ copy được mà không phải lần trong đoạn văn — hữu ích
+            khi cần dán link sang cửa sổ ẩn danh hay sang máy khác.
+          */}
+          <code className="mt-2 block break-all text-sm text-ink-soft">{href}</code>
         </li>
       ))}
     </ul>
