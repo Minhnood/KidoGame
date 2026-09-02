@@ -57,12 +57,26 @@ const check = (name, ok, detail = '') => {
 const IP_GIA = '203.0.113.7';
 
 async function post(body, headers = {}) {
-  const res = await fetch(`${APP}/api/errors`, {
-    method: 'POST',
-    headers: { 'content-type': 'text/plain', 'x-forwarded-for': IP_GIA, ...headers },
-    body: typeof body === 'string' ? body : JSON.stringify(body),
-  });
-  return res.status;
+  try {
+    const res = await fetch(`${APP}/api/errors`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', 'x-forwarded-for': IP_GIA, ...headers },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+    return res.status;
+  } catch {
+    /*
+     * Trả 0 thay vì ném. Bước kiểm trần bắn hơn 40 request liên tiếp, và tầng dev
+     * server của Next thỉnh thoảng ngắt một kết nối giữa loạt đó — đúng cái
+     * `ECONNRESET` đã ghi trong TODO là "điều tra rồi cố ý không sửa". Một request
+     * đứt không đổi kết luận về trần, nhưng nó từng làm CẢ bài đổ ở dòng
+     * `await fetch`, và triệu chứng thì trông như route bị hỏng.
+     *
+     * Không che được lỗi thật: mọi phép kiểm ở trên so status với 204, nên server
+     * chết thật thì chúng đỏ ngay.
+     */
+    return 0;
+  }
 }
 
 const browser = await chromium.launch({ channel: 'chrome' });
@@ -195,15 +209,23 @@ check(
   );
 }
 
-// ---------- Dòng dẫn trên /admin ----------
+// ---------- Số đếm trên thanh của khu quản trị ----------
+/*
+ * Số nhóm lỗi chưa xử lý phải thấy được từ MỌI trang trong khu quản trị, không chỉ
+ * trang lỗi: một trang giám sát mà phải chủ động mở mới biết có gì thì chỉ được mở
+ * lúc người ta đã nghi có chuyện — tức đúng lúc nó không còn cảnh báo được nữa.
+ *
+ * Trước đây đây là một dòng chữ riêng trên `/admin`; giờ là số trên tab "Lỗi", nên
+ * nó đi theo admin sang mọi trang.
+ */
 {
   const chuaXuLy = await tongNhom('chua-xu-ly');
   await p.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
-  const line = await p.locator('[data-testid=admin-error-link]').innerText();
+  const dem = await p.locator('[data-testid=admin-tab-loi-dem]').innerText();
   check(
-    'Trang kiểm duyệt có dòng dẫn sang trang lỗi, đúng số nhóm',
-    line.includes(String(chuaXuLy)),
-    line
+    'Tab Lỗi trên thanh quản trị hiện đúng số nhóm chưa xử lý',
+    dem.trim() === String(chuaXuLy),
+    `tab nói ${dem.trim()}, trang lỗi nói ${chuaXuLy}`
   );
 }
 

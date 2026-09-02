@@ -57,7 +57,27 @@ export default async function RootLayout({ children }: { children: React.ReactNo
    * script chắc chắn bị CSP chặn: giao diện vẫn đúng theo cài đặt của máy, chỉ mất
    * phần chống loé cho người đã tự chọn.
    */
-  const nonce = (await headers()).get('x-nonce');
+  const h = await headers();
+  const nonce = h.get('x-nonce');
+
+  /*
+   * Khu QUẢN TRỊ không dùng khung của site.
+   *
+   * Không phải chuyện thẩm mỹ. Thanh điều hướng, tranh đồi cây và chân trang được
+   * dựng cho trẻ em và bố mẹ: chữ to, màu tươi, cột nội dung 1024px. Việc của người
+   * quản trị là ngược lại — đọc bảng dài, so số đếm, bấm nút khó đảo — và đặt nó
+   * giữa mấy cái cây thì hai chuyện cùng dở đi: danh sách bị bó vào 1024px trong khi
+   * nó cần cả bề ngang, còn cái cây thì nằm cạnh một nút "Gỡ hẳn".
+   *
+   * `app/admin/layout.tsx` tự dựng khung riêng cho mình, nên ở đây chỉ việc thôi
+   * không vẽ ba thứ kia. `<html>`, `<body>`, font và script chống loé giao diện thì
+   * VẪN dùng chung — chúng là hạ tầng của mọi trang, không phải trang trí.
+   *
+   * `startsWith('/admin')` là đủ và cố tình thô: cả `/admin` lẫn `/admin/loi` và mọi
+   * trang quản trị thêm sau này đều phải rơi vào đây, và không có route nào khác của
+   * site bắt đầu bằng chuỗi đó.
+   */
+  const laKhuQuanTri = (h.get('x-pathname') ?? '').startsWith('/admin');
 
   return (
     /*
@@ -95,8 +115,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             dangerouslySetInnerHTML={{ __html: SCRIPT_GIAO_DIEN }}
           />
         )}
+        {/* Ba thứ dưới đây — link nhảy, tranh trang trí, thanh điều hướng — là KHUNG
+            CỦA SITE. Khu quản trị tự dựng khung riêng, xem chú thích ở `laKhuQuanTri`. */}
+        {!laKhuQuanTri && (
+          <>
         {/*
          * Link nhảy thẳng tới nội dung, cho người dùng bàn phím.
+         *
+         * KHÔNG có ở khu quản trị, và không phải vì bỏ sót: đích của nó là
+         * `<main>`, mà ở khu quản trị chính thanh điều hướng riêng lại nằm TRONG
+         * `<main>`. Nhảy tới đó là nhảy lên phía trên thanh, tức không bỏ qua được
+         * gì — một link nói mình làm một việc mà không làm thì tệ hơn không có.
          *
          * Không có nó thì mỗi trang phải bấm Tab 5 lần mới ra khỏi thanh điều
          * hướng — đã đếm trên bản production. Năm lần không nhiều, nhưng nó lặp
@@ -198,6 +227,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             className="relative h-0.75 bg-linear-to-r from-accent via-accent/40 to-transparent"
           />
         </header>
+          </>
+        )}
         {/*
          * `tabIndex={-1}` để link nhảy ở trên thật sự MANG FOCUS tới đây.
          *
@@ -226,9 +257,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
          * `<main>`, không phải con.
          */}
         <main id="noi-dung" tabIndex={-1} className="flex-1 overflow-x-clip">
-          <Wrap>{children}</Wrap>
+          {/*
+            `Wrap` bó nội dung vào 1024px. Khu quản trị KHÔNG dùng nó và tự quyết bề
+            rộng của mình: việc ở đó là đọc danh sách dài có ảnh, số đếm và nút, và
+            1024px trên màn 1920 nghĩa là gần một nửa màn hình để trống trong khi
+            từng dòng thì chật.
+          */}
+          {laKhuQuanTri ? children : <Wrap>{children}</Wrap>}
         </main>
-        <SiteFooter />
+        {!laKhuQuanTri && <SiteFooter />}
       </body>
     </html>
   );

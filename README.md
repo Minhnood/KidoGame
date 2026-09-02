@@ -55,7 +55,7 @@ export MAIL_LOG=/tmp/kg-mail.log
 
 SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                     # 51 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 58
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 61
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 43
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
@@ -1202,6 +1202,36 @@ có người MỚI phát hiện mới báo cáo được.
 Trang `/admin` có bộ lọc (`?loc=can-xem|tat-ca|dang-hien|da-an|da-go`), phân trang 20
 game mỗi trang (`?trang=N`), thumbnail, lý do báo cáo, lịch sử `ModerationLog`, và nút
 khoá thẳng tài khoản bé.
+
+### Khu quản trị là một khu RIÊNG
+
+`/admin` và `/admin/loi` **không dùng khung của site**: không thanh điều hướng trẻ em,
+không tranh đồi cây, không chân trang. Chúng có
+[`app/admin/layout.tsx`](apps/web/src/app/admin/layout.tsx) với thanh tab riêng, và
+cột nội dung rộng 1600px thay vì 1024px.
+
+Không phải chuyện thẩm mỹ: khung của site dựng cho trẻ em và bố mẹ — chữ to, màu tươi,
+cột hẹp — còn việc của người quản trị là đọc danh sách dài, so số đếm, bấm nút khó
+đảo. Đặt cái sau vào cái trước thì danh sách bị bó vào 1024px trong khi cần cả bề
+ngang, và một cái cây ngồi cạnh nút "Gỡ hẳn".
+
+**Layout gốc nhận biết khu này qua header `x-pathname`** do `middleware.ts` đặt vào —
+server component không có cách nào tự đọc pathname. Cách khác là chuyển 13 route hiện
+có vào một route group `(site)`, sạch hơn về kiến trúc, nhưng `app/not-found.tsx` buộc
+phải nằm ở gốc và sẽ mất thanh điều hướng cùng chân trang, đúng thứ đã cố ý thêm cho
+nó. Một header rẻ hơn hẳn.
+
+**Thanh điều hướng của site KHÔNG có link tới khu quản trị**, với bất kỳ ai. Trước đây
+có mục "Kiểm duyệt" hiện khi `isAdmin`; nó nói cho mọi người biết khu quản trị nằm ở
+đâu và chỉ tiết kiệm cho đúng một người, người vốn biết đường. Vào bằng `/admin`.
+
+**Quyền kiểm ở layout VÀ ở từng trang**, cố ý lặp: layout của Next không chạy lại trên
+mọi lần điều hướng phía client, nên một layout đóng vai người giữ cửa duy nhất là
+người giữ cửa có lúc ngủ. Layout chỉ để không vẽ khung cho người không có quyền.
+
+Số việc đang chờ nằm trên tab (`admin-tab-go-dem`, `admin-tab-loi-dem`) nên nó theo
+admin sang mọi trang trong khu — trước đây số nhóm lỗi chỉ hiện trên `/admin`, nên
+đang xem trang lỗi thì không biết hàng đợi bản quyền vừa có thêm yêu cầu.
 
 **Admin xem được game đã ẩn.** `/game/[id]` có ngoại lệ đúng cho `isAdmin` — không có
 nó thì admin phải quyết định gỡ hay giữ mà không nhìn thấy nội dung, vì bấm vào tên game

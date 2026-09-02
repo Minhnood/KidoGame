@@ -86,6 +86,19 @@ export function middleware(request: NextRequest) {
   requestHeaders.set('content-security-policy', csp);
   // Để component của ta đọc được nếu sau này cần chèn script inline của riêng mình.
   requestHeaders.set('x-nonce', nonce);
+  /*
+   * Đường dẫn đang mở, để layout GỐC biết mình đang bọc trang nào.
+   *
+   * Server component không có cách nào tự đọc pathname — `usePathname` là hook của
+   * client. Mà layout gốc cần biết đúng một việc: khu `/admin` có khung riêng, nên
+   * đừng vẽ thanh điều hướng trẻ em, tranh trang trí và chân trang quanh nó.
+   *
+   * Cách khác là chuyển toàn bộ 13 route hiện có vào một route group `(site)` để
+   * group đó mang khung riêng. Sạch hơn về kiến trúc, nhưng `app/not-found.tsx` —
+   * trang bắt MỌI đường dẫn sai — buộc phải nằm ở gốc và sẽ mất thanh điều hướng
+   * cùng chân trang, đúng thứ đã cố ý thêm vào nó. Một header rẻ hơn hẳn.
+   */
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('content-security-policy', csp);

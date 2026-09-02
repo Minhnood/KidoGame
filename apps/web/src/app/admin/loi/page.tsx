@@ -96,9 +96,9 @@ export default async function AdminErrorsPage({
         lead={`Gom theo nhóm, giữ ${RETENTION_DAYS} ngày. Không lưu IP, không lưu user agent đầy đủ, không lưu nội dung form.`}
       />
 
-      <p className="mt-2">
-        <Link href="/admin">← Về trang kiểm duyệt</Link>
-      </p>
+      {/* Link "về trang kiểm duyệt" từng ở đây, đã BỎ: thanh tab của khu quản trị
+          làm đúng việc đó, ở mọi trang, và làm rõ hơn — nó còn cho biết trang kia
+          đang có bao nhiêu việc chờ. */}
 
       {unresolved >= MAX_UNRESOLVED_GROUPS && (
         <Notice tone="error">

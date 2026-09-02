@@ -104,7 +104,7 @@ export default async function AdminPage({
   const page = Math.max(1, Number(sp.trang ?? '1') || 1);
   const where = whereFor(filter);
 
-  const [total, games, takedowns, errorGroups] = await Promise.all([
+  const [total, games, takedowns] = await Promise.all([
     prisma.game.count({ where }),
     prisma.game.findMany({
       where,
@@ -174,16 +174,6 @@ export default async function AdminPage({
         },
       },
     }),
-
-    /*
-     * Số nhóm lỗi chưa xử lý. Chỉ một con số, chi tiết ở `/admin/loi`.
-     *
-     * Đếm ở đây chứ không bắt admin tự nhớ mở trang kia: một trang giám sát mà phải
-     * chủ động vào mới biết có gì thì chỉ được mở lúc đã nghi có chuyện — tức đúng
-     * lúc nó không còn cảnh báo được nữa. Con số đứng ngay trên đường đi hằng ngày
-     * của admin thì lỗi mới tự tìm đến mắt người xem.
-     */
-    prisma.errorLog.count({ where: { resolvedAt: null } }),
   ]);
 
   /*
@@ -242,29 +232,20 @@ export default async function AdminPage({
 
   return (
     <>
+      {/* Email người đang đăng nhập từng ở trong dòng này, đã bỏ: thanh của khu quản
+          trị hiện nó ở mọi trang. Còn lại đúng thứ chỉ trang này cần nói — hai ngưỡng
+          tự ẩn, vì mọi con số trên trang phải đọc theo chúng. */}
       <PageTitle
         title="Kiểm duyệt"
-        lead={`${actor.email} · ${REPORT_AUTO_HIDE_THRESHOLD} báo cáo đã xác minh thì ẩn mềm, ${REPORT_HARD_HIDE_THRESHOLD} thì ẩn hẳn`}
+        lead={`${REPORT_AUTO_HIDE_THRESHOLD} báo cáo đã xác minh thì ẩn mềm, ${REPORT_HARD_HIDE_THRESHOLD} thì ẩn hẳn`}
       />
 
       {/*
-        Một DÒNG, không phải một khối.
-        Cố ý nhỏ hơn hàng đợi bản quyền bên dưới: khối lỗi kỹ thuật mà to bằng khối
-        có hạn chót pháp lý là đổi thứ tự ưu tiên của trang bằng cỡ chữ. Nhưng vẫn
-        nằm trên cùng, vì "web đang hỏng" là thứ đọc được trong một giây, và nếu phải
-        cuộn mới thấy thì nó chỉ được đọc khi người ta đã nghi có chuyện.
+        Dòng dẫn sang trang lỗi từng nằm ở đây, đã BỎ: thanh tab của khu quản trị
+        (`app/admin/admin-nav.tsx`) mang số nhóm lỗi chưa xử lý, và mang nó ở MỌI
+        trang trong khu chứ không riêng trang này. Giữ cả hai là hai chỗ nói cùng một
+        con số, rồi sớm muộn một chỗ nói sai.
       */}
-      <p className="mb-6 text-sm" data-testid="admin-error-link">
-        {errorGroups > 0 ? (
-          <Link href="/admin/loi" className="font-bold text-danger">
-            {errorGroups} nhóm lỗi chưa xử lý →
-          </Link>
-        ) : (
-          <Link href="/admin/loi" className="text-ink-soft">
-            Không có lỗi nào chưa xử lý · xem trang lỗi →
-          </Link>
-        )}
-      </p>
 
       {takedowns.length > 0 && (
         <section className="mb-7" data-testid="admin-takedowns">
@@ -373,11 +354,17 @@ export default async function AdminPage({
           {games.map((game) => (
             <li
               key={game.id}
-              className={`p-5 ${MAT_THE}`}
+              /*
+                Từ `xl` trở lên thì thẻ thành HAI CỘT: thông tin bên trái, cụm nút bên
+                phải. Khu quản trị rộng 1600px, nên xếp dọc như trước để lại một dải
+                trống gần một nghìn pixel bên phải mỗi thẻ, trong khi cụm nút thì nằm
+                dưới ảnh và đẩy thẻ cao lên.
+              */
+              className={`p-5 ${MAT_THE} xl:flex xl:items-start xl:gap-6`}
               data-testid="admin-game"
               data-game-id={game.id}
             >
-              <div className="flex flex-wrap items-start gap-4">
+              <div className="flex flex-wrap items-start gap-4 xl:min-w-0 xl:flex-1">
                 {/*
                   Ảnh nằm trên player origin nên dùng <img> thường, giống game-card:
                   next/image sẽ đòi cấu hình remotePatterns mà chẳng được lợi gì thêm.
@@ -444,11 +431,15 @@ export default async function AdminPage({
               </div>
 
               {/*
-                Nút xuống hàng riêng chứ không xếp cạnh phần chữ. Ba nút cạnh nhau
-                chiếm gần nửa bề ngang, ép cột thông tin hẹp lại tới mức email và
-                trạng thái tài khoản gãy dòng lung tung.
+                DƯỚI `xl`: nút xuống hàng riêng chứ không xếp cạnh phần chữ. Ba nút
+                cạnh nhau chiếm gần nửa bề ngang, ép cột thông tin hẹp lại tới mức
+                email và trạng thái tài khoản gãy dòng lung tung.
+
+                TỪ `xl`: thành một cột dọc bên phải, bề rộng chốt cứng. Chốt cứng để
+                cụm nút của mọi thẻ thẳng lề nhau — nút "Gỡ hẳn" nhảy trái phải theo
+                độ dài tiêu đề game là kiểu bố cục làm người ta bấm nhầm.
               */}
-              <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center gap-2 xl:mt-0 xl:w-56 xl:shrink-0 xl:flex-col xl:items-stretch">
                 {game.status !== 'PUBLISHED' && <RestoreGameButton gameId={game.id} />}
                 {/* Game vẫn đang hiện mà dính báo cáo sai: dọn báo cáo, giữ nguyên game. */}
                 {game.status === 'PUBLISHED' && game.reportCount > 0 && (

@@ -69,11 +69,15 @@ export async function SiteNav() {
         </ButtonLink>
       )}
 
-      {actor?.kind === 'parent' && actor.isAdmin && (
-        <Link href="/admin" data-testid="nav-admin" className={MUC_CHU}>
-          Kiểm duyệt
-        </Link>
-      )}
+      {/*
+        KHÔNG có link tới khu quản trị ở đây, cố ý — trước đây có, và đã bỏ.
+
+        Thanh này là thanh của trẻ em và bố mẹ. Một mục "Kiểm duyệt" trên đó nói cho
+        mọi người biết khu quản trị nằm ở đâu, kể cả những người không vào được, và
+        nó chỉ tiết kiệm cho đúng một người: người quản trị, người vốn biết đường.
+        Khu quản trị có thanh điều hướng riêng (`app/admin/layout.tsx`), vào bằng
+        đường dẫn `/admin`.
+      */}
 
       {actor ? (
         <form action={logoutAction}>

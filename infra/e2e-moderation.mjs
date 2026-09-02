@@ -216,8 +216,14 @@ if (!gameId) {
     res?.status() === 404,
     `HTTP ${res?.status()}`
   );
+  /*
+   * Thanh điều hướng của site KHÔNG CÒN link tới khu quản trị với BẤT KỲ AI, kể cả
+   * admin — trước đây có, và đã bỏ: một mục "Kiểm duyệt" trên thanh của trẻ em nói
+   * cho mọi người biết khu quản trị nằm ở đâu, mà chỉ tiết kiệm cho đúng một người.
+   * Khu quản trị có thanh riêng, xem phép kiểm về `admin-nav` bên dưới.
+   */
   check(
-    'Phụ huynh thường không thấy link Kiểm duyệt trên nav',
+    'Thanh điều hướng của site không có link tới khu quản trị',
     (await p.locator('[data-testid=nav-admin]').count()) === 0
   );
   await p.close();
@@ -240,7 +246,26 @@ const admin = await adminCtx.newPage();
 
   const res = await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
   check('Admin vào được /admin', res?.status() === 200, `HTTP ${res?.status()}`);
-  check('Admin thấy link Kiểm duyệt trên nav', (await admin.locator('[data-testid=nav-admin]').count()) > 0);
+  /*
+   * Khu quản trị có KHUNG RIÊNG: thanh tab của nó, và không có thanh điều hướng trẻ
+   * em, tranh trang trí hay chân trang của site. Ba phép kiểm dưới đây canh đúng ba
+   * thứ đó — bỏ khung riêng đi mà quên là danh sách kiểm duyệt lại bị bó vào 1024px
+   * giữa mấy cái cây, và không có gì báo ra.
+   */
+  check('Khu quản trị có thanh tab riêng', (await admin.locator('[data-testid=admin-nav]').count()) > 0);
+  check(
+    'Khu quản trị KHÔNG mang thanh điều hướng của site',
+    (await admin.locator('[data-testid=nav-admin]').count()) === 0 &&
+      (await admin.locator('[data-testid=logout]').count()) === 0
+  );
+  check(
+    'Khu quản trị hiện email của người đang đăng nhập',
+    (await admin.locator('[data-testid=admin-who]').innerText()).includes(ADMIN_EMAIL)
+  );
+  check(
+    'Tab Kiểm duyệt đang được đánh dấu là trang hiện tại',
+    (await admin.locator('[data-testid=admin-tab-go]').getAttribute('aria-current')) === 'page'
+  );
 
   const row = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
   const countText = await row.locator('[data-testid=admin-report-count]').innerText();
@@ -425,7 +450,19 @@ const verifiedCtxs = [];
   const num = (s) => Number(s.match(/^(\d+)/)?.[1] ?? -1);
   const totalOf = async (loc) => {
     await admin.goto(`${APP}/admin?loc=${loc}`, { waitUntil: 'networkidle' });
-    const activeTab = await admin.locator('[aria-current=page]').innerText().catch(() => '');
+    /*
+     * KHOANH vào nhóm bộ lọc. `[aria-current=page]` trần khớp HAI phần tử từ khi khu
+     * quản trị có thanh tab riêng — tab "Kiểm duyệt" cũng đánh dấu trang hiện tại —
+     * và locator khớp nhiều phần tử thì Playwright ném, `.catch` biến nó thành chuỗi
+     * rỗng, rồi phép kiểm đỏ mà chẳng nói gì về nguyên nhân.
+     *
+     * Cùng một bài học đã ghi trong README cho `role=alert`: selector theo thuộc tính
+     * chung phải có phạm vi, không thì nó bắt trúng thứ mới xuất hiện ở chỗ khác.
+     */
+    const activeTab = await admin
+      .locator('[data-testid=admin-filters] [aria-current=page]')
+      .innerText()
+      .catch(() => '');
     const total = num(await admin.locator('[data-testid=admin-total]').innerText());
     return { total, activeTab };
   };
