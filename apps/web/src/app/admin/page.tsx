@@ -104,7 +104,7 @@ export default async function AdminPage({
   const page = Math.max(1, Number(sp.trang ?? '1') || 1);
   const where = whereFor(filter);
 
-  const [total, games, takedowns] = await Promise.all([
+  const [total, games, takedowns, errorGroups] = await Promise.all([
     prisma.game.count({ where }),
     prisma.game.findMany({
       where,
@@ -174,6 +174,16 @@ export default async function AdminPage({
         },
       },
     }),
+
+    /*
+     * Số nhóm lỗi chưa xử lý. Chỉ một con số, chi tiết ở `/admin/loi`.
+     *
+     * Đếm ở đây chứ không bắt admin tự nhớ mở trang kia: một trang giám sát mà phải
+     * chủ động vào mới biết có gì thì chỉ được mở lúc đã nghi có chuyện — tức đúng
+     * lúc nó không còn cảnh báo được nữa. Con số đứng ngay trên đường đi hằng ngày
+     * của admin thì lỗi mới tự tìm đến mắt người xem.
+     */
+    prisma.errorLog.count({ where: { resolvedAt: null } }),
   ]);
 
   /*
@@ -236,6 +246,25 @@ export default async function AdminPage({
         title="Kiểm duyệt"
         lead={`${actor.email} · ${REPORT_AUTO_HIDE_THRESHOLD} báo cáo đã xác minh thì ẩn mềm, ${REPORT_HARD_HIDE_THRESHOLD} thì ẩn hẳn`}
       />
+
+      {/*
+        Một DÒNG, không phải một khối.
+        Cố ý nhỏ hơn hàng đợi bản quyền bên dưới: khối lỗi kỹ thuật mà to bằng khối
+        có hạn chót pháp lý là đổi thứ tự ưu tiên của trang bằng cỡ chữ. Nhưng vẫn
+        nằm trên cùng, vì "web đang hỏng" là thứ đọc được trong một giây, và nếu phải
+        cuộn mới thấy thì nó chỉ được đọc khi người ta đã nghi có chuyện.
+      */}
+      <p className="mb-6 text-sm" data-testid="admin-error-link">
+        {errorGroups > 0 ? (
+          <Link href="/admin/loi" className="font-bold text-danger">
+            {errorGroups} nhóm lỗi chưa xử lý →
+          </Link>
+        ) : (
+          <Link href="/admin/loi" className="text-ink-soft">
+            Không có lỗi nào chưa xử lý · xem trang lỗi →
+          </Link>
+        )}
+      </p>
 
       {takedowns.length > 0 && (
         <section className="mb-7" data-testid="admin-takedowns">

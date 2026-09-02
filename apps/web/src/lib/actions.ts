@@ -27,6 +27,7 @@ import {
   reportGame,
 } from './moderation';
 import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
+import { resolveAllErrors, setErrorResolved } from './error-log';
 import { clientFingerprint, destroySession, getActor } from './session';
 import { prisma } from './db';
 
@@ -455,5 +456,37 @@ export async function adminSetChildLockedAction(
     );
   });
   revalidatePath('/admin');
+  return state;
+}
+
+/**
+ * Đánh dấu một nhóm lỗi đã xử lý, hoặc mở lại.
+ *
+ * KHÔNG ghi `ModerationLog`, khác mọi action admin ở trên. Vết kiểm duyệt là hồ sơ
+ * về những gì đã làm với game và tài khoản của một đứa trẻ, tức nó có ý nghĩa với
+ * người ngoài; còn đánh dấu một lỗi kỹ thuật là ghi chú nội bộ của người đang sửa.
+ * Trộn hai loại vào một dòng thời gian là làm loãng đúng chỗ cần đọc kỹ nhất.
+ */
+export async function adminSetErrorResolvedAction(
+  _prev: FormState,
+  form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    await requireAdmin();
+    await setErrorResolved(String(form.get('id') ?? ''), String(form.get('resolved')) === 'true');
+  });
+  revalidatePath('/admin/loi');
+  return state;
+}
+
+export async function adminResolveAllErrorsAction(
+  _prev: FormState,
+  _form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    await requireAdmin();
+    await resolveAllErrors();
+  });
+  revalidatePath('/admin/loi');
   return state;
 }

@@ -35,17 +35,21 @@ ai biết** cho tới khi có người mở web và thấy trắng.
 | Thứ | Trạng thái |
 |---|---|
 | Analytics | **không có gì** |
-| Error tracking | **không có gì** |
-| Uptime monitoring | **không có gì** |
+| Error tracking | tự host, xem mục 6 — lỗi phía client vào bảng `ErrorLog`, admin đọc ở `/admin/loi` |
+| Uptime monitoring | **không có gì** — tầng duy nhất còn thiếu, cần tài khoản của fen |
 | Error boundary của Next | **không có** `error.tsx`, `global-error.tsx`, `not-found.tsx` → đã bổ sung, xem mục 5 |
-| Lỗi phía server | 8 chỗ `console.error` → log Docker → **không ai đọc** |
-| Lỗi phía client | đi vào console trình duyệt của **người dùng** → ta không bao giờ thấy |
+| Lỗi phía server | 8 chỗ `console.error` → log Docker → **không ai đọc**; nhưng lỗi làm vỡ trang thì đi qua boundary nên vẫn vào bảng, kèm `digest` để dò ngược log |
+| Lỗi phía client | đã vào DB của chính mình, xem mục 6 |
 | Giữ log | `json-file` **không giới hạn** → phình tới khi hết đĩa; đã chặn, xem mục 5 |
 | Healthcheck | có trong compose, nhưng chỉ **restart container** — không báo cho ai |
 
-Nói gọn: hệ thống này hiện tại **không có cách nào biết mình đang hỏng**, ngoài
-việc fen tự mở web ra xem. Đây là cùng một loại lỗi với vụ mail: mọi thứ trông
+Trạng thái lúc viết báo cáo này: hệ thống **không có cách nào biết mình đang hỏng**
+ngoài việc fen tự mở web ra xem. Đây là cùng một loại lỗi với vụ mail: mọi thứ trông
 xanh, và cách hỏng duy nhất lộ ra là khi người dùng thật bỏ đi.
+
+Sau tầng 0 và tầng 2, còn đúng một khoảng trống, và nó là khoảng trống mà tầng 2
+**không thể** tự bù: web sập hẳn thì không có trình duyệt nào chạy được `sendBeacon`
+để kể lại. Chỉ một con mắt ở NGOÀI hệ thống nhìn thấy được loại hỏng đó — tức tầng 1.
 
 ---
 
@@ -106,10 +110,10 @@ Nên ping thêm **cả hai domain** — `app` và `play`. Player domain sập th
 vẫn xanh nhưng **không game nào chạy được**, và uptime chỉ theo dõi `app` sẽ báo
 "mọi thứ ổn".
 
-### Tầng 2 — lỗi vào DB + trang cho admin xem, ~nửa ngày, KHÔNG vendor nào
+### Tầng 2 — lỗi vào DB + trang cho admin xem (ĐÃ LÀM, mục 6)
 
 Một bảng `ErrorLog`, một route nhận báo cáo lỗi từ `error.tsx` / `global-error.tsx`,
-và một mục trong `/admin` để xem: lỗi gì, `digest`, mấy lần, lần cuối khi nào.
+và một trang `/admin/loi` để xem: lỗi gì, `digest`, mấy lần, lần cuối khi nào.
 
 - Không thư viện mới, không host mới, không lỗ CSP (`connect-src 'self'` là đủ vì
   route nằm trên chính app).
@@ -120,7 +124,8 @@ và một mục trong `/admin` để xem: lỗi gì, `digest`, mấy lần, lầ
   lưu nội dung form**. Lưu lỗi mà kéo theo dữ liệu cá nhân là tự tạo ra đúng vấn đề
   vừa tránh được ở mục 3.
 
-Đây là tầng tôi khuyên làm **sau tầng 1**, và có thể là tầng cuối cùng cần làm.
+Đây có thể là tầng cuối cùng cần làm. Tầng 1 vẫn nên làm trước theo giá trị chia cho
+công, nhưng nó cần tài khoản của fen nên không chờ được.
 
 ### Tầng 3 — chỉ khi tầng 2 thật sự không đủ
 
@@ -203,10 +208,83 @@ chân trang**, có link về trang chủ.
 
 ---
 
-## 6. Việc tiếp theo cần fen quyết
+## 6. Đã làm — tầng 2
+
+Đường đi trọn vẹn: một trang ném lỗi → `error.tsx` chạy → `navigator.sendBeacon`
+bắn về `POST /api/errors` → gom nhóm vào bảng `ErrorLog` → admin đọc ở `/admin/loi`.
+
+### `apps/web/src/lib/error-report.ts`
+
+Phần chạy trong trình duyệt. `sendBeacon` **chứ không** `fetch`: đây đúng là bài học
+đã trả giá ở `game-frame.tsx` — `fetch` bắn-rồi-quên mà không ai đọc response thì
+trình duyệt kể lại thành `net::ERR_ABORTED`, tức cơ chế bắt lỗi tự đẻ ra một dòng đỏ
+mỗi lần nó chạy. `keepalive: true` không chữa được, đã đo.
+
+File này **không import gì cả**, và đó là điều kiện để `global-error.tsx` được phép
+dùng nó mà không phá bất biến của mình (xem mục 5).
+
+### `apps/web/src/app/api/errors/route.ts`
+
+Hộp nhận, **không đòi đăng nhập** — và không thể đòi: đúng những lỗi đáng lo nhất là
+lỗi làm hỏng cả cây React, trong đó có thể có cả phần đọc phiên. Luôn trả 204, kể cả
+với thân request rác hay khi vượt trần: `sendBeacon` không đọc được response, nên
+phân biệt mã trả về chỉ có tác dụng kể cho người dò biết cơ chế bên trong.
+
+### `apps/web/src/lib/error-log.ts`
+
+Bốn chỗ phải chặn, vì đây là hộp nhận dữ liệu của người ngoài ghi thẳng vào DB:
+
+1. **Dữ liệu cá nhân.** Query string bị cắt trước khi lưu — link xác minh email và
+   link đặt lại mật khẩu đều mang token ở đó, và một bảng lỗi giữ token là một bảng
+   phải bảo vệ như bảng mật khẩu. User agent bị rút còn `Chrome 130`: đủ để thấy
+   "lỗi này chỉ có trên Safari", không đủ để lần ra một người.
+2. **Một lỗi lặp trong vòng render.** Gom nhóm theo băm nội dung, nên nghìn lần lặp
+   là một dòng với `count` tăng, không phải nghìn dòng.
+3. **Bơm thông điệp ngẫu nhiên để đẻ vô hạn nhóm.** Trần 500 nhóm chưa xử lý. Chạm
+   trần thì nhóm mới bị bỏ, nhóm cũ vẫn đếm — cố ý không chọn "xoá nhóm cũ nhường
+   chỗ", vì như thế kẻ tấn công đẩy được mọi lỗi thật ra khỏi bảng, tức biến cơ chế
+   giám sát thành cơ chế xoá dấu vết.
+4. **Bảng lớn mãi.** Giữ 90 ngày, dọn ngay trên đường tạo nhóm mới. Không cần cron,
+   và không đánh thuế lên đường đi phổ biến nhất (lỗi cũ lặp lại — đúng một truy vấn).
+
+Thêm một chỗ đáng ghi: dùng `updateMany` chứ không `update`, vì `update` **ném** khi
+where không khớp và Prisma in lỗi ra stderr **trước khi** `.catch` của mình nuốt —
+đúng cái bẫy đã làm mọi lần đăng nhập thành công in ra một khối `prisma:error`.
+
+### `apps/web/src/app/admin/loi/page.tsx`
+
+Trang riêng, **không** thêm khối nữa vào `/admin`: `/admin` là chỗ xử lý nội dung,
+việc ở đó có hạn chót và có trẻ con ở đầu bên kia. Xếp chung thì hàng đợi bản quyền —
+thứ duy nhất có hạn đã hứa công khai với người ngoài — bị đẩy xuống dưới một danh
+sách stack trace. Bù lại `/admin` có **một dòng** đếm dẫn sang, cố ý nhỏ hơn khối
+bản quyền nhưng nằm trên cùng.
+
+Sắp theo **lần cuối gặp**, không theo số lần: sắp theo số lần thì một lỗi cũ đã đếm
+tới hàng nghìn ngồi mãi trên đỉnh, che đúng thứ đáng xem nhất là lỗi vừa xuất hiện —
+tức lỗi có khả năng cao nhất là do bản vừa deploy gây ra.
+
+"Đã xử lý" **không xoá dòng**, chỉ đóng dấu thời gian. Nhờ vậy lỗi quay lại sau khi
+đánh dấu thì thẻ nói thẳng *"nhưng đã xảy ra lại sau đó"* — nghĩa là bản vá không ăn,
+và đó là thông tin quan trọng nhất trên cả thẻ.
+
+### Đã kiểm
+
+`typecheck` sạch · `contrast-check` 76/76 · `a11y-check` 17/17 · `e2e-check` 44/44 ·
+`e2e-moderation` 58/58 · bộ mới `e2e-errorlog` **26/26**.
+
+Chặng duy nhất bộ e2e không phủ được là "trang thật ném lỗi → boundary → beacon",
+vì kiểm tự động chặng đó cần một route cố tình ném lỗi nằm sẵn trong mã nguồn, tức
+đặt một quả bom vào production để phục vụ bài test. Đã kiểm **tay** một lần: dựng
+`kg-tmp-throw/page.tsx`, nghe request tới `/api/errors` bằng Playwright, thấy đúng
+một POST và một dòng mới mang `digest` thật của Next; rồi xoá file. Cách làm lại ghi
+trong phần đầu `infra/e2e-errorlog.mjs`.
+
+---
+
+## 7. Việc tiếp theo cần fen quyết
 
 1. **Tầng 1 (uptime)** — fen tạo tài khoản ở một dịch vụ ping, trỏ vào cả hai
-   domain. Chỉ làm được sau khi có domain thật.
-2. **Tầng 2 (lỗi vào DB + trang admin)** — tôi làm được ngay, không cần chờ gì.
-   Nói một tiếng là bắt đầu.
-3. **Tầng 3** — tôi khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
+   domain. Chỉ làm được sau khi có domain thật. Giờ đây là tầng duy nhất còn thiếu
+   mà rẻ, và nó bắt loại hỏng mà tầng 2 **không** bắt được: web sập hẳn thì không có
+   trình duyệt nào chạy được `sendBeacon` để kể lại.
+2. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.

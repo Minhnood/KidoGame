@@ -59,6 +59,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 43
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 17
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 12, chạy riêng
+node infra/e2e-errorlog.mjs                                        # 26, không cần .sb3
 ```
 
 **Vì sao gần như bộ nào cũng cần `MAIL_LOG`:** `createChild` từ chối tạo tài khoản cho
@@ -67,6 +68,9 @@ thư. Logic đọc link nằm ở `infra/e2e-mail.mjs` dùng chung — và nó c
 phải khởi tạo bộ đọc **trước** khi đăng ký phụ huynh, xem chú thích trong file.
 
 `e2e-check.mjs` không cần `MAIL_LOG` vì nó dùng bé `beminh` do seed tạo sẵn.
+`e2e-errorlog.mjs` không cần cả `MAIL_LOG` lẫn `SB3_FIXTURE` — nó không tạo tài khoản
+nào, chỉ dùng admin demo và bé `beminh`. Đặt nó CUỐI trong một lượt chạy: bước cuối
+của bài là bắn hơn 40 báo cáo lỗi để kiểm trần chống lụt, và trần tính theo phút.
 
 `e2e-takedown.mjs` dựng HAI game vì "gỡ hẳn" không quay lui được: một game cho nhánh
 chấp nhận, một cho nhánh bác bỏ. `e2e-email.mjs` cần thêm `SB3_FIXTURE` để kiểm mail báo
@@ -872,6 +876,39 @@ devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoả
 | `apps/web/src/components` | Bộ component dùng chung (button, field, notice, card, file-picker) |
 | `infra` | Server tĩnh cho dev, Caddyfile + Dockerfile + compose + backup.sh cho production, script e2e |
 | `storage` | File theo địa chỉ nội dung: `sb3/`, `html/`, `thumb/` |
+
+## Biết khi web hỏng — lỗi vào DB của chính mình
+
+Kế hoạch đầy đủ và lý do từng lựa chọn ở [`infra/GIAM-SAT.md`](infra/GIAM-SAT.md).
+Phần đã chạy:
+
+`error.tsx` và `global-error.tsx` gọi `reportError` trong
+[`src/lib/error-report.ts`](apps/web/src/lib/error-report.ts) → `POST /api/errors` →
+gom nhóm vào bảng `ErrorLog` → admin đọc ở `/admin/loi`.
+
+**Không vendor, và đó là quyết định chứ không phải tiết kiệm.** Cả kiến trúc này dựng
+để không có traffic ra bên thứ ba từ trình duyệt của trẻ — biến đám mây Scratch đổi
+sang `local`, runtime đọc từ `node_modules`, `connect-src 'self'`. Cắm Google
+Analytics hay Sentry SaaS vào là đi ngược đúng những quyết định đó và phải chọc lỗ
+CSP, mà cái lỗ đó không chỉ dành cho Sentry.
+
+**Bốn điều dễ làm hỏng nếu sửa phần này:**
+
+1. **`sendBeacon`, không `fetch`.** `fetch` bắn-rồi-quên mà không ai đọc response thì
+   trình duyệt kể lại thành `net::ERR_ABORTED` — cơ chế bắt lỗi tự đẻ ra một dòng đỏ
+   mỗi lần chạy. `keepalive: true` không chữa được, đã đo.
+2. **`error-report.ts` không được import gì.** Đó là điều kiện duy nhất để
+   `global-error.tsx` dùng nó mà không phá bất biến "không phụ thuộc vào thứ đang
+   hỏng". Thêm một import là âm thầm nối trang cứu hộ vào cái cây vừa sập.
+3. **Query string phải bị cắt trước khi lưu.** Link xác minh email và link đặt lại
+   mật khẩu mang token ở đó. Bảng lỗi giữ token là bảng phải bảo vệ như bảng mật khẩu.
+4. **`updateMany`, không `update`.** `update` ném khi where không khớp, và Prisma in
+   lỗi ra stderr *trước khi* `.catch` nuốt được. Ở đây "không khớp" là đường đi bình
+   thường: lần đầu thấy lỗi này.
+
+Bộ kiểm: `node infra/e2e-errorlog.mjs` (26). Chặng "trang thật ném lỗi → boundary →
+beacon" **không** nằm trong bộ tự động — kiểm nó cần một route cố tình ném lỗi nằm sẵn
+trong mã nguồn. Cách kiểm tay ghi ở đầu file bộ kiểm.
 
 ## CSP của app origin — nonce, không phải unsafe-inline
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { reportError } from '@/lib/error-report';
 
 /**
  * Error boundary CUỐI CÙNG — bắt lỗi xảy ra trong chính `layout.tsx`.
@@ -15,6 +16,10 @@ import { useEffect } from 'react';
  * hỏng thì nó hỏng theo, và người dùng nhận được một trang trắng thay vì một câu.
  * Style viết thẳng inline, màu chốt cứng.
  *
+ * NGOẠI LỆ DUY NHẤT cho luật trên là `lib/error-report.ts`, và nó được phép vì file
+ * đó tự nó không import gì cả — nó không nối trang này vào cái cây vừa sập. Thêm
+ * một import vào file kia là âm thầm xoá mất ngoại lệ này.
+ *
  * Trang này hiếm khi xuất hiện, nhưng đúng lúc nó xuất hiện thì mọi cách chẩn đoán
  * khác đều đã tắt — nên `digest` ở đây còn quan trọng hơn ở `error.tsx`.
  */
@@ -27,6 +32,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('[global error boundary]', error);
+    reportError('global', error);
   }, [error]);
 
   return (

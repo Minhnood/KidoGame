@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import { Notice } from '@/components/notice';
 import { PageTitle } from '@/components/page';
+import { reportError } from '@/lib/error-report';
 
 /**
  * Error boundary cho mọi trang.
@@ -20,10 +21,13 @@ import { PageTitle } from '@/components/page';
  * dây DUY NHẤT nối "phụ huynh nói web hỏng" với đúng một dòng trong log. Không hiện
  * nó ra thì cách duy nhất còn lại là đoán.
  *
- * `console.error` ở đây là chỗ CẮM error tracking sau này (Sentry hoặc thứ tương
- * đương): chính hàm này là nơi mọi lỗi phía client đi qua. Hiện tại nó chỉ vào
- * console của trình duyệt, tức là chỉ ta thấy khi tự mở DevTools — KHÔNG ai theo dõi
- * được lỗi của người dùng thật. Xem `infra/GIAM-SAT.md`.
+ * `console.error` một mình thì chỉ vào console của NGƯỜI DÙNG, tức ta không bao giờ
+ * thấy. Nên bên cạnh nó là `reportError`, đẩy lỗi về `/api/errors` để nó vào bảng
+ * `ErrorLog` và hiện trên `/admin/loi`. Không vendor, không rời VPS — xem
+ * `infra/GIAM-SAT.md` mục 4, tầng 2.
+ *
+ * Giữ luôn `console.error`: khi tự mở DevTools để tìm lỗi thì object lỗi đầy đủ
+ * trong console vẫn hơn hẳn một dòng đã cắt trong DB.
  */
 export default function Error({
   error,
@@ -34,6 +38,7 @@ export default function Error({
 }) {
   useEffect(() => {
     console.error('[error boundary]', error);
+    reportError('boundary', error);
   }, [error]);
 
   return (

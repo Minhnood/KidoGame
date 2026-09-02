@@ -337,3 +337,61 @@ model GameTag {
 
   @@id([gameId, tagId])
 }
+
+/// Lỗi xảy ra ở máy người dùng thật, GOM THEO NHÓM chứ không một dòng một lần.
+///
+/// Vì sao cần bảng này: `error.tsx` và `global-error.tsx` chỉ `console.error`, tức
+/// lỗi nằm trong DevTools của người dùng và ta không bao giờ thấy. Còn lỗi phía
+/// server thì vào log Docker mà không ai đọc. Nghĩa là hệ thống không có cách nào
+/// biết mình đang hỏng ngoài việc tự mở web ra xem. Xem `infra/GIAM-SAT.md` mục 4.
+///
+/// Vì sao gom nhóm chứ không ghi từng lần: một lỗi trong vòng render lặp lại có thể
+/// bắn hàng nghìn báo cáo trong vài giây. Ghi từng dòng thì bảng phình theo tốc độ
+/// lỗi, mà thông tin thêm gần bằng không — cái admin cần là "lỗi gì, mấy lần, lần
+/// cuối khi nào", chứ không phải một nghìn bản sao của cùng một stack.
+///
+/// KHÔNG lưu IP, KHÔNG lưu user agent đầy đủ, KHÔNG lưu nội dung form. Lưu lỗi mà
+/// kéo theo dữ liệu cá nhân là tự tạo ra đúng vấn đề mà cả kiến trúc này đang tránh.
+model ErrorLog {
+  id String @id @default(cuid())
+
+  /// Khoá gom nhóm: băm của (nguồn + đường dẫn + digest + thông điệp). Unique, nên
+  /// `upsert` theo cột này là toàn bộ cơ chế gom — không cần đếm ở tầng ứng dụng.
+  fingerprint String @unique
+
+  /// `boundary` (error.tsx), `global` (global-error.tsx), hoặc `server`.
+  source String
+
+  /// Đường dẫn nơi lỗi xảy ra, ĐÃ CẮT query string và hash.
+  ///
+  /// Cắt là bắt buộc, không phải cho gọn: query string mang những thứ như
+  /// `?game=<id>` hay token trong link xác minh email, và một bảng lỗi mà giữ token
+  /// là một bảng lỗi phải bảo vệ như bảng mật khẩu.
+  path String
+
+  /// `digest` của Next — sợi dây DUY NHẤT nối một dòng ở đây với một dòng trong log
+  /// server ở production, nơi thông điệp lỗi thật cố tình không được gửi xuống
+  /// trình duyệt. Rỗng khi lỗi không có digest (lỗi thuần phía client).
+  digest String @default("")
+
+  /// Thông điệp lỗi, đã cắt ngắn. Ở production lỗi từ server component đã bị Next
+  /// thay bằng câu chung, nên phần lớn giá trị ở đây là lỗi thuần client.
+  message String @default("")
+
+  /// Tên trình duyệt và số hiệu chính, ví dụ `Chrome 130`. Rút từ user agent Ở PHÍA
+  /// SERVER rồi bỏ phần còn lại: đủ để thấy "lỗi này chỉ xảy ra trên Safari", mà
+  /// không giữ được chuỗi dài dùng để lần ra một người.
+  browser String @default("")
+
+  count       Int      @default(1)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  /// Null nghĩa là chưa ai xem. Đánh dấu đã xử lý KHÔNG xoá dòng: lỗi quay lại thì
+  /// `count` tiếp tục tăng, và so được lần cuối với lúc đánh dấu.
+  resolvedAt DateTime?
+
+  /// Bộ lọc mặc định của trang admin là "chưa xử lý, mới nhất trước".
+  @@index([resolvedAt, lastSeenAt])
+  @@index([lastSeenAt])
+}
