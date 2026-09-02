@@ -9,6 +9,7 @@ import {
   loginChild,
   loginParent,
   registerParent,
+  REGISTRATIONS_PER_IP_PER_HOUR,
   resetChildPassword,
   setChildLocked,
 } from './auth';
@@ -28,6 +29,7 @@ import {
 } from './moderation';
 import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
 import { resolveAllErrors, setErrorResolved } from './error-log';
+import { rateKey, tooMany } from './rate-limit';
 import { clientFingerprint, destroySession, getActor } from './session';
 import { prisma } from './db';
 
@@ -82,6 +84,20 @@ export async function registerParentAction(
   form: FormData
 ): Promise<FormState> {
   const state = await run(async () => {
+    /*
+     * KHÔNG biết IP thì KHÔNG giới hạn, cùng lý lẽ đã dùng ở `reporterKey` trong
+     * `moderation.ts`: gộp mọi người không rõ IP vào một khoá là chặn oan cả nhóm.
+     * Ở production Caddy luôn ghi đè `x-forwarded-for`, nên đường không-có-IP chỉ
+     * chạy ở dev và LAN — và nhờ đó các bộ e2e (dựng tới sáu phụ huynh một lượt,
+     * chạy lại nhiều lần trong một giờ) không bao giờ chạm trần này.
+     */
+    const ip = await clientIp();
+    if (ip && tooMany(rateKey('dang-ky', ip), REGISTRATIONS_PER_IP_PER_HOUR, 60 * 60 * 1000)) {
+      throw new AuthError(
+        'Có quá nhiều lượt đăng ký từ mạng của bạn trong một giờ qua. Bạn thử lại sau ít phút nhé.'
+      );
+    }
+
     const parentId = await registerParent(
       String(form.get('email') ?? ''),
       String(form.get('password') ?? '')

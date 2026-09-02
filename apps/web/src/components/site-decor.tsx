@@ -23,6 +23,20 @@
  *    cây sẽ nằm đè lên nội dung. Đây là trang trí cho chỗ thừa, không phải một
  *    thành phần của giao diện.
  *
+ *    ĐÃ CÂN VIỆC ĐẨY MỐC NÀY LÊN `2xl` (1536px) VÀ QUYẾT ĐỊNH KHÔNG. Đo được: ở
+ *    1280px lề chỉ 128px nên tỉ lệ vẽ là 128/300 = 0.43, lá còn khoảng 10px và hoa
+ *    gần thành đốm màu; ở 1536px tỉ lệ là 0.85 và mọi chi tiết đọc rõ. Nhưng ẩn tới
+ *    1536px thì 1366px và 1440px — hai cỡ màn laptop phổ biến nhất — mất sạch trang
+ *    trí, tức trả lại đúng dải trắng trơn mà cả file này tồn tại để tránh. Chi tiết
+ *    nhỏ hơn là cái giá nhẹ hơn hẳn không có gì.
+ *
+ *    Cách sửa ĐÚNG không phải ẩn, mà là cùng nguyên tắc đã ghi bên dưới đọc theo
+ *    chiều ngược: lề hẹp thì vẽ ÍT hơn, chứ không vẽ NHỎ hơn — tức một bộ path cành
+ *    ngắn cho khung 200 đơn vị, dùng ở dải 1280–1535px, để tỉ lệ lên 0.64 mà không
+ *    lấn vào nội dung. Chưa làm vì nó là một bản vẽ thứ hai phải giữ đồng bộ với bản
+ *    hiện có, và đúng cái bẫy đó đã được ghi ở `Canh`: hai bản vẽ tay của cùng một
+ *    cái cành thì sớm muộn sẽ lệch nhau. Không đánh đổi việc đó bằng cách ẩn hình.
+ *
  * BỀ RỘNG PHẢI THEO MÀN HÌNH. Ở đúng 1280px mỗi bên lề chỉ có (1280−1024)/2 = 128px,
  * nên tranh phải hẹp hơn thế; tới 1536px thì lề rộng 256px và tranh mới được to ra.
  * Bản đầu tiên vẽ cứng 144px và đã lấn vào nội dung ở đúng mốc 1280px.

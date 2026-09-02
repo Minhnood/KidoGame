@@ -1002,6 +1002,15 @@ không bắt được, phải nghe `console` riêng.
 - **Sửa `packages/sb3` xong phải build lại**: `pnpm --filter @kidogame/sb3 build`.
   Nó nằm trong `serverExternalPackages` nên Next dùng `dist/`, không dùng `src/`.
 - **Đổi `next.config.ts` thì phải restart dev server**, Next không hot-reload file này.
+- **Đổi `prisma/schema.prisma` cũng phải restart dev server.** `db:push` cập nhật DB và
+  sinh lại Prisma Client, nhưng tiến trình đang chạy vẫn giữ bản cũ trong bộ nhớ. Triệu
+  chứng là một cột mới "không tồn tại" và biểu hiện ở tầng trên cùng: upload đổ, trông
+  y như luồng đăng game hỏng.
+- **File `'use server'` CHỈ được export hàm async.** `export const` ra khỏi
+  `src/lib/actions.ts` là lỗi build cho mọi trang import chuỗi đó, và `pnpm typecheck`
+  **không hề thấy** — triệu chứng là trang trả 500 với thông báo chỉ nằm trong log dev
+  server. Hằng số dùng chung phải ở file thường (ví dụ `REGISTRATIONS_PER_IP_PER_HOUR`
+  nằm trong `lib/auth.ts`).
 - `infra/player-server.mjs` và `infra/Caddyfile` phải giữ cùng bộ header. Sửa một
   bên nhớ sửa bên kia — e2e chỉ kiểm được bản dev.
 - **Selector trong e2e chỉ dùng `data-testid` hoặc thuộc tính ngữ nghĩa** (`role`),

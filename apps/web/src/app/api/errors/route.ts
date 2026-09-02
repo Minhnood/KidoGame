@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { overRateLimit, rateKeyOf, recordError } from '@/lib/error-log';
+import { overRateLimit, recordError } from '@/lib/error-log';
 
 export const runtime = 'nodejs';
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     if (declared > MAX_BODY_BYTES) return new NextResponse(null, { status: 204 });
 
     const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
-    if (overRateLimit(rateKeyOf(ip))) return new NextResponse(null, { status: 204 });
+    if (overRateLimit(ip)) return new NextResponse(null, { status: 204 });
 
     const raw = await request.text();
     if (raw.length > MAX_BODY_BYTES) return new NextResponse(null, { status: 204 });

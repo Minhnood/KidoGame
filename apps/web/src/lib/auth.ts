@@ -99,6 +99,28 @@ async function verifyOrDecoy(password: string, storedHash: string | null): Promi
   return verifyPassword(password, storedHash);
 }
 
+/**
+ * Trần số lượt đăng ký từ một IP trong một giờ. Áp ở `registerParentAction`.
+ *
+ * Hằng số này nằm ở đây chứ không nằm cạnh chỗ dùng, vì `actions.ts` là file
+ * `'use server'` và một file như thế CHỈ được export hàm async — export một `const`
+ * ra khỏi đó là lỗi build, mà `tsc --noEmit` không hề thấy.
+ *
+ * Chặn hai thứ khác nhau bằng cùng một con số:
+ *
+ *  1. **Dò danh sách email.** `/dang-ky` trả lời thẳng "email này đã được dùng" —
+ *     lý lẽ đầy đủ ở `registerParent` bên dưới. Một người dò một email không phải
+ *     vấn đề; dò mười nghìn email mới là, và trần này biến việc đó thành nhiều tháng.
+ *  2. **Tạo tài khoản hàng loạt**, và cái này nặng hơn: mỗi lượt đăng ký là một lượt
+ *     băm scrypt, mà scrypt có semaphore 4 và hàng chờ 32 (`lib/password.ts`). Bơm
+ *     đăng ký là làm đầy hàng chờ, rồi người thật đang đăng nhập nhận
+ *     `ScryptBusyError` — một script rẻ tiền khoá được cả trang.
+ *
+ * 60 chứ không phải 10: cả một lớp học hay cả một nhà đi chung một IP, và đây là
+ * trần cho MỌI người sau NAT đó cộng lại.
+ */
+export const REGISTRATIONS_PER_IP_PER_HOUR = 60;
+
 const normalizeEmail = (raw: string) => raw.trim().toLowerCase();
 const normalizeUsername = (raw: string) => raw.trim().toLowerCase();
 
@@ -119,7 +141,26 @@ export async function registerParent(emailRaw: string, password: string): Promis
 
   const existing = await prisma.parent.findUnique({ where: { email }, select: { id: true } });
   if (existing) {
-    throw new AuthError('Email này đã được dùng để đăng ký rồi.');
+    /*
+     * NÓI THẲNG là email đã có tài khoản, cố ý. Cách này để người ngoài thăm dò được
+     * email nào đã đăng ký, và đó là đánh đổi đã cân:
+     *
+     * Cách che thông tin đó là trả lời y như đăng ký thành công rồi gửi thư "bạn đã
+     * có tài khoản, đây là link đặt lại mật khẩu". Nhưng cách ấy chỉ an toàn khi thư
+     * CHẮC CHẮN tới, mà mail thật của dự án còn chưa dựng — làm bây giờ thì phụ
+     * huynh nhập lại email cũ (chuyện rất hay xảy ra, vì họ quên đã đăng ký) sẽ thấy
+     * "thành công", không có tài khoản nào được tạo, mật khẩu mới không dùng được, và
+     * không có thư nào để hiểu vì sao. Mắc kẹt hoàn toàn, im lặng.
+     *
+     * Cái thật sự phải chặn không phải một người dò một email, mà là dò cả một danh
+     * sách — chỗ đó đã siết bằng trần theo IP ở `registerParentAction`.
+     *
+     * Đổi lại thứ tự này khi mail thật đã chạy: khi ấy phương án gửi thư mới là
+     * phương án tốt hơn ở cả hai mặt.
+     */
+    throw new AuthError(
+      'Email này đã được dùng để đăng ký rồi. Bạn đăng nhập, hoặc bấm "Quên mật khẩu" nếu không nhớ.'
+    );
   }
 
   const parent = await prisma.parent.create({

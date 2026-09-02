@@ -17,8 +17,10 @@
  * `/api/errors`, xong thì XOÁ file.
  *
  * Rác để lại: vài nhóm lỗi mang đường dẫn `/e2e-loi-<hex>`, đều đã được đánh dấu là
- * đã xử lý ở bước cuối nên không đọng trong danh sách việc cần làm. Muốn xoá hẳn:
- *   delete from "ErrorLog" where path like '/e2e-loi-%';
+ * đã xử lý ở bước cuối nên không đọng trong danh sách việc cần làm. Muốn xoá hẳn thì
+ * xoá theo THÔNG ĐIỆP, không theo đường dẫn — một phép kiểm cố tình gửi đường dẫn
+ * tuyệt đối để xem nó bị quy về `khong-ro`, và dòng đó không khớp mẫu đường dẫn nào:
+ *   delete from "ErrorLog" where message like 'Loi kiem thu %';
  */
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
@@ -43,11 +45,21 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? '✅' : '❌'} ${name}${detail ? ` — ${detail}` : ''}`);
 };
 
-/** Gửi một báo cáo lỗi đúng như `sendBeacon` của trình duyệt gửi. */
+/**
+ * Gửi một báo cáo lỗi đúng như `sendBeacon` của trình duyệt gửi.
+ *
+ * `x-forwarded-for` PHẢI có, dù ở dev không ai đặt nó: trần chống lụt cố ý KHÔNG
+ * giới hạn khi không biết IP (gộp mọi người không rõ IP vào một khoá là chặn oan cả
+ * nhóm — cùng lý lẽ đã dùng cho khoá chống báo cáo trùng). Thiếu header này thì phép
+ * kiểm trần bên dưới đo một cái van đang mở, và nó xanh vì không có gì để đóng.
+ * Ở production Caddy luôn ghi đè header này.
+ */
+const IP_GIA = '203.0.113.7';
+
 async function post(body, headers = {}) {
   const res = await fetch(`${APP}/api/errors`, {
     method: 'POST',
-    headers: { 'content-type': 'text/plain', ...headers },
+    headers: { 'content-type': 'text/plain', 'x-forwarded-for': IP_GIA, ...headers },
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
   return res.status;
