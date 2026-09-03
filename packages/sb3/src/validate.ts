@@ -70,12 +70,33 @@ function hasProfanity(strings: string[], words: string[]): string | null {
   for (const s of strings) {
     const hay = s.toLowerCase();
     for (const w of words) {
-      // Ranh giới thô: tránh "hell" khớp trong "hello".
-      const i = hay.indexOf(w);
-      if (i === -1) continue;
-      const before = i === 0 ? ' ' : hay[i - 1];
-      const after = i + w.length >= hay.length ? ' ' : hay[i + w.length];
-      if (!/[a-z0-9à-ỹ]/.test(before) && !/[a-z0-9à-ỹ]/.test(after)) return w;
+      /*
+       * Ranh giới thô: chặn "hell" khớp trong "hello" — chỉ tính là khớp khi hai
+       * bên KHÔNG phải chữ/số.
+       *
+       * Lưu ý mức bảo đảm thật sự yếu hơn nghe tưởng: dấu câu, xuống dòng, ngoặc,
+       * gạch nối đều được coi là ranh giới hợp lệ. Nên một token 2 ký tự vẫn khớp
+       * rất dễ khi quét lượng chuỗi lớn. Vì vậy chọn wordlist theo bề mặt quét là
+       * việc của người GỌI hàm này — xem apps/web/src/lib/profanity.ts.
+       */
+      /*
+       * Quét HẾT mọi lần xuất hiện, không chỉ lần đầu.
+       *
+       * Bản trước dùng đúng một `indexOf`: gặp lần đầu mà lần đó nằm trong một
+       * từ khác thì `continue` sang từ tiếp theo, và những lần sau không bao giờ
+       * được xét. Nghĩa là một từ vô hại chứa chuỗi đó là đủ để VÔ HIỆU HOÁ cả
+       * từ ấy trên toàn bộ chuỗi đang quét.
+       */
+      let khop = false;
+      for (let i = hay.indexOf(w); i !== -1; i = hay.indexOf(w, i + 1)) {
+        const before = i === 0 ? ' ' : hay[i - 1];
+        const after = i + w.length >= hay.length ? ' ' : hay[i + w.length];
+        if (!/[a-z0-9à-ỹ]/.test(before) && !/[a-z0-9à-ỹ]/.test(after)) {
+          khop = true;
+          break;
+        }
+      }
+      if (khop) return w;
     }
   }
   return null;

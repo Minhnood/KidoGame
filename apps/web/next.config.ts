@@ -1,38 +1,24 @@
 import type { NextConfig } from 'next';
 
-const PLAYER_ORIGIN = process.env.PLAYER_ORIGIN ?? 'http://127.0.0.1:3001';
-
-/**
- * CSP của app origin.
- *
- * `frame-src` chỉ cho phép đúng player origin, và app origin KHÔNG BAO GIỜ serve
- * file của người dùng — đó là cặp ràng buộc giữ cho một game độc hại không chạm
- * được vào session của người đang đăng nhập.
- *
- * `script-src 'unsafe-inline'` là do Next cần inline script để hydrate. Đường
- * nâng cấp là dùng nonce qua middleware — nên làm trước khi mở public.
- */
-const isDev = process.env.NODE_ENV === 'development';
-
 /*
- * `next dev` build bundle client bằng devtool eval-source-map, nên CSP không có
- * 'unsafe-eval' sẽ chặn thẳng bundle đó: client component không hydrate được,
- * form upload và bộ đếm lượt chơi im lặng không chạy. Bản production không dùng
- * eval nên chỉ nới đúng ở dev.
+ * CSP KHÔNG còn ở đây — nó nằm trong `src/middleware.ts`.
+ *
+ * Hai lý do, cả hai đều bắt buộc chứ không phải sở thích:
+ *
+ * 1. Policy phải mang một `nonce` MỚI cho mỗi request thì mới bỏ được
+ *    `script-src 'unsafe-inline'`. `headers()` ở đây trả về giá trị tĩnh, không
+ *    có chỗ nào sinh được giá trị theo từng request.
+ *
+ * 2. `headers()` được Next đánh giá LÚC BUILD rồi nướng vào
+ *    .next/routes-manifest.json. Khi CSP còn ở đây, `frame-src` lấy PLAYER_ORIGIN
+ *    tại thời điểm build, trong khi `objectUrl()` đọc biến đó lúc chạy — hai thời
+ *    điểm khác nhau cho cùng một giá trị. Đã hỏng thật khi deploy Docker: iframe
+ *    trỏ đúng player domain nhưng CSP vẫn chỉ cho phép mặc định của dev, và triệu
+ *    chứng là "game không boot" / "stage 0x0", nhìn y hệt lỗi đóng gói.
+ *
+ * Các header an ninh CÒN LẠI vẫn ở đây, vì chúng tĩnh thật và cần áp cho mọi
+ * đường dẫn, kể cả những đường mà middleware cố ý bỏ qua (/_next/static...).
  */
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: ${PLAYER_ORIGIN}`,
-  `frame-src ${PLAYER_ORIGIN}`,
-  `connect-src 'self'`,
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join('; ');
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
@@ -51,14 +37,19 @@ const nextConfig: NextConfig = {
    *
    * Kèm theo: chạy `pnpm --filter @kidogame/sb3 build` sau khi sửa packages/sb3.
    */
-  serverExternalPackages: ['@kidogame/sb3', 'sharp'],
+  /*
+   * `nodemailer` cũng để external: nó là CommonJS và tự `require` các module Node
+   * theo tên dựng lúc chạy. Bundle nó thì webpack cố phân giải những tên đó lúc
+   * build và cảnh báo về "critical dependency", còn transport SMTP thì chỉ hỏng khi
+   * có người thật bấm đăng ký. Để external là Node nạp nó y như một package thường.
+   */
+  serverExternalPackages: ['@kidogame/sb3', 'sharp', 'nodemailer'],
 
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
-          { key: 'Content-Security-Policy', value: csp },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'same-origin' },
           { key: 'X-Frame-Options', value: 'DENY' },

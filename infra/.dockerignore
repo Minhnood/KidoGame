@@ -1,0 +1,17 @@
+# Build context của service `backup` là thư mục infra/ (xem `context: .` trong
+# docker-compose.yml). Docker đọc .dockerignore ĐẶT CẠNH context, không phải cái
+# ở gốc repo — nên nếu thiếu file này thì khoá SSH và infra/.env được gửi thẳng
+# vào daemon mỗi lần build. Dockerfile.backup không COPY chúng, nên chúng không
+# nằm trong image, nhưng đưa khoá riêng đi lòng vòng là thói quen không nên có.
+
+# Khoá SSH cho bước đẩy sao lưu ra ngoài máy.
+ssh
+
+# Bí mật production.
+.env
+.env.local
+
+# Bản sao lưu: dump DB đầy đủ, tức email phụ huynh và hash mật khẩu.
+backups
+
+*.log

@@ -1,12 +1,20 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export type Bucket = 'sb3' | 'html' | 'thumb';
+export type Bucket = 'sb3' | 'html' | 'thumb' | 'runtime';
 
 const EXT: Record<Bucket, string> = {
   sb3: '.sb3',
   html: '.html',
   thumb: '.webp',
+  /*
+   * Runtime scratch-vm, tách khỏi HTML để mọi game dùng chung một file.
+   *
+   * Quy ước đường dẫn ở đây phải khớp `runtimePath()` trong `packages/sb3` — chính
+   * hàm đó nhúng URL vào HTML lúc đóng gói. Lệch nhau thì game mở ra với stage
+   * trắng và một 404 trong tab Network, không có lỗi nào ở tầng ứng dụng.
+   */
+  runtime: '.js',
 };
 
 function storageRoot(): string {

@@ -7,18 +7,38 @@
 # Điểm cốt lõi: HAI DOMAIN RIÊNG. File của người dùng không bao giờ được serve
 # từ app origin. Cookie phiên là host-only trên app domain nên không lọt sang
 # player domain.
+#
+# Domain đọc từ biến môi trường, KHÔNG viết cứng ở đây: docker compose truyền
+# APP_DOMAIN/PLAYER_DOMAIN từ infra/.env vào cả file này và app, nên hai bên
+# không thể lệch nhau. Lệch là frame-ancestors không khớp app origin, iframe bị
+# chặn, và triệu chứng lại là "game không boot" — nhìn y hệt lỗi đóng gói.
+# Giá trị sau dấu `:` là mặc định khi chạy Caddy tay, không qua compose.
 
 {
-	email admin@kidogame.vn
+	email {$ADMIN_EMAIL:admin@kidogame.vn}
 }
 
 # ---------------------------------------------------------------------------
 # App origin — Next.js. Là nơi DUY NHẤT có cookie phiên.
 # ---------------------------------------------------------------------------
-app.kidogame.vn {
+{$APP_DOMAIN:app.kidogame.vn} {
 	encode zstd gzip
 
-	reverse_proxy web:3000
+	reverse_proxy web:3000 {
+		# GHI ĐÈ X-Forwarded-For, không để Caddy nối thêm.
+		#
+		# Mặc định Caddy NỐI IP thật vào cuối chuỗi client gửi lên, nên phần tử
+		# trái nhất là do client tự viết. Mà `clientIp()` trong src/lib/actions.ts
+		# lấy đúng phần tử trái nhất — tức là IP hoàn toàn giả được bằng một dòng
+		# header. Cái đó nuôi hạn mức 5 yêu cầu gỡ bản quyền mỗi IP mỗi ngày, mà
+		# gửi yêu cầu là game của một đứa trẻ bị ẩn ngay lập tức.
+		#
+		# Ở đây Caddy là hop DUY NHẤT trước app (không Cloudflare, không LB), nên
+		# ghi đè là đúng: không có proxy hợp lệ nào phía trước để mà giữ chuỗi.
+		# Thêm một lớp proxy phía trước thì PHẢI sửa lại dòng này, không thì mọi
+		# người dùng trông như cùng một IP.
+		header_up X-Forwarded-For {remote_host}
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
@@ -34,7 +54,7 @@ app.kidogame.vn {
 # ---------------------------------------------------------------------------
 # Player origin — chỉ file tĩnh. KHÔNG có ứng dụng, KHÔNG có cookie.
 # ---------------------------------------------------------------------------
-play.kidogame.vn {
+{$PLAYER_DOMAIN:play.kidogame.vn} {
 	encode zstd gzip
 	root * /srv/storage
 
@@ -58,7 +78,7 @@ play.kidogame.vn {
 	@html path /html/*
 	header @html {
 		Content-Type "text/html; charset=utf-8"
-		Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; form-action 'none'; frame-ancestors https://app.kidogame.vn"
+		Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; form-action 'none'; frame-ancestors https://{$APP_DOMAIN:app.kidogame.vn}"
 	}
 
 	# --- File .sb3 gốc cho trẻ tải về ---------------------------------------
@@ -77,8 +97,25 @@ play.kidogame.vn {
 		Access-Control-Allow-Origin "*"
 	}
 
+	# --- Runtime scratch-vm dùng chung cho mọi game -------------------------
+	# Tách khỏi HTML để một đứa trẻ mở nhiều game không tải lại 1.75 MB mỗi lần.
+	# Content-Type phải đúng: `nosniff` ở trên tắt việc trình duyệt tự đoán kiểu,
+	# nên sai kiểu là trình duyệt từ chối chạy và game ra stage trắng.
+	#
+	# KHÔNG mở CORS ở đây: file này chỉ được nạp bằng thẻ <script> từ HTML nằm
+	# trên chính origin này.
+	@runtime path /runtime/*
+	header @runtime {
+		Content-Type "text/javascript; charset=utf-8"
+	}
+
 	# Chỉ cho phép đúng dạng đường dẫn địa chỉ-hoá-theo-nội-dung, chặn mọi thứ khác.
-	@valid path_regexp ^/(sb3|html|thumb)/[0-9a-f]{2}/[0-9a-f]{64}\.(sb3|html|webp)$
+	#
+	# Ghép cặp thùng-với-đuôi thay vì hai nhóm rời nhau: bản trước cho phép mọi tổ
+	# hợp, tức `/html/<sha>.js` cũng là đường dẫn "hợp lệ" và nó nhận Content-Type
+	# `text/html` từ khối @html ở trên. Chưa có file nào như thế nên chưa hại, nhưng
+	# ràng buộc chặt hơn không tốn gì.
+	@valid path_regexp ^/(sb3/[0-9a-f]{2}/[0-9a-f]{64}\.sb3|html/[0-9a-f]{2}/[0-9a-f]{64}\.html|thumb/[0-9a-f]{2}/[0-9a-f]{64}\.webp|runtime/[0-9a-f]{2}/[0-9a-f]{64}\.js)$
 	handle @valid {
 		file_server
 	}

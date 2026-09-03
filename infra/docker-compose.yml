@@ -1,0 +1,208 @@
+# Docker Compose cho production (M5). Chạy từ trong thư mục infra/.
+#
+#   cp .env.example .env   # rồi sửa mật khẩu và domain
+#   docker compose up -d --build
+#   docker compose run --rm web pnpm --filter @kidogame/web db:deploy
+#
+# `db:deploy` chứ KHÔNG phải `db:push`: chỉ khác ở `--skip-generate`. Prisma client
+# đã được sinh lúc build image; `prisma generate` chạy lại trong container sẽ cố ghi
+# vào /app/node_modules do root sở hữu, trong khi tiến trình chạy bằng user `node` —
+# kết quả là một lỗi EACCES to đùng ngay giữa bước migrate. Nó KHÔNG làm hỏng gì
+# (schema đã push xong, constraints vẫn chạy tiếp), nhưng một bước deploy bình thường
+# mà in ra lỗi quyền là thứ khiến người ta hoặc hoảng, hoặc quen mắt rồi bỏ qua cả
+# những lỗi thật sau này.
+#
+# BỐN SERVICE: db, web, caddy, backup. KHÔNG có service nào chạy
+# player-server.mjs — file đó chỉ dùng khi dev trên máy local. Ở production chính
+# Caddy serve thư mục storage, đúng như infra/Caddyfile đã viết sẵn từ M0.
+#
+# HAI DOMAIN là yêu cầu bảo mật, không phải sở thích. Cookie phiên là host-only
+# trên app domain nên không lọt sang player domain — nhờ vậy một game độc hại
+# do người lạ upload không đọc được session của đứa trẻ đang đăng nhập. Cookie
+# KHÔNG phân biệt theo port, nên "hai port" không thay thế được "hai hostname".
+#
+# Domain khai MỘT LẦN trong .env: cả Caddy và app đều đọc từ đó. Đừng sửa
+# domain trực tiếp trong Caddyfile — lệch giữa hai chỗ thì frame-ancestors
+# không khớp app origin, iframe bị chặn, và triệu chứng là "game không boot"
+# hay "stage 0x0", nhìn y hệt lỗi đóng gói. Đây là cái bẫy đã vấp ở dev.
+
+name: kidogame
+
+# ---------------------------------------------------------------------------
+# GIỚI HẠN LOG, áp cho cả bốn service qua YAML anchor.
+#
+# Docker mặc định dùng driver `json-file` KHÔNG GIỚI HẠN: file log lớn mãi tới khi
+# container bị xoá. Trên một VPS nhỏ đó là một cách hết đĩa rất chậm và rất im —
+# và khi đĩa đầy thì Postgres là thứ chết trước, tức mất web chứ không phải mất log.
+#
+# 20MB × 5 file = tối đa 100MB mỗi service. Đủ để soi lại vài ngày gần nhất, mà
+# vẫn có trần. Đây là log DUY NHẤT của hệ thống này — chưa có nơi nào khác nhận
+# lỗi, xem `infra/GIAM-SAT.md`.
+# ---------------------------------------------------------------------------
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '20m'
+    max-file: '5'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Postgres. Không publish port ra ngoài: chỉ `web` trong network nội bộ nói
+  # chuyện với nó. Muốn vào bằng psql thì `docker compose exec db psql -U kidogame`.
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_DB: kidogame
+      POSTGRES_USER: kidogame
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thieu POSTGRES_PASSWORD trong infra/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `web` chờ cái này xanh mới khởi động, khỏi crash vòng đầu vì DB chưa lên.
+      test: ['CMD-SHELL', 'pg_isready -U kidogame -d kidogame']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # ---------------------------------------------------------------------------
+  # App Next.js. Cũng không publish port: Caddy là đường vào duy nhất.
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Mật khẩu đi vào URL nên chỉ dùng ký tự chữ và số — ký tự như @ : / ?
+      # phải percent-encode, và quên encode thì lỗi báo ra là "không kết nối
+      # được DB", không hề chỉ vào mật khẩu.
+      DATABASE_URL: postgresql://kidogame:${POSTGRES_PASSWORD}@db:5432/kidogame?schema=public
+      # Dùng để dựng link tuyệt đối trong email xác minh / đặt lại mật khẩu.
+      APP_ORIGIN: https://${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
+      # Vào cả CSP frame-src của app (next.config.ts) và URL file game.
+      PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # Hai đường gửi mail, phải có MỘT. Không đường nào thì `sendMail` NÉM LỖI ở
+      # production, cố ý — in mail chứa token ra log production chính là rò token.
+      # Xem src/lib/mail.ts.
+      #
+      # KHÔNG dùng `:?` cho biến nào trong nhóm này, dù trước đây RESEND_API_KEY có.
+      # Lý do: compose không diễn đạt được "một trong hai", nên `:?` trên một đường
+      # sẽ chặn cả stack không khởi động được đối với người đã cấu hình xong đường
+      # kia. Đổi lại, cấu hình thiếu không còn lộ ra lúc `up` mà lúc gửi lá thư đầu
+      # tiên — nên chạy `node infra/mail-check.mjs` trước khi mở web, đó là chỗ trả
+      # lời có/không cho cả hai đường.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
+      # Hiện trên /dieu-khoan và nhận mail yêu cầu gỡ bản quyền. KHÔNG dùng `:?`
+      # như hai biến trên: thiếu tên đơn vị vận hành chỉ làm trang điều khoản kém
+      # đầy đủ, còn `:?` sẽ chặn cả stack không khởi động được vì một dòng chữ.
+      OPERATOR_NAME: ${OPERATOR_NAME:-}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+    volumes:
+      # Ghi được: đây là tiến trình nhận upload và đóng gói game.
+      - storage:/srv/storage
+    healthcheck:
+      # Trang chủ có truy vấn DB nên phép kiểm này cũng bắt được cả DB chết.
+      # Fetch trượt hoặc trả không-2xx -> promise reject -> node thoát khác 0.
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/').then(r => { if (!r.ok) throw new Error(String(r.status)) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Caddy: TLS tự động, reverse proxy cho app, và serve tĩnh cho player origin.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      - web
+    ports:
+      # Cần 80 mở thật ra Internet: Let's Encrypt xác thực qua đó.
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      PLAYER_DOMAIN: ${PLAYER_DOMAIN}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kidogame.vn}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # CHỈ ĐỌC. Player origin không bao giờ được ghi vào storage — nó chỉ là
+      # nơi phát file, và mọi thứ nó phát ra là do `web` đã kiểm và đóng gói.
+      - storage:/srv/storage:ro
+      # Giữ chứng chỉ đã cấp. Mất volume này là mỗi lần dựng lại phải xin
+      # chứng chỉ mới, rất dễ chạm rate limit của Let's Encrypt.
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # ---------------------------------------------------------------------------
+  # Sao lưu hằng ngày: dump Postgres + đóng gói storage, giữ N bản gần nhất.
+  #
+  # Là một service trong stack chứ không phải cron trên host, cố ý: cron trên host
+  # là một bước cài đặt riêng, nằm ngoài repo, và là thứ người ta quên. Backup mà
+  # quên bật thì đúng bằng không có backup, nhưng lại cho cảm giác đã có.
+  # ---------------------------------------------------------------------------
+  backup:
+    # Image riêng, nhưng vẫn FROM postgres:17 — xem Dockerfile.backup. Ghim đúng
+    # tag của service db vì `pg_dump` lệch major với server là nó TỪ CHỐI chạy.
+    # Thêm rsync + openssh-client để đẩy bản sao lưu ra khỏi máy này.
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://kidogame:${POSTGRES_PASSWORD}@db:5432/kidogame
+      STORAGE_DIR: /srv/storage
+      BACKUP_DIR: /backups
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      # Không có dòng này thì container chạy UTC, và BACKUP_HOUR=3 nghĩa là 3 giờ
+      # sáng UTC — tức 10 GIỜ SÁNG giờ Việt Nam, đúng quãng trẻ hay chơi. Con số 3
+      # đọc lên ai cũng hiểu là 3 giờ sáng, nên phải làm cho nó đúng là 3 giờ sáng.
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      # Đẩy bản sao lưu sang máy khác. Rỗng = tắt, và mỗi lần chạy sẽ log một dòng
+      # nhắc rằng bản sao lưu đang nằm cùng ổ với dữ liệu gốc.
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_REMOTE_PORT: ${BACKUP_REMOTE_PORT:-22}
+      BACKUP_SSH_KEY: /ssh/id_backup
+      BACKUP_SSH_KNOWN_HOSTS: /ssh/known_hosts
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      # Chỉ đọc: việc của nó là sao chép ra, không bao giờ sửa file game.
+      - storage:/srv/storage:ro
+      # Bind mount ra host chứ không dùng named volume: bản sao lưu phải nhìn thấy
+      # và copy đi được từ ngoài mà không cần lệnh docker nào.
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+      # Khoá SSH + known_hosts cho bước đẩy ra ngoài máy. Chỉ đọc, và thư mục này
+      # KHÔNG vào image (xem .dockerignore) — nó chứa khoá riêng.
+      # Thư mục phải tồn tại kể cả khi chưa dùng tới; ./ssh trong repo có .gitkeep.
+      - ./ssh:/ssh:ro
+    # Image postgres có entrypoint riêng lo việc khởi tạo cluster, phải ghi đè.
+    entrypoint: ['/bin/bash', '/backup.sh', 'loop']
+
+volumes:
+  # Hai volume dưới đây là TOÀN BỘ dữ liệu không sinh lại được. Sao lưu nghĩa là
+  # sao lưu đúng hai cái này.
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

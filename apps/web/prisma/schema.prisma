@@ -16,8 +16,41 @@ model Parent {
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  children Child[]
-  reports  Report[]
+  /// Null nghĩa là chưa bấm link xác minh trong mail.
+  ///
+  /// CỐ TÌNH không chặn đăng nhập khi chưa xác minh: phụ huynh đăng ký xong là
+  /// tạo tài khoản cho con ngay, chặn ở đây thì đứa trẻ ngồi chờ bố mẹ mở mail.
+  /// Xác minh dùng để bảo đảm luồng quên-mật-khẩu gửi tới đúng hòm thư thật.
+  emailVerifiedAt DateTime?
+
+  children   Child[]
+  reports    Report[]
+  sessions   Session[]
+  authTokens AuthToken[]
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+/// Token dùng MỘT LẦN gửi qua email: xác minh email và đặt lại mật khẩu.
+///
+/// Giống Session, cột khoá chính là sha256 của token thật nằm trong link —
+/// rò database KHÔNG kéo theo rò token, vì từ hash không dựng ngược lại được.
+model AuthToken {
+  tokenHash String       @id
+  parentId  String
+  purpose   TokenPurpose
+  expiresAt DateTime
+  /// Đánh dấu đã dùng thay vì xoá: còn nhìn thấy token vừa bị dùng lại lần hai.
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  parent Parent @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, purpose])
+  @@index([expiresAt])
 }
 
 /// Tài khoản của trẻ: KHÔNG email, KHÔNG tên thật.
@@ -31,14 +64,75 @@ model Child {
   birthYear    Int?
   createdAt    DateTime @default(now())
 
-  parent Parent @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  games  Game[]
+  /// Phụ huynh khoá được tài khoản con mà không cần xoá.
+  isLocked Boolean @default(false)
+
+  parent   Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  games    Game[]
+  sessions Session[]
+  /// Vết kiểm duyệt nhắm vào chính TÀI KHOẢN này (admin khoá/mở khoá), không
+  /// nhắm vào một game cụ thể.
+  moderationLogs ModerationLog[]
 
   @@index([parentId])
 }
 
+/// Phiên đăng nhập lưu trong DB, KHÔNG dùng JWT.
+///
+/// Lý do: phụ huynh phải thu hồi được phiên của con ngay lập tức (khoá tài khoản,
+/// đổi mật khẩu). JWT thì token đã phát ra không gọi về được, còn hàng ở đây thì
+/// xoá là mất hiệu lực tức thì.
+///
+/// Đúng một trong hai cột parentId/childId được set — xem `CHECK` constraint
+/// thêm bằng migration, Prisma không diễn đạt được ràng buộc này.
+model Session {
+  /// sha256 của token trong cookie. Rò database KHÔNG kéo theo rò phiên.
+  tokenHash String   @id
+  parentId  String?
+  childId   String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  /// Hash của IP + user agent, chỉ để phụ huynh nhận ra phiên lạ. Không lưu IP thô.
+  clientHash String @default("")
+
+  parent Parent? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child  Child?  @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@index([childId])
+  @@index([expiresAt])
+}
+
+/// Đếm số lần đăng nhập sai để chặn dò mật khẩu.
+///
+/// Khoá theo (loại, danh tính) chứ không theo IP: trẻ trong cùng một lớp hay một
+/// nhà sẽ dùng chung IP, khoá theo IP là khoá oan cả lớp.
+model LoginAttempt {
+  id          String   @id @default(cuid())
+  /// "parent:<email>" hoặc "child:<username>", đã lowercase.
+  identity    String   @unique
+  failedCount Int      @default(0)
+  lockedUntil DateTime?
+  updatedAt   DateTime @updatedAt
+}
+
 enum GameStatus {
   PUBLISHED
+
+  /// Ẩn MỀM: rút khỏi trang chủ, tìm kiếm và mọi danh sách, nhưng link trực tiếp
+  /// vẫn chơi được.
+  ///
+  /// Đây là hành động tự động khi đủ ngưỡng báo cáo, thay cho việc ẩn hẳn. Lý do:
+  /// nội dung xấu bị chặn đúng thứ cần chặn là ĐƯỜNG LAN TRUYỀN — không ai còn tình
+  /// cờ gặp nó nữa — trong khi một game bị vùi oan không biến mất trước mặt những
+  /// người bạn mà bé đã gửi link cho. Hai loại thiệt hại không đối xứng: bỏ sót nội
+  /// dung xấu vài giờ là tệ, nhưng xoá công của một đứa trẻ vì ba người lạ bấm nút
+  /// cũng là tệ, và cái sau thì chính đứa trẻ đó phải chịu.
+  ///
+  /// Đủ ngưỡng gấp đôi thì mới lên HIDDEN. Xem `communityStatus` trong
+  /// `src/lib/moderation.ts`.
+  LIMITED
+
   HIDDEN
   REMOVED
 }
@@ -49,18 +143,54 @@ model Game {
   title       String
   description String @default("")
 
-  /// Ba nội dung đều địa chỉ hoá theo nội dung — cùng sha256 thì dùng chung file.
+  /// Bốn nội dung đều địa chỉ hoá theo nội dung — cùng sha256 thì dùng chung file.
   sb3Sha256   String
   sb3Size     Int
   htmlSha256  String
   thumbSha256 String
+
+  /// Runtime scratch-vm mà HTML của game này trỏ tới, đã tách ra thành file riêng.
+  ///
+  /// Giống hệt nhau giữa mọi game đóng gói bởi cùng một bản packager, nên trên đĩa
+  /// nó chỉ có một bản. Lưu cột này KHÔNG để phục vụ — HTML tự mang đường dẫn — mà
+  /// để trả lời được câu "file runtime nào còn game nào dùng" lúc dọn đĩa sau này.
+  ///
+  /// Rỗng nghĩa là game đóng gói TRƯỚC bản tách runtime, tức HTML của nó vẫn nhúng
+  /// nguyên 1.75 MB. Chạy `db:repackage` để đưa nó sang bản mới.
+  runtimeSha256 String @default("")
 
   /// Mặc định PUBLISHED theo quyết định "public ngay".
   /// Đổi default sang HIDDEN là bật được chế độ duyệt-trước.
   status GameStatus @default(PUBLISHED)
 
   playCount   Int @default(0)
+
+  /// MỌI báo cáo, kể cả của khách vãng lai. Dùng để admin thấy mức độ ồn ào.
   reportCount Int @default(0)
+
+  /// Chỉ báo cáo của phụ huynh ĐÃ XÁC MINH EMAIL. Đây là con số duy nhất được phép
+  /// tự động thay đổi trạng thái game.
+  ///
+  /// Vì sao phải là cột riêng chứ không dùng `reportCount`: khách vãng lai bị khoá
+  /// trùng theo hash IP, nên một người có Wi-Fi + 4G + VPN là tự đủ ba báo cáo mà
+  /// không cần rủ ai. Đếm kiểu đó thì "ngưỡng 3" thực chất chỉ đắt bằng ba địa chỉ
+  /// IP. Đòi email đã xác minh biến giá đó thành ba hòm thư thật, khác hẳn về bậc.
+  ///
+  /// Trẻ và khách vẫn báo cáo được, vẫn vào hàng đợi admin — chỉ không tự kích hoạt.
+  /// ĐÁNH ĐỔI ĐÃ BIẾT: hiện không có gì bắt phụ huynh xác minh email ngoài một
+  /// banner nhắc, nên lớp tự động sẽ nổ ít hơn trước. Bù lại nó không còn bị lách
+  /// bằng vài phút đổi mạng.
+  trustedReportCount Int @default(0)
+
+  /// Tên + mô tả đã bỏ dấu và về chữ thường, để tìm kiếm không dấu.
+  ///
+  /// Trẻ gõ "meo" phải ra "Mèo phiêu lưu". Dùng cột thay vì extension `unaccent`
+  /// của Postgres để khỏi phải CREATE EXTENSION lúc dựng DB trên VPS.
+  /// Xem `src/lib/search.ts`. Nhớ ghi lại cột này mỗi khi tên/mô tả đổi.
+  ///
+  /// KHÔNG đánh index: truy vấn là `LIKE '%...%'` nên btree không giúp được gì.
+  /// Khi nào số game đủ lớn để thấy chậm thì chuyển sang pg_trgm.
+  titleSearch String @default("")
 
   /// Từ analysis của packager — ảnh hưởng dung lượng runtime nhúng vào HTML.
   usesMusic Boolean @default(false)
@@ -70,10 +200,11 @@ model Game {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  child          Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
-  reports        Report[]
-  moderationLogs ModerationLog[]
-  tags           GameTag[]
+  child            Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
+  reports          Report[]
+  moderationLogs   ModerationLog[]
+  tags             GameTag[]
+  takedownRequests TakedownRequest[]
 
   @@index([childId])
   @@index([status, createdAt])
@@ -105,18 +236,99 @@ model Report {
   @@index([status])
 }
 
+enum TakedownStatus {
+  OPEN
+  /// Khiếu nại đúng — game đã bị gỡ hẳn.
+  ACCEPTED
+  /// Khiếu nại không đúng — game được cho hiện lại (nếu chính nó gây ra việc ẩn).
+  REJECTED
+}
+
+/// Yêu cầu gỡ game vì vi phạm bản quyền.
+///
+/// TÁCH KHỎI `Report` một cách có chủ đích, dù `Report` đã có lý do `CHEP_BAI`.
+/// Hai thứ khác nhau ở người gửi và ở cái cần thu thập:
+///
+///  - `Report` là của người dùng trong nhà — thường là trẻ hoặc phụ huynh đi ngang
+///    qua. Nó cố tình KHÔNG có ô nhập tự do, và chỉ cần đếm tới ngưỡng.
+///  - Yêu cầu gỡ là của người NGOÀI, thường là tác giả bản gốc, không có tài khoản
+///    ở đây. Cái cần là danh tính người khiếu nại và căn cứ sở hữu — chính hai thứ
+///    mà form báo cáo cố tình không hỏi.
+///
+/// Không lưu cột "đã cam đoan trung thực": `submitTakedownRequest` từ chối mọi yêu
+/// cầu chưa cam đoan, nên mọi hàng trong bảng đều đã cam đoan. Một cột luôn luôn
+/// `true` không nói lên gì.
+model TakedownRequest {
+  id     String @id @default(cuid())
+  gameId String
+
+  /// Người khiếu nại tự khai. KHÔNG xác minh được — đó chính là lý do phải có
+  /// bước admin xem lại, chứ không gỡ hẳn ngay khi nhận.
+  claimantName  String
+  claimantEmail String
+  /// Căn cứ: quan hệ với bản gốc, link tới bản gốc, ngày đăng...
+  evidence String
+
+  status TakedownStatus @default(OPEN)
+
+  /// CHÍNH yêu cầu này có phải là thứ đã chuyển game sang HIDDEN hay không.
+  ///
+  /// Cần để hoàn tác cho đúng. Game có thể đã bị ẩn từ trước vì lý do khác (phụ
+  /// huynh tự ẩn, hoặc đủ ngưỡng báo cáo); bác bỏ khiếu nại mà cứ thế cho hiện
+  /// lại thì sẽ lật luôn quyết định của người khác, vì một việc chẳng liên quan.
+  didHide Boolean @default(false)
+
+  /// Hash của IP người gửi. CHỈ dùng để đếm hạn mức chống spam — KHÔNG dùng làm
+  /// danh tính. Khác hẳn `Report.reporterIpHash`, cột đó vừa chống spam vừa là khoá
+  /// chống trùng, và ở đây làm vậy là sai: hai người khác nhau cùng một mạng công ty
+  /// cùng khiếu nại thì người thứ hai bị nuốt yêu cầu trong im lặng.
+  ipHash String
+
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  /// Id của admin đã xử lý. Chuỗi thường, không phải khoá ngoại — giống `ModerationLog.actorId`.
+  resolvedBy     String?
+  resolutionNote String    @default("")
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  /// Chống trùng theo EMAIL người khiếu nại, không theo IP: người khiếu nại tự khai
+  /// danh tính, và chính danh tính đó mới là thứ "cùng một người" nghĩa là gì ở đây.
+  /// Gửi lại thì im lặng coi như đã nhận, đúng cách `reportGame` xử lý báo cáo trùng.
+  @@unique([gameId, claimantEmail])
+  @@index([status, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+/// Vết của mọi thao tác kiểm duyệt.
+///
+/// Nhắm vào ĐÚNG MỘT đối tượng: một game, hoặc một tài khoản trẻ. Trước đây
+/// `gameId` là bắt buộc, nên việc admin khoá tài khoản một bé không để lại vết
+/// nào — mà đó lại là thao tác nặng nhất trong cả hệ thống. Hai cột nullable
+/// cộng một CHECK constraint là cách diễn đạt "một trong hai, không phải cả
+/// hai": giống hệt `Session.parentId`/`childId`.
+///
+/// Ràng buộc đúng-một nằm trong `prisma/constraints.sql`, Prisma không diễn đạt
+/// được. Chạy `pnpm db:constraints` sau mỗi `prisma db push`.
 model ModerationLog {
-  id      String @id @default(cuid())
-  gameId  String
+  id String @id @default(cuid())
+
+  /// Null khi thao tác nhắm vào tài khoản trẻ.
+  gameId String?
+  /// Null khi thao tác nhắm vào một game.
+  childId String?
+
   /// Ai thao tác: parent id, admin id, hoặc "system" khi tự động ẩn theo ngưỡng.
   actorId String
   action  String
   note    String @default("")
 
   createdAt DateTime @default(now())
-  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game      Game?    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  child     Child?   @relation(fields: [childId], references: [id], onDelete: Cascade)
 
   @@index([gameId])
+  @@index([childId])
 }
 
 model Tag {
@@ -134,4 +346,62 @@ model GameTag {
   tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([gameId, tagId])
+}
+
+/// Lỗi xảy ra ở máy người dùng thật, GOM THEO NHÓM chứ không một dòng một lần.
+///
+/// Vì sao cần bảng này: `error.tsx` và `global-error.tsx` chỉ `console.error`, tức
+/// lỗi nằm trong DevTools của người dùng và ta không bao giờ thấy. Còn lỗi phía
+/// server thì vào log Docker mà không ai đọc. Nghĩa là hệ thống không có cách nào
+/// biết mình đang hỏng ngoài việc tự mở web ra xem. Xem `infra/GIAM-SAT.md` mục 4.
+///
+/// Vì sao gom nhóm chứ không ghi từng lần: một lỗi trong vòng render lặp lại có thể
+/// bắn hàng nghìn báo cáo trong vài giây. Ghi từng dòng thì bảng phình theo tốc độ
+/// lỗi, mà thông tin thêm gần bằng không — cái admin cần là "lỗi gì, mấy lần, lần
+/// cuối khi nào", chứ không phải một nghìn bản sao của cùng một stack.
+///
+/// KHÔNG lưu IP, KHÔNG lưu user agent đầy đủ, KHÔNG lưu nội dung form. Lưu lỗi mà
+/// kéo theo dữ liệu cá nhân là tự tạo ra đúng vấn đề mà cả kiến trúc này đang tránh.
+model ErrorLog {
+  id String @id @default(cuid())
+
+  /// Khoá gom nhóm: băm của (nguồn + đường dẫn + digest + thông điệp). Unique, nên
+  /// `upsert` theo cột này là toàn bộ cơ chế gom — không cần đếm ở tầng ứng dụng.
+  fingerprint String @unique
+
+  /// `boundary` (error.tsx), `global` (global-error.tsx), hoặc `server`.
+  source String
+
+  /// Đường dẫn nơi lỗi xảy ra, ĐÃ CẮT query string và hash.
+  ///
+  /// Cắt là bắt buộc, không phải cho gọn: query string mang những thứ như
+  /// `?game=<id>` hay token trong link xác minh email, và một bảng lỗi mà giữ token
+  /// là một bảng lỗi phải bảo vệ như bảng mật khẩu.
+  path String
+
+  /// `digest` của Next — sợi dây DUY NHẤT nối một dòng ở đây với một dòng trong log
+  /// server ở production, nơi thông điệp lỗi thật cố tình không được gửi xuống
+  /// trình duyệt. Rỗng khi lỗi không có digest (lỗi thuần phía client).
+  digest String @default("")
+
+  /// Thông điệp lỗi, đã cắt ngắn. Ở production lỗi từ server component đã bị Next
+  /// thay bằng câu chung, nên phần lớn giá trị ở đây là lỗi thuần client.
+  message String @default("")
+
+  /// Tên trình duyệt và số hiệu chính, ví dụ `Chrome 130`. Rút từ user agent Ở PHÍA
+  /// SERVER rồi bỏ phần còn lại: đủ để thấy "lỗi này chỉ xảy ra trên Safari", mà
+  /// không giữ được chuỗi dài dùng để lần ra một người.
+  browser String @default("")
+
+  count       Int      @default(1)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  /// Null nghĩa là chưa ai xem. Đánh dấu đã xử lý KHÔNG xoá dòng: lỗi quay lại thì
+  /// `count` tiếp tục tăng, và so được lần cuối với lúc đánh dấu.
+  resolvedAt DateTime?
+
+  /// Bộ lọc mặc định của trang admin là "chưa xử lý, mới nhất trước".
+  @@index([resolvedAt, lastSeenAt])
+  @@index([lastSeenAt])
 }

@@ -26,6 +26,14 @@ const BUCKETS = {
   sb3: { ext: '.sb3', type: 'application/octet-stream' },
   html: { ext: '.html', type: 'text/html; charset=utf-8' },
   thumb: { ext: '.webp', type: 'image/webp' },
+  /*
+   * Runtime scratch-vm, tách khỏi HTML để mọi game dùng chung một file.
+   *
+   * Content-Type PHẢI đúng: `nosniff` bên dưới tắt hẳn việc trình duyệt tự đoán
+   * kiểu, nên trả sai kiểu cho một file .js là trình duyệt từ chối chạy nó và game
+   * mở ra với stage trắng.
+   */
+  runtime: { ext: '.js', type: 'text/javascript; charset=utf-8' },
 };
 
 /**
@@ -64,7 +72,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   // /<bucket>/<xx>/<sha256><ext>
-  const m = /^\/(sb3|html|thumb)\/([0-9a-f]{2})\/([0-9a-f]{64})(\.[a-z0-9]+)$/.exec(pathname);
+  const m = /^\/(sb3|html|thumb|runtime)\/([0-9a-f]{2})\/([0-9a-f]{64})(\.[a-z0-9]+)$/.exec(
+    pathname
+  );
   if (!m) return notFound(res);
 
   const [, bucket, prefix, sha, ext] = m;
@@ -93,9 +103,13 @@ const server = http.createServer(async (req, res) => {
 
   if (bucket === 'html') {
     headers['content-security-policy'] = PLAYER_CSP;
-  } else {
+  } else if (bucket !== 'runtime') {
     // scratch-vm fetch .sb3 cross-origin -> thiếu header này là hỏng.
     // Thiếu CORS là lỗi mất thời gian nhất khi mới dựng.
+    //
+    // Runtime KHÔNG cần: nó chỉ được nạp bằng thẻ <script> từ HTML nằm trên CHÍNH
+    // origin này. Mở CORS cho nó là cho phép trang khác đọc nội dung file mà không
+    // đổi lại được gì.
     headers['access-control-allow-origin'] = '*';
   }
 

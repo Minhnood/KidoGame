@@ -1,0 +1,17 @@
+# Image cho service `backup`.
+#
+# VÌ SAO không dùng thẳng `postgres:17` như trước: để đẩy bản sao lưu ra khỏi máy
+# thì cần `rsync` và `ssh`, mà image postgres không có cái nào. Cài chúng lúc
+# container KHỞI ĐỘNG thì mỗi lần restart lại phải có mạng và phải chờ apt —
+# nghĩa là service sao lưu phụ thuộc vào apt còn sống, vào đúng cái ngày ta cần
+# nó nhất. Cài lúc BUILD thì cài một lần, và ảnh chạy được cả khi offline.
+#
+# VÌ SAO vẫn `FROM postgres:17` chứ không phải alpine cho nhẹ: `pg_dump` lệch
+# major với server là nó TỪ CHỐI chạy, không phải cảnh báo. Ghim chung một tag
+# với service `db` thì nâng Postgres là hai bên lên cùng lúc, không thể lệch.
+FROM postgres:17
+
+# --no-install-recommends: openssh-client kéo theo kha khá thứ không cần.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends rsync openssh-client \
+	&& rm -rf /var/lib/apt/lists/*
