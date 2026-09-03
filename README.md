@@ -226,8 +226,28 @@ buộc chúng khớp nhau ngoài việc có người nhớ — và bộ e2e ch�
 | `/be-dang-nhap` | `beminh` | `be1234` | Bé "Bé Minh", con của tài khoản trên |
 
 `isAdmin` nằm ở cả nhánh `create` lẫn `update` của seed, nên chạy seed lại trên DB cũ
-vẫn ra admin. Đây là tài khoản admin DUY NHẤT — chưa có giao diện nào phong admin cho
-người khác, muốn thêm thì sửa cột `Parent.isAdmin` thẳng trong DB.
+vẫn ra admin.
+
+**Tài khoản này CHỈ dành cho máy dev.** Mật khẩu của nó viết thẳng trong repo, nên
+`db:seed` từ chối chạy khi `NODE_ENV=production` (xem `guardProduction`).
+
+**Trên production, phong admin bằng lệnh này chứ đừng phá chốt seed:**
+
+```bash
+pnpm --filter @kidogame/web db:make-admin ban@example.com
+pnpm --filter @kidogame/web db:make-admin ban@example.com --bo   # thu hồi
+```
+
+Nó KHÔNG tạo tài khoản, chỉ nâng quyền cho một tài khoản đã đăng ký qua web — nên mật
+khẩu do chính người đó đặt và không bao giờ đi qua repo, qua log, hay qua tay ai khác.
+Nó cũng đòi email đã xác minh: quyền admin gồm việc ẩn game của trẻ và khoá tài khoản
+người khác, mà một hòm thư chưa chứng minh được là của ai thì cũng chưa chứng minh
+được người bấm những nút đó là ai.
+
+Trước khi có lệnh này, đường duy nhất để có admin trên production là chạy seed với
+`ALLOW_PRODUCTION_SEED=1` — tức nhận đúng cái tài khoản mật khẩu công khai mà chốt
+tồn tại để ngăn. Một chốt không kèm đường đi thay thế thì người ta không dừng lại,
+người ta đi vòng.
 
 **Tài khoản do e2e tự sinh khi chạy** (mỗi lần chạy là một bộ mới, `<hex>` là 8 ký tự
 ngẫu nhiên — cố ý như vậy để chạy lại nhiều lần mà không phải dọn DB):
