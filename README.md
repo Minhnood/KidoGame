@@ -424,9 +424,12 @@ thư đó không tồn tại nên không có link nào để bấm.
 
 > **MAIL HỎNG GIỜ LÀ SỰ CỐ CHẶN NGƯỜI DÙNG MỚI — không còn là chuyện bất tiện.**
 >
-> Trước cổng này, `RESEND_API_KEY` sai chỉ làm hỏng luồng quên mật khẩu. Bây giờ nó
+> Trước cổng này, cấu hình mail sai chỉ làm hỏng luồng quên mật khẩu. Bây giờ nó
 > chặn hẳn việc lên sàn: phụ huynh đăng ký được, đăng nhập được, nhưng **không bao giờ
 > tạo được tài khoản cho con**, nên đứa trẻ không có gì để đăng game.
+>
+> Có hai đường gửi, chọn một: `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` qua một hòm thư sẵn
+> có, hoặc `RESEND_API_KEY`. Khai cả hai thì SMTP thắng. Xem `infra/MAIL.md`.
 >
 > Đã kiểm chứng trên stack Docker với khoá Resend giả: đăng ký vẫn thành công (cố ý —
 > mail trượt không được làm hỏng việc đăng ký), cảnh báo hiện ra, khung tạo tài khoản

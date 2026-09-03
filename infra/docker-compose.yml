@@ -88,9 +88,22 @@ services:
       APP_ORIGIN: https://${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
       # Vào cả CSP frame-src của app (next.config.ts) và URL file game.
       PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
-      # THIẾU KEY NÀY Ở PRODUCTION LÀ NÉM LỖI, cố ý — in mail chứa token ra log
-      # production chính là rò token. Xem src/lib/mail.ts.
-      RESEND_API_KEY: ${RESEND_API_KEY:?thieu RESEND_API_KEY trong infra/.env}
+      # Hai đường gửi mail, phải có MỘT. Không đường nào thì `sendMail` NÉM LỖI ở
+      # production, cố ý — in mail chứa token ra log production chính là rò token.
+      # Xem src/lib/mail.ts.
+      #
+      # KHÔNG dùng `:?` cho biến nào trong nhóm này, dù trước đây RESEND_API_KEY có.
+      # Lý do: compose không diễn đạt được "một trong hai", nên `:?` trên một đường
+      # sẽ chặn cả stack không khởi động được đối với người đã cấu hình xong đường
+      # kia. Đổi lại, cấu hình thiếu không còn lộ ra lúc `up` mà lúc gửi lá thư đầu
+      # tiên — nên chạy `node infra/mail-check.mjs` trước khi mở web, đó là chỗ trả
+      # lời có/không cho cả hai đường.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
       # Hiện trên /dieu-khoan và nhận mail yêu cầu gỡ bản quyền. KHÔNG dùng `:?`
       # như hai biến trên: thiếu tên đơn vị vận hành chỉ làm trang điều khoản kém

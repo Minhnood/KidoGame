@@ -79,12 +79,61 @@ const note = (text) => console.log(`   ${text}`);
 // ---------------------------------------------------------------------------
 console.log('\n── Cấu hình ────────────────────────────────────────────────');
 
-const apiKey = process.env.RESEND_API_KEY;
-check('Có RESEND_API_KEY', !!apiKey, apiKey ? `re_…${apiKey.slice(-4)}` : 'CHƯA ĐẶT');
-if (!apiKey) {
-  note('Thiếu key thì ở production `sendMail` ném lỗi chứ không in ra log —');
+/*
+ * Hai đường gửi, phải có MỘT. Giữ đúng thứ tự ưu tiên của src/lib/mail.ts: SMTP
+ * thắng Resend khi cả hai được khai. Kiểm sai thứ tự thì script báo về đường mà
+ * web KHÔNG dùng, tức là xanh hết trong khi mail vẫn không đi.
+ */
+const smtpRaw = {
+  host: process.env.SMTP_HOST?.trim(),
+  port: process.env.SMTP_PORT?.trim(),
+  user: process.env.SMTP_USER?.trim(),
+  pass: process.env.SMTP_PASS,
+  secure: process.env.SMTP_SECURE?.trim().toLowerCase(),
+};
+const smtpKhaiMotPhan = Boolean(smtpRaw.host || smtpRaw.user || smtpRaw.pass);
+const smtpDu = Boolean(smtpRaw.host && smtpRaw.user && smtpRaw.pass);
+
+/*
+ * Giữ chỗ kiểu `re_xxx` bị coi như KHÔNG có key, y hệt src/lib/mail.ts — mọi bản
+ * .env chép từ .env.example đều có sẵn một giá trị giả, nên kiểm `!!apiKey` thì
+ * script báo đạt trong khi Resend trả 401 cho từng lá thư.
+ */
+const apiKeyRaw = process.env.RESEND_API_KEY;
+const apiKey = apiKeyRaw && apiKeyRaw.trim().startsWith('re_') && apiKeyRaw.trim().length >= 20 ? apiKeyRaw : null;
+
+const duong = smtpDu ? 'smtp' : apiKey ? 'resend' : null;
+
+check(
+  'Có một đường gửi mail',
+  !!duong,
+  duong === 'smtp'
+    ? `SMTP qua ${smtpRaw.host}`
+    : duong === 'resend'
+      ? `Resend, key re_…${apiKey.slice(-4)}`
+      : 'KHÔNG CÓ ĐƯỜNG NÀO'
+);
+
+if (!duong) {
+  note('Không đường nào thì ở production `sendMail` ném lỗi chứ không in ra log —');
   note('cố ý như vậy, vì log production chứa token là rò token.');
-  note('Lấy key ở https://resend.com/api-keys');
+  note('Chọn một: khai SMTP_HOST + SMTP_USER + SMTP_PASS, hoặc đặt RESEND_API_KEY.');
+  note('SMTP là đường không cần domain riêng; với Gmail thì SMTP_PASS là App');
+  note('Password ở https://myaccount.google.com/apppasswords, không phải mật khẩu.');
+}
+
+if (smtpKhaiMotPhan && !smtpDu) {
+  check(
+    'SMTP khai đủ cả ba biến bắt buộc',
+    false,
+    `thiếu ${[!smtpRaw.host && 'SMTP_HOST', !smtpRaw.user && 'SMTP_USER', !smtpRaw.pass && 'SMTP_PASS'].filter(Boolean).join(', ')}`
+  );
+  note('src/lib/mail.ts coi cấu hình SMTP dở dang là CHƯA cấu hình và rơi sang');
+  note('đường sau, nên một biến gõ thiếu ở đây không báo lỗi mà lặng lẽ đổi đường.');
+}
+
+if (smtpDu && apiKeyRaw && apiKey) {
+  note('Khai cả SMTP và Resend: web sẽ dùng SMTP. Xoá bớt một đường cho khỏi lẫn.');
 }
 
 const mailFrom = process.env.MAIL_FROM;
@@ -134,7 +183,79 @@ if (appOrigin && !/^https:\/\//.test(appOrigin)) {
 // ---------------------------------------------------------------------------
 let resendDomain = null;
 
-if (apiKey && fromDomain) {
+/*
+ * Nhà cung cấp hòm thư dùng chung: SPF, DKIM và DMARC của những domain này do họ
+ * quản, không phải việc của mình, và kiểm chúng thì luôn xanh mà chẳng nói gì.
+ */
+const HOM_THU_DUNG_CHUNG = ['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'icloud.com', 'me.com', 'proton.me', 'zoho.com'];
+
+// ---------------------------------------------------------------------------
+// 2a. SMTP nối được và xác thực được chưa
+// ---------------------------------------------------------------------------
+if (duong === 'smtp') {
+  console.log('\n── SMTP ────────────────────────────────────────────────────');
+
+  const port = Number(smtpRaw.port ?? 587);
+  const portOk = Number.isInteger(port) && port >= 1 && port <= 65535;
+  check('SMTP_PORT hợp lệ', portOk, portOk ? String(port) : `"${smtpRaw.port}" không phải số cổng`);
+
+  const secure = smtpRaw.secure ? smtpRaw.secure === 'true' || smtpRaw.secure === '1' : port === 465;
+  note(`Chế độ: ${secure ? 'TLS ngay từ đầu' : 'kết nối thường rồi STARTTLS'}${smtpRaw.secure ? ' (do SMTP_SECURE)' : ' (suy từ cổng)'}`);
+
+  /*
+   * MAIL_FROM lệch SMTP_USER là cách hỏng khó thấy nhất của đường SMTP: Gmail
+   * KHÔNG báo lỗi, nó âm thầm viết lại người gửi thành địa chỉ đã xác thực. Nên
+   * log thì ghi một đằng, thư người ta nhận lại ghi một nẻo, và phần trả lời của
+   * phụ huynh bay về một hòm thư không ai đọc.
+   */
+  if (fromAddr && smtpRaw.user && fromAddr.toLowerCase() !== smtpRaw.user.toLowerCase()) {
+    check('MAIL_FROM trùng SMTP_USER', false, `MAIL_FROM là ${fromAddr}, SMTP_USER là ${smtpRaw.user}`);
+    note('Nhiều máy chủ, Gmail trong đó, viết lại người gửi thành địa chỉ đã xác');
+    note('thực mà KHÔNG báo lỗi. Đặt MAIL_FROM trùng SMTP_USER cho khỏi lệch.');
+  }
+
+  if (portOk) {
+    try {
+      /*
+       * nodemailer nằm trong node_modules của apps/web, không phải của root —
+       * pnpm không hoist. createRequire neo việc phân giải vào đúng package đó,
+       * giống cách packages/sb3 nạp @turbowarp/packager.
+       */
+      const { createRequire } = await import('node:module');
+      const here2 = dirname(fileURLToPath(import.meta.url));
+      const requireFromWeb = createRequire(join(here2, '..', 'apps', 'web', 'package.json'));
+      const nodemailer = requireFromWeb('nodemailer');
+
+      const transporter = nodemailer.createTransport({
+        host: smtpRaw.host,
+        port,
+        secure,
+        auth: { user: smtpRaw.user, pass: smtpRaw.pass },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+      });
+
+      // verify() nối, bắt tay TLS và AUTH thật — trả lời đúng câu "dùng được
+      // không", mà không gửi thư cho bất kỳ ai.
+      await transporter.verify();
+      check('SMTP nối và xác thực được', true);
+      transporter.close();
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      check('SMTP nối và xác thực được', false, msg.slice(0, 200));
+      if (/invalid login|535|534|authentication/i.test(msg)) {
+        note('Sai đăng nhập. Với Gmail, nguyên nhân gần như luôn là dùng mật khẩu');
+        note('đăng nhập thay cho App Password. Bật xác minh hai bước rồi tạo ở');
+        note('https://myaccount.google.com/apppasswords và dán 16 ký tự đó vào SMTP_PASS.');
+      } else if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND|timeout/i.test(msg)) {
+        note('Không nối được tới máy chủ. Kiểm SMTP_HOST, SMTP_PORT, và xem mạng có');
+        note('chặn cổng đó không — nhiều nhà mạng và VPS chặn cổng 25, hãy dùng 587.');
+      }
+    }
+  }
+}
+
+if (duong === 'resend' && fromDomain) {
   console.log('\n── Domain ở Resend ─────────────────────────────────────────');
   try {
     const res = await fetch('https://api.resend.com/domains', {
@@ -198,6 +319,11 @@ console.log('\n── DNS ──────────────────
 
 if (!fromDomain) {
   console.log('   Bỏ qua: chưa biết domain gửi.');
+} else if (duong === 'smtp' && HOM_THU_DUNG_CHUNG.includes(fromDomain)) {
+  console.log(`   Bỏ qua: ${fromDomain} là hòm thư dùng chung, SPF/DKIM/DMARC do nhà`);
+  console.log('   cung cấp quản, không phải việc của mình.');
+  note('Đổi lại, thư gửi từ địa chỉ này dễ vào spam hơn thư từ domain riêng đã ký');
+  note('DKIM, và Gmail chặn ở khoảng 500 thư một ngày. Đủ cho lớp học và bản thử.');
 } else {
   const txtOf = async (name) => {
     try {
@@ -240,8 +366,12 @@ if (!fromDomain) {
     check('Có bản ghi SPF', spf.length > 0, spf[0] ?? 'không tìm thấy v=spf1');
     if (spf.length > 1) note('CÓ HAI SPF — sai chuẩn, hòm thư nhận sẽ coi như không có cái nào.');
 
-    const dkim = await txtOf(`resend._domainkey.${fromDomain}`);
-    check('Có DKIM của Resend', dkim.length > 0, dkim.length ? 'có' : 'không thấy resend._domainkey');
+    // Chỉ hỏi bản ghi DKIM của Resend khi Resend là đường đang dùng. Đường SMTP
+    // với domain riêng có selector khác, do máy chủ SMTP đặt ra.
+    if (duong === 'resend') {
+      const dkim = await txtOf(`resend._domainkey.${fromDomain}`);
+      check('Có DKIM của Resend', dkim.length > 0, dkim.length ? 'có' : 'không thấy resend._domainkey');
+    }
   }
 
   const dmarc = (await txtOf(`_dmarc.${fromDomain}`)).filter((v) => v.startsWith('v=DMARC1'));
@@ -258,8 +388,55 @@ if (!fromDomain) {
 if (sendTo) {
   console.log('\n── Gửi thử ─────────────────────────────────────────────────');
 
-  if (!apiKey) {
-    check('Gửi được thư thật', false, 'không có RESEND_API_KEY nên không gửi');
+  const noiDungThu = [
+    'Đây là thư kiểm tra do infra/mail-check.mjs gửi.',
+    '',
+    `Nhận được thư này nghĩa là đường gửi ${duong === 'smtp' ? 'SMTP' : 'Resend'}, MAIL_FROM và DNS đã đúng.`,
+    '',
+    'CHƯA XONG ĐÂU. Việc bắt buộc còn lại là mở web thật, đăng ký một tài',
+    'khoản phụ huynh bằng hòm thư này, rồi BẤM link xác minh trong thư nhận',
+    'được. Đó mới là thứ chặn đường một đứa trẻ đăng game, chứ không phải',
+    'việc gửi được thư.',
+    '',
+    `APP_ORIGIN đang là: ${appOrigin ?? '(chưa đặt — link trong mail sẽ sai)'}`,
+  ].join('\n');
+
+  if (!duong) {
+    check('Gửi được thư thật', false, 'chưa có đường gửi nào nên không gửi');
+  } else if (duong === 'smtp') {
+    try {
+      const { createRequire } = await import('node:module');
+      const here3 = dirname(fileURLToPath(import.meta.url));
+      const nodemailer = createRequire(join(here3, '..', 'apps', 'web', 'package.json'))('nodemailer');
+
+      const port = Number(smtpRaw.port ?? 587);
+      const secure = smtpRaw.secure ? smtpRaw.secure === 'true' || smtpRaw.secure === '1' : port === 465;
+      const transporter = nodemailer.createTransport({
+        host: smtpRaw.host,
+        port,
+        secure,
+        auth: { user: smtpRaw.user, pass: smtpRaw.pass },
+        connectionTimeout: 10_000,
+      });
+
+      const info = await transporter.sendMail({
+        from: mailFrom ?? smtpRaw.user,
+        to: sendTo,
+        subject: 'KidoGame — thư kiểm tra đường gửi',
+        text: noiDungThu,
+      });
+      transporter.close();
+
+      check('Máy chủ SMTP nhận thư', true, info.messageId ? `id ${info.messageId}` : '');
+      note(`Giờ mở hòm thư ${sendTo} kiểm xem có nhận được không —`);
+      note('máy chủ SMTP nhận thư KHÔNG có nghĩa là hòm thư kia nhận được.');
+      note('Nhớ nhìn cả thư mục Spam. Vào Spam cũng tính là hỏng.');
+      if (info.rejected?.length) {
+        check('Không có địa chỉ nào bị từ chối', false, info.rejected.join(', '));
+      }
+    } catch (err) {
+      check('Máy chủ SMTP nhận thư', false, String(err?.message ?? err).slice(0, 200));
+    }
   } else {
     try {
       const res = await fetch('https://api.resend.com/emails', {
@@ -269,18 +446,7 @@ if (sendTo) {
           from: mailFrom ?? 'KidoGame <no-reply@kidogame.local>',
           to: [sendTo],
           subject: 'KidoGame — thư kiểm tra đường gửi',
-          text: [
-            'Đây là thư kiểm tra do infra/mail-check.mjs gửi.',
-            '',
-            'Nhận được thư này nghĩa là RESEND_API_KEY, MAIL_FROM và DNS đã đúng.',
-            '',
-            'CHƯA XONG ĐÂU. Việc bắt buộc còn lại là mở web thật, đăng ký một tài',
-            'khoản phụ huynh bằng hòm thư này, rồi BẤM link xác minh trong thư nhận',
-            'được. Đó mới là thứ chặn đường một đứa trẻ đăng game, chứ không phải',
-            'việc gửi được thư.',
-            '',
-            `APP_ORIGIN đang là: ${appOrigin ?? '(chưa đặt — link trong mail sẽ sai)'}`,
-          ].join('\n'),
+          text: noiDungThu,
         }),
       });
 

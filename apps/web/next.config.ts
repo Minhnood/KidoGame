@@ -37,7 +37,13 @@ const nextConfig: NextConfig = {
    *
    * Kèm theo: chạy `pnpm --filter @kidogame/sb3 build` sau khi sửa packages/sb3.
    */
-  serverExternalPackages: ['@kidogame/sb3', 'sharp'],
+  /*
+   * `nodemailer` cũng để external: nó là CommonJS và tự `require` các module Node
+   * theo tên dựng lúc chạy. Bundle nó thì webpack cố phân giải những tên đó lúc
+   * build và cảnh báo về "critical dependency", còn transport SMTP thì chỉ hỏng khi
+   * có người thật bấm đăng ký. Để external là Node nạp nó y như một package thường.
+   */
+  serverExternalPackages: ['@kidogame/sb3', 'sharp', 'nodemailer'],
 
   async headers() {
     return [

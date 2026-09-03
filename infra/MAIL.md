@@ -1,25 +1,45 @@
 # Cách làm mail cho KidoGame
 
-Code mail đã xong hết. Việc còn lại là hạ tầng: một tài khoản Resend, một key, và
-ba bản ghi DNS. Tài liệu này đi từ trạng thái hiện tại tới lúc một phụ huynh thật
-nhận được thư thật.
+Code mail đã xong hết. Việc còn lại là hạ tầng, và có **hai đường** để chọn:
 
-Kiểm trạng thái bất cứ lúc nào:
+| | SMTP | Resend |
+|---|---|---|
+| Cần gì | một hòm thư sẵn có | tài khoản Resend + key |
+| Cần domain riêng | không | có, để gửi cho người ngoài |
+| Gửi được cho ai | bất kỳ ai, ngay | giai đoạn đầu chỉ hòm thư chủ tài khoản |
+| Hạn mức | Gmail khoảng 500 thư/ngày | theo gói |
+| Vào spam | dễ hơn, vì gửi từ @gmail.com | ít hơn, khi domain đã ký DKIM |
+| Dựng xong trong | khoảng 5 phút | khoảng 10 phút, hoặc một buổi nếu làm DNS |
+
+**Chọn SMTP nếu chỉ cần mail đi thật được** — cho bài tập, cho quay video, cho
+lớp học. Chọn Resend khi mở cho người dùng thật và đã có domain.
+
+Khai cả hai thì **SMTP thắng** (`src/lib/mail.ts`).
+
+Kiểm trạng thái bất cứ lúc nào — script biết cả hai đường và chỉ kiểm đường đang
+được dùng:
 
 ```bash
 node infra/mail-check.mjs
+node infra/mail-check.mjs --send ban@gmail.com   # gửi thật một lá
 ```
 
-Hôm viết file này: **4/8**. Chưa đạt: key dùng được, SPF, DKIM, DMARC.
+Chưa cấu hình gì thì nó ra **3/6**. Chưa đạt: đường gửi, SPF, DMARC.
 
 ---
 
 ## Hiểu trước: mail hỏng ở đây KHÔNG kêu
 
 `sendMail` trong `apps/web/src/lib/mail.ts` có một chốt an toàn: ở production mà
-**thiếu** `RESEND_API_KEY` thì nó ném lỗi rõ ràng. Nhưng `infra/.env` đang có key
+**không có đường gửi nào** thì nó ném lỗi rõ ràng. Nhưng `infra/.env` đang có key
 **placeholder** (`re_…ocal`), nên chốt đó không bao giờ chạy — code đi thẳng vào
 Resend và ăn 401.
+
+Từ khi có đường SMTP, `docker-compose.yml` **không còn** dùng `:?` để chặn stack
+khi thiếu `RESEND_API_KEY`: compose không diễn đạt được "một trong hai đường", nên
+`:?` trên một đường sẽ chặn cả stack đối với người đã cấu hình xong đường kia. Đổi
+lại, cấu hình thiếu không lộ ra lúc `up` nữa mà lúc gửi lá thư đầu tiên — nên
+`mail-check.mjs` từ chỗ nên chạy thành chỗ **phải** chạy trước khi mở web.
 
 Đã thử thật trên stack Docker: đăng ký một phụ huynh trên `https://app.localhost`
 thì
@@ -39,7 +59,69 @@ Vì thế: **đừng tin `docker compose up` xanh.** Điều kiện mở cho ng�
 
 ---
 
-## GIAI ĐOẠN 1 — gửi được thư, CHƯA CẦN DOMAIN
+## ĐƯỜNG SMTP — gửi qua hòm thư sẵn có, khoảng 5 phút
+
+Không cần domain, không cần tài khoản dịch vụ nào, và gửi được cho **bất kỳ ai**
+ngay từ lá thư đầu — khác đường Resend ở dưới, giai đoạn đầu chỉ gửi tới được
+đúng hòm thư của chủ tài khoản.
+
+Ví dụ dưới đây dùng Gmail. Outlook, Yahoo, Zoho hay máy chủ mail của trường đều
+cùng bốn biến, chỉ khác host và port.
+
+1. Bật **xác minh hai bước** cho tài khoản Google, nếu chưa. Không bật thì không
+   tạo được App Password, và Google không nói lý do — trang chỉ đơn giản không có
+   mục đó.
+
+2. Tạo **App Password** ở https://myaccount.google.com/apppasswords. Google cho
+   một chuỗi 16 chữ, dán nguyên vào `SMTP_PASS`.
+
+   **Đừng dùng mật khẩu đăng nhập Gmail.** Google chặn thẳng, và lỗi nó trả về
+   chỉ là `Invalid login: 535-5.7.8` — không đoán ra được nguyên nhân từ đó.
+
+3. Sửa `infra/.env` (hoặc `apps/web/.env` nếu chỉ thử ở máy dev):
+
+   ```
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=ban@gmail.com
+   SMTP_PASS=<16 chữ App Password>
+   MAIL_FROM="KidoGame <ban@gmail.com>"
+   ```
+
+   `MAIL_FROM` **nên trùng** `SMTP_USER`. Gmail viết lại người gửi thành địa chỉ
+   đã xác thực mà không báo lỗi, nên khai lệch chỉ làm log ghi một đằng và thư
+   người ta nhận ghi một nẻo — `mail-check.mjs` bắt đúng chỗ này.
+
+4. Kiểm:
+
+   ```bash
+   node infra/mail-check.mjs
+   ```
+
+   Mục **"SMTP nối và xác thực được"** phải xanh — nó nối thật, bắt tay TLS thật
+   và đăng nhập thật, nhưng không gửi thư cho ai. Mục DNS bị **bỏ qua** khi gửi
+   từ hòm thư dùng chung: SPF, DKIM và DMARC của `gmail.com` do Google quản.
+
+5. Gửi thử một lá tới hòm thư khác:
+
+   ```bash
+   node infra/mail-check.mjs --send hom-thu-khac@example.com
+   ```
+
+   Nhìn cả thư mục **Spam**. Vào Spam cũng tính là hỏng.
+
+6. Đi trọn con đường thật:
+
+   ```bash
+   node infra/mail-journey.mjs --email <hòm thư fen đọc được>
+   ```
+
+Cổng: dùng **587**. Nhiều nhà mạng và phần lớn VPS chặn cổng 25, và cổng 465 thì
+cần `SMTP_SECURE=true` nếu máy chủ không theo quy ước thường gặp.
+
+---
+
+## GIAI ĐOẠN 1 (đường Resend) — gửi được thư, CHƯA CẦN DOMAIN
 
 Đây là chỗ dễ hiểu sai. Resend cho mỗi tài khoản một địa chỉ gửi dùng chung
 `onboarding@resend.dev`, **dùng được ngay, không cần xác minh domain**. Đổi lại nó
@@ -196,19 +278,49 @@ Cả ba biến này phải là hòm thư **đọc được thật**, và nên kh
 
 ---
 
-## BẪY: đừng đặt key thật vào môi trường dev
+## BẪY CŨ, ĐÃ VÁ: đường gửi thật ở dev từng làm đổ 146 phép kiểm
 
 Bốn bộ e2e — `e2e-auth`, `e2e-email`, `e2e-moderation`, `e2e-takedown`, tổng **146
-phép kiểm** — đọc link xác minh từ `/tmp/kg-mail.log`, tức từ transport `console`
-(`sendViaConsole` in nguyên nội dung thư ra log server).
+phép kiểm** — đọc link xác minh từ `/tmp/kg-mail.log`, tức từ nội dung thư mà
+server in ra log.
 
-Có `RESEND_API_KEY` trong môi trường là `sendMail` đi Resend, log không còn link,
-**cả bốn bộ đổ**. Và chúng đổ ở bước đầu tiên nên triệu chứng trông như luồng xác
-minh email bị hỏng, không như lỗi cấu hình.
+Trước đây việc in ra log gắn liền với chuyện *không có đường gửi thật*: đặt
+`RESEND_API_KEY` thật vào môi trường dev là `sendMail` đi Resend, log không còn
+link, **cả bốn bộ đổ** — và đổ ở bước đầu tiên nên triệu chứng trông y như luồng
+xác minh email bị hỏng, không chỉ vào cấu hình chút nào.
 
-`RESEND_API_KEY` chỉ thuộc `infra/.env` (production). Máy dev để trống — transport
-`console` là mặc định và nó cố ý in cả token, vì người chạy dev chính là người cần
-bấm link.
+**Nay không còn.** `ghiLaiChoDev` tách khỏi việc gửi: ở dev, mọi lá thư đều vào
+hộp thư `/dev/thu` và ra log **bất kể** sau đó đi bằng console, SMTP hay Resend.
+Nhãn trong khung log nói rõ nó đi đường nào, ví dụ
+`┌─ MAIL (gửi thật qua SMTP smtp.gmail.com)`.
+
+Nên bật SMTP ở máy dev để thử gửi thật là an toàn — đã kiểm: `e2e-auth` 25/25 và
+`e2e-email` 22/22 với `SMTP_HOST` trỏ vào một cổng không ai lắng nghe, tức mọi lá
+thư đều gửi trượt mà bộ kiểm vẫn xanh.
+
+Còn ở **production** thì `ghiLaiChoDev` không bao giờ được gọi: in mail chứa token
+ra log production là rò token.
+
+### Nhưng nó sinh ra một bẫy MỚI, cũng đã vá
+
+Bật SMTP thật ở dev thì bộ kiểm không đổ nữa — chúng **gửi thật**. Sáu bộ e2e gửi
+thư tới `e2e-…@kidogame.test`, hàng chục lá mỗi lượt chạy. Gmail nhận, cố phát tới
+một domain không tồn tại, rồi trả bounce. Hàng chục bounce một lượt chạy đúng là
+dấu hiệu Google dùng để chấm một tài khoản là nguồn spam, và cái mất không phải
+một lá thư trượt mà là hòm thư của người vận hành bị hạ điểm — hậu quả lộ ra sau,
+ở dạng "thư của KidoGame tự nhiên hay vào Spam".
+
+`sendMail` nay chặn ở dev mọi địa chỉ thuộc TLD dành riêng cho thử nghiệm:
+`.test`, `.example`, `.invalid`, `.localhost`, `.local` (RFC 2606 và RFC 6761 giữ
+chúng để không ai đăng ký được, nên chặn không thể chặn oan ai). Thư vẫn vào
+`/dev/thu` và ra log, nên bộ kiểm không biết khác biệt — nhãn log là
+`┌─ MAIL (địa chỉ thử nghiệm — KHÔNG gửi ra ngoài)`.
+
+Đã kiểm với SMTP Gmail thật đang bật: `e2e-email` 22/22, `e2e-auth` 25/25,
+`e2e-moderation` 61/61, và **16** lá thư bị chặn đúng lúc — không lá nào rời máy.
+
+Ở production KHÔNG chặn: ở đó một địa chỉ `.test` là dữ liệu sai, cần được thấy là
+gửi trượt chứ không phải im lặng bỏ qua.
 
 ---
 
