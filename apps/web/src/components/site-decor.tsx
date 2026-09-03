@@ -30,12 +30,12 @@
  *    trí, tức trả lại đúng dải trắng trơn mà cả file này tồn tại để tránh. Chi tiết
  *    nhỏ hơn là cái giá nhẹ hơn hẳn không có gì.
  *
- *    Cách sửa ĐÚNG không phải ẩn, mà là cùng nguyên tắc đã ghi bên dưới đọc theo
- *    chiều ngược: lề hẹp thì vẽ ÍT hơn, chứ không vẽ NHỎ hơn — tức một bộ path cành
- *    ngắn cho khung 200 đơn vị, dùng ở dải 1280–1535px, để tỉ lệ lên 0.64 mà không
- *    lấn vào nội dung. Chưa làm vì nó là một bản vẽ thứ hai phải giữ đồng bộ với bản
- *    hiện có, và đúng cái bẫy đó đã được ghi ở `Canh`: hai bản vẽ tay của cùng một
- *    cái cành thì sớm muộn sẽ lệch nhau. Không đánh đổi việc đó bằng cách ẩn hình.
+ *    CÁI TỈ LỆ 0.43 ẤY ĐÃ ĐƯỢC SỬA, xem `LAN` bên dưới — nay 0.64 ở 1280px, và
+ *    không đổi gì ở mọi cỡ từ 1536px trở lên. Cách làm KHÔNG phải cách ghi chú này
+ *    từng dự tính (một bộ path cành ngắn cho khung 200 đơn vị): bản vẽ thứ hai là
+ *    đúng cái bẫy `Canh` đã cảnh báo, và còn phải nhân đôi cả đồi, cây, cỏ, hoa cho
+ *    tỉ lệ giữa chúng khỏi lệch. Vẫn đúng nguyên tắc "lề hẹp thì vẽ ÍT hơn chứ không
+ *    NHỎ hơn", chỉ đạt bằng cách khác: đẩy phần thừa ra ngoài mép màn hình.
  *
  * BỀ RỘNG PHẢI THEO MÀN HÌNH. Ở đúng 1280px mỗi bên lề chỉ có (1280−1024)/2 = 128px,
  * nên tranh phải hẹp hơn thế; tới 1536px thì lề rộng 256px và tranh mới được to ra.
@@ -71,7 +71,45 @@
  * Một chỗ duy nhất cho cả bốn cành và hai mặt đất — ba hình cùng nằm trên một lề
  * thì phải cùng một bề rộng, không thì cái nọ thò ra khỏi cái kia.
  */
-const RONG_LE = 'w-[min(calc((100vw-64rem)/2),32rem)]';
+const RONG_LE = 'w-[calc(min((100vw-64rem)/2,32rem)+var(--kg-lan))]';
+
+/**
+ * Khoảng tranh được LAN RA NGOÀI mép màn hình, chỉ ở dải màn hình hẹp.
+ *
+ * Đây là cách giải bài "ở 1280px tỉ lệ vẽ chỉ 0.43" mà ghi chú đầu file để lại, và
+ * nó KHÔNG phải cách ghi chú đó dự tính. Cách dự tính là vẽ thêm một bộ path cành
+ * ngắn cho khung 200 đơn vị — nhưng thế là hai bản vẽ tay của cùng một cái cành,
+ * đúng cái bẫy `Canh` đã cảnh báo, và còn phải nhân đôi cả quả đồi, cái cây, bụi cỏ
+ * và mấy bông hoa để tỉ lệ giữa chúng khỏi lệch nhau.
+ *
+ * Cách này giữ ĐÚNG MỘT bản vẽ. Ghi chú đầu file nói rõ mép NGOÀI (x≈0) tràn ra
+ * được vì nó nằm ngoài tầm mắt, còn mép TRONG thì tràn một đơn vị là một nhát cắt
+ * dọc giữa trang. Vậy thì cho tranh rộng hơn lề rồi đẩy đúng phần thừa ấy ra ngoài
+ * mép màn hình: mép trong vẫn dừng đúng ở biên nội dung, còn chỗ bị che là gốc cành
+ * và chân đồi — chỗ vốn đã tràn.
+ *
+ * Vẽ ÍT hơn chứ không NHỎ hơn, đúng nguyên tắc cũ: thấy ít hình hơn, mà từng chiếc
+ * lá vẫn đúng cỡ.
+ *
+ * Con số giảm dần tới 0 ở 1536px thay vì tắt đột ngột theo breakpoint: nhảy bậc thì
+ * người kéo cửa sổ qua mốc đó thấy cả bức tranh giật một cái. Tỉ lệ vẽ đo được —
+ * 1280: 0.43 → 0.64, 1366: 0.57 → 0.71, 1440: 0.69 → 0.77, 1536: 0.85 và mọi cỡ
+ * lớn hơn KHÔNG ĐỔI, nên quả táo trên màn 1920 vẫn đúng cỡ hôm qua.
+ */
+/*
+ * KHOẢNG TRẮNG QUANH DẤU TRỪ LÀ BẮT BUỘC, và thiếu nó thì hỏng im lặng.
+ *
+ * CSS `calc` đòi space quanh `-` và `+`; `(96rem-100vw)` là cú pháp sai. Nhưng một
+ * custom property chấp nhận gần như mọi chuỗi mà không kêu, nên `--kg-lan` vẫn được
+ * đặt bình thường và lỗi chỉ lộ ra khi giá trị ấy được thay vào `calc` của chỗ khác
+ * — lúc đó cả biểu thức thành vô hiệu, `width` rơi về `auto`, và mọi hình trang trí
+ * giãn ra bằng cả khung nhìn. Đo được lần đầu: sáu svg đều rộng đúng 1280px và tỉ
+ * lệ vẽ 4.27, tức tranh phủ kín trang, không một dòng lỗi nào ở đâu.
+ *
+ * Trong class Tailwind thì không cắn phải, vì Tailwind tự chèn space quanh toán tử
+ * trong giá trị arbitrary. Chỉ style inline như dòng này là không ai sửa hộ.
+ */
+const LAN = 'clamp(0px, (96rem - 100vw) * 0.25, 4rem)';
 
 /**
  * Một MẢNG tán lá: nhiều hình tròn chồng lên nhau, cùng một màu.
@@ -544,8 +582,14 @@ function CanhVien({
       // chạy, mà Tailwind sinh class lúc BIÊN DỊCH — `w-[calc(...*${co})]` thì
       // class ấy không tồn tại và cành mất tăm. Cùng công thức với RONG_LE, chỉ
       // nhân thêm `co`.
-      style={{ top, width: `calc(min((100vw - 64rem) / 2, 32rem) * ${co})` }}
-      className={`absolute ${ben === 'trai' ? 'left-0' : 'right-0 -scale-x-100'}`}
+      style={{
+        top,
+        width: `calc((min((100vw - 64rem) / 2, 32rem) + var(--kg-lan)) * ${co})`,
+        // Cành nhỏ hơn thì lan ra ngoài ít hơn, đúng theo `co` — không thì cành
+        // co=0.7 bị đẩy ra ngoài quá nửa gốc trong khi cành co=1 chỉ mất một khúc.
+        [ben === 'trai' ? 'left' : 'right']: `calc(var(--kg-lan) * ${co} * -1)`,
+      }}
+      className={`absolute ${ben === 'phai' ? '-scale-x-100' : ''}`}
       fill="none"
       focusable="false"
     >
@@ -569,6 +613,10 @@ export function SiteDecor() {
   return (
     <div
       aria-hidden="true"
+      // `--kg-lan` khai ở đây một lần cho cả sáu hình bên dưới. Đặt trên khung
+      // ngoài chứ không lặp ở từng svg: sáu hình cùng nằm trên một lề thì phải lan
+      // ra ngoài cùng một khoảng, không thì cái nọ lệch khỏi cái kia.
+      style={{ '--kg-lan': LAN } as React.CSSProperties}
       className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden xl:block"
     >
       {/*
@@ -656,7 +704,7 @@ export function SiteDecor() {
       {/* --- Mặt đất bên trái: đồi, một cây tán rộng, bụi cỏ, hoa --- */}
       <svg
         viewBox="0 0 300 290"
-        className={`absolute bottom-0 left-0 ${RONG_LE}`}
+        className={`absolute bottom-0 left-[calc(var(--kg-lan)*-1)] ${RONG_LE}`}
         fill="none"
         focusable="false"
       >
@@ -726,7 +774,7 @@ export function SiteDecor() {
              xứng y hệt thì thành ảnh soi gương chứ không ra khung cảnh. --- */}
       <svg
         viewBox="0 0 300 290"
-        className={`absolute bottom-0 right-0 ${RONG_LE}`}
+        className={`absolute bottom-0 right-[calc(var(--kg-lan)*-1)] ${RONG_LE}`}
         fill="none"
         focusable="false"
       >
