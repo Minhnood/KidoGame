@@ -64,6 +64,51 @@ export async function verifyEmail(rawToken: string): Promise<void> {
  * Lỗi gửi mail cũng bị nuốt vì lý do tương tự: gửi trượt mà báo lỗi ra màn hình
  * thì cũng là một tín hiệu phân biệt được email có thật.
  */
+/**
+ * Nhắc chủ hòm thư rằng email này ĐÃ có tài khoản, kèm link đặt lại mật khẩu.
+ *
+ * Gửi khi có người thử đăng ký bằng một email đã tồn tại. Người đó gần như luôn là
+ * chính chủ, quên mất mình đã đăng ký — trang có nói "email này đã được dùng", nhưng
+ * một câu trên màn hình thì họ phải tự đi tìm đường ra, còn một lá thư thì mang sẵn
+ * đường ra ấy tới nơi họ chắc chắn mở.
+ *
+ * Thư nói rõ KHÔNG có gì thay đổi. Nếu người thử đăng ký lại là người khác, thì đây
+ * cũng là cách chủ hòm thư biết có ai đang gõ email của mình vào một trang lạ.
+ *
+ * Không nuốt lỗi ở đây, để chỗ gọi tự quyết — `createAuthToken` ném khi vượt trần 5
+ * lượt một giờ, và đó là hành vi đúng: nó vừa là van chống dùng /dang-ky làm máy gửi
+ * thư tới hòm thư người khác.
+ */
+export async function guiThuEmailDaCoTaiKhoan(emailRaw: string): Promise<void> {
+  const email = normalizeEmail(emailRaw);
+  const parent = await prisma.parent.findUnique({ where: { email }, select: { id: true } });
+  if (!parent) return;
+
+  const token = await createAuthToken(parent.id, 'PASSWORD_RESET');
+  const link = `${appOrigin()}/dat-lai-mat-khau?token=${encodeURIComponent(token)}`;
+
+  await sendMail({
+    to: email,
+    subject: 'Email này đã có tài khoản KidoGame',
+    text: [
+      'Chào bạn,',
+      '',
+      'Có người vừa thử đăng ký một tài khoản KidoGame bằng địa chỉ này, nhưng nó',
+      'đã có tài khoản từ trước rồi. Chúng tôi không tạo thêm tài khoản nào, và',
+      'mật khẩu hiện tại của bạn vẫn giữ nguyên.',
+      '',
+      'Nếu đó là bạn và bạn không nhớ mật khẩu, bấm vào link dưới đây để đặt mật',
+      'khẩu mới:',
+      '',
+      link,
+      '',
+      'Link có hiệu lực trong 1 giờ và chỉ dùng được một lần.',
+      '',
+      'Nếu không phải bạn thì bỏ qua thư này là được, không có gì thay đổi cả.',
+    ].join('\n'),
+  });
+}
+
 export async function requestPasswordReset(emailRaw: string): Promise<void> {
   const email = normalizeEmail(emailRaw);
   const parent = await prisma.parent.findUnique({ where: { email }, select: { id: true } });

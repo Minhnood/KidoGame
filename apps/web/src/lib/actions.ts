@@ -14,6 +14,7 @@ import {
   setChildLocked,
 } from './auth';
 import {
+  guiThuEmailDaCoTaiKhoan,
   requestEmailVerification,
   requestPasswordReset,
   resetPasswordWithToken,
@@ -99,10 +100,38 @@ export async function registerParentAction(
       );
     }
 
-    const parentId = await registerParent(
-      String(form.get('email') ?? ''),
-      String(form.get('password') ?? '')
-    );
+    const emailNhap = String(form.get('email') ?? '');
+
+    let parentId: string;
+    try {
+      parentId = await registerParent(emailNhap, String(form.get('password') ?? ''));
+    } catch (e) {
+      /*
+       * Email đã có tài khoản: gửi cho chủ hòm thư một lá thư nhắc kèm link đặt lại
+       * mật khẩu, rồi ném lại để người đang đứng ở form vẫn nhận đúng câu trả lời
+       * thẳng như cũ.
+       *
+       * Người gõ lại email cũ gần như luôn là chính chủ đã quên mình đăng ký rồi.
+       * Câu trên màn hình bảo họ đi bấm "Quên mật khẩu"; lá thư này mang luôn cái
+       * link đó tới nơi họ chắc chắn mở.
+       *
+       * Nhận biết bằng `ma` chứ không so `message`: message là câu chữ cho người
+       * đọc, và ai sửa lời cho dễ hiểu hơn sẽ lặng lẽ tắt mất nhánh này.
+       *
+       * Nuốt lỗi gửi thư, không để nó thay câu trả lời. `createAuthToken` ném khi
+       * vượt trần 5 lượt một giờ cho mỗi tài khoản — chính là van chặn việc dùng
+       * /dang-ky làm máy gửi thư tới hòm thư người khác. Chạm van đó thì thư không
+       * đi, và người ở form vẫn phải thấy đúng câu "email này đã được dùng".
+       */
+      if (e instanceof AuthError && e.ma === 'EMAIL_DA_DUNG') {
+        try {
+          await guiThuEmailDaCoTaiKhoan(emailNhap);
+        } catch (loi) {
+          console.error('[action] không gửi được thư nhắc email đã có tài khoản:', loi);
+        }
+      }
+      throw e;
+    }
     /*
      * Mail xác minh gửi trượt KHÔNG được làm hỏng việc đăng ký. Tài khoản đã tạo
      * xong và phiên đã mở; bắt người dùng đăng ký lại chỉ vì nhà cung cấp mail

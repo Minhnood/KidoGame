@@ -9,9 +9,20 @@ import { createSession, revokeAllSessions } from './session';
 
 /** Lỗi có thông báo an toàn để hiện thẳng cho người dùng. */
 export class AuthError extends Error {
-  constructor(message: string) {
+  /**
+   * Mã máy đọc được, tuỳ chọn.
+   *
+   * Có vì một chỗ gọi cần phân biệt ĐÚNG một tình huống — email đã có tài khoản —
+   * để làm thêm một việc. Cách khác là so chuỗi `message`, mà chuỗi đó là câu chữ
+   * hiển thị cho người dùng: ai sửa lời cho dễ hiểu hơn sẽ lặng lẽ làm chết logic
+   * ở chỗ khác, và không phép kiểm nào chỉ vào đó.
+   */
+  readonly ma?: string;
+
+  constructor(message: string, ma?: string) {
     super(message);
     this.name = 'AuthError';
+    this.ma = ma;
   }
 }
 
@@ -155,11 +166,22 @@ export async function registerParent(emailRaw: string, password: string): Promis
      * Cái thật sự phải chặn không phải một người dò một email, mà là dò cả một danh
      * sách — chỗ đó đã siết bằng trần theo IP ở `registerParentAction`.
      *
-     * Đổi lại thứ tự này khi mail thật đã chạy: khi ấy phương án gửi thư mới là
-     * phương án tốt hơn ở cả hai mặt.
+     * ĐÃ XEM LẠI khi mail thật chạy được (3/9), và GIỮ NGUYÊN câu trả lời thẳng.
+     * Phương án "trả lời y như thành công rồi gửi thư" chỉ che được thông tin nếu
+     * hai nhánh cho ra cùng một kết quả quan sát được từ ngoài — mà nhánh thành
+     * công hiện mở phiên và chuyển sang /phu-huynh, nên người dò vẫn phân biệt được
+     * bằng đúng một cái nhìn. Che thật thì phải bỏ luôn việc tự đăng nhập sau khi
+     * đăng ký, tức MỌI phụ huynh phải mở hòm thư trước khi vào được. Cái giá đó lớn
+     * hơn giá trị che một thông tin mà GitHub và Google cũng để lộ ở form đăng ký.
+     *
+     * Việc đã thêm là gửi cho chủ hòm thư một lá thư nhắc kèm link đặt lại mật khẩu
+     * (xem `registerParentAction`): phần hữu ích của phương án kia, không kèm cái
+     * giá của nó. Người gõ lại email cũ vì quên mình đã đăng ký giờ có đường ra
+     * ngay trong hòm thư, chứ không phải đọc một câu rồi tự đi tìm.
      */
     throw new AuthError(
-      'Email này đã được dùng để đăng ký rồi. Bạn đăng nhập, hoặc bấm "Quên mật khẩu" nếu không nhớ.'
+      'Email này đã được dùng để đăng ký rồi. Bạn đăng nhập, hoặc bấm "Quên mật khẩu" nếu không nhớ.',
+      'EMAIL_DA_DUNG'
     );
   }
 
