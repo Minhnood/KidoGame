@@ -121,6 +121,18 @@ const CAP = [
   { ten: 'Chữ lỗi trong hộp lỗi', fg: 'danger', bg: 'danger-bg', min: 4.5 },
   { ten: 'Chữ trên nút danger lúc hover', fg: 'surface', bg: 'danger', min: 4.5 },
   { ten: 'Chữ cảnh báo trong hộp cảnh báo', fg: 'warn-ink', bg: 'warn-bg', min: 4.5 },
+  /*
+   * Viền hộp cảnh báo. Ngưỡng 2.5 là của riêng dự án, không phải WCAG — viền hộp
+   * không phải thành phần cần nhận diện. Nhưng có nó vì cặp này đã từng tụt xuống
+   * 1.25:1 (sáng) và 1.77:1 (tối) mà không gì báo: hộp vẫn "có viền" trong mã
+   * nguồn, chỉ là mắt không thấy đường nào, và hộp đọc ra một vũng màu loang.
+   */
+  { ten: 'Viền hộp cảnh báo trên nền hộp', fg: 'warn-border', bg: 'warn-bg', min: 2.5 },
+  { ten: 'Viền hộp lỗi trên nền hộp', fg: 'danger-border', bg: 'danger-bg', min: 2.5 },
+  /* Cùng token đó là viền nút danger, và nút là CONTROL — chỗ duy nhất trong nhóm
+     viền này mà 3:1 là ngưỡng WCAG thật, không phải ngưỡng tự đặt. Đo trên nền
+     trang vì nút danger đứng trên nền trang, không phải trong hộp lỗi. */
+  { ten: 'Viền nút danger trên nền trang', fg: 'danger-border', bg: 'bg', min: 3 },
   { ten: 'Viền ô nhập trên thẻ/khung', fg: 'field-border', bg: 'surface', min: 3 },
   { ten: 'Viền ô nhập trên nền trang', fg: 'field-border', bg: 'bg', min: 3 },
   { ten: 'Viền focus trên nền trang', fg: 'focus', bg: 'bg', min: 3 },

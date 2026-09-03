@@ -155,15 +155,23 @@
   --color-decor-tao: #e2574f;
   --color-decor-tao-sang: #f5867f;
 
-  --color-warn-bg: #fff6e8;
-  --color-warn-border: #ffd9a8;
+  /* Viền cũ (#ffd9a8) chỉ đạt 1.25:1 với nền hộp — tức là không phải một đường
+     viền, chỉ là mép hộp hơi khác màu, và hộp trông như một vũng màu loang ra.
+     Nay 2.54:1: thấy rõ thành đường, mà chưa thành khung nặng. Nền nhạt bớt vàng
+     một chút để chữ và viền nổi lên trên nó thay vì cùng chìm trong màu kem. */
+  --color-warn-bg: #fffaf0;
+  --color-warn-border: #d19338;
   --color-warn-ink: #8a5200;
 
   /* Đậm hơn bản cũ (#d64545): trên nền hộp lỗi nó chỉ đạt 3.83:1, mà thông báo lỗi
      là câu người ta đang cần đọc nhất. Nay 4.78:1. */
   --color-danger: #c62f2f;
   --color-danger-bg: #fdecec;
-  --color-danger-border: #f6c6c6;
+  /* Cùng bệnh với viền hộp cảnh báo: bản cũ (#f6c6c6) đạt 1.33:1 với nền hộp lỗi.
+     Token này còn là viền của nút danger, tức một CONTROL — ở đó viền mờ không chỉ
+     xấu mà còn dưới ngưỡng 3:1 mà WCAG đòi cho thành phần cần nhận diện. Nay
+     3.10:1 với nền hộp và 3.31:1 với nền trang, đạt cả hai ngữ cảnh. */
+  --color-danger-border: #cf6a6a;
 
   /* --- Bo góc: to hơn mặc định cho thân thiện với trẻ --- */
   --radius-card: 16px;
@@ -260,13 +268,17 @@
   --toi-decor-tao: #7c322f;
   --toi-decor-tao-sang: #9c4a45;
 
-  --toi-warn-bg: #392b14;
-  --toi-warn-border: #6b4d1c;
-  --toi-warn-ink: #ffdca8;
+  /* Cùng lý do như bản sáng, nhưng ở đây tệ hơn: viền cũ (#6b4d1c) chỉ đạt 1.77:1
+     với nền, hai màu nâu đậm cạnh nhau nên hộp đọc ra một khối nâu bùn không có
+     mép. Nay 3.99:1. Nền bớt đỏ, xám hơn, để màu hổ phách của chữ và viền là thứ
+     mang nghĩa cảnh báo chứ không phải cả cái nền. */
+  --toi-warn-bg: #2f2617;
+  --toi-warn-border: #a87d2c;
+  --toi-warn-ink: #ffdfb0;
 
   --toi-danger: #ff8080;
   --toi-danger-bg: #3a1e1e;
-  --toi-danger-border: #6b3030;
+  --toi-danger-border: #b55555;
 }
 
 /* Máy đang ở chế độ tối, và người dùng chưa tự chọn giao diện sáng. */
