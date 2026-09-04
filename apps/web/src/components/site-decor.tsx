@@ -617,6 +617,7 @@ export function SiteDecor() {
       // ngoài chứ không lặp ở từng svg: sáu hình cùng nằm trên một lề thì phải lan
       // ra ngoài cùng một khoảng, không thì cái nọ lệch khỏi cái kia.
       style={{ '--kg-lan': LAN } as React.CSSProperties}
+      data-kg-decor="le"
       className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden xl:block"
     >
       {/*
@@ -944,6 +945,7 @@ export function DatCuoiTrang() {
   return (
     <div
       aria-hidden="true"
+      data-kg-decor="dat"
       /* `overflow-hidden`: ràng buộc số 3 ở đầu file. Một cái cây thò ra ngoài mép
          là cả trang phải vuốt ngang, và có một bộ kiểm tràn ngang đang canh đúng
          chuyện đó. */
@@ -1135,6 +1137,118 @@ export function DatCuoiTrang() {
         {/* Cây con vẽ TRƯỚC cây to: tán có chồng nhau thì cây to phải che cây nhỏ. */}
         <Cay x={62} y={0} s={0.26} delay={-6} />
         <Cay x={0} y={0} s={0.4} delay={0} lat />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Dây leo hai bên MÉP MÀN HÌNH — tranh trang trí thứ ba, chỉ cho màn hình hẹp.
+ *
+ * Ở đây có đúng 20px để vẽ, và con số đó không phải tôi chọn: nội dung dùng `px-5`
+ * (xem `page.tsx`), nên hai dải 20px sát mép là chỗ DUY NHẤT trên màn điện thoại mà
+ * không dòng chữ nào chạm tới. Thẻ game thì đục và nằm trên, nên vẽ lấn vào trong
+ * cũng chỉ bị thẻ che; nhưng tiêu đề "Game mới nhất" và mấy dòng chữ thường nằm
+ * THẲNG trên nền và bắt đầu đúng ở 20px, nên lấn một pixel là một chiếc lá nằm sau
+ * chữ cái đầu của một tiêu đề. Đó là lằn ranh, không phải một lề an toàn.
+ *
+ * VẼ ÍT HƠN, KHÔNG VẼ NHỎ HƠN — luật đã ghi ở đầu file, và lề 20px là ca cực đoan
+ * của nó. Không phải cái cây thu nhỏ (ở cỡ đó cả tán lá thành một đốm 6px), mà là
+ * một thứ KHÁC: một sợi dây leo, vốn dĩ mảnh và dài, với lá và hoa đúng cỡ đọc được.
+ *
+ * TÔ BẰNG `<pattern>` LẶP DỌC, không phải một danh sách toạ độ.
+ *
+ * Bên lề rộng thì `CanhVien` đặt tay từng cành theo phần trăm chiều cao, được, vì
+ * ở đó có 3–4 cành. Dây leo thì phải LIÊN TỤC suốt chiều cao khung nhìn, mà chiều
+ * cao ấy đổi theo máy và theo cả thanh địa chỉ của trình duyệt di động. Đặt tay thì
+ * hoặc dây đứt quãng ở máy cao, hoặc phải giãn hình — mà giãn là bông hoa bị bóp.
+ * Một ô hoa văn 20×120 lặp lại thì cao bao nhiêu cũng kín, và không hình nào méo.
+ *
+ * Ô phải NỐI ĐƯỢC VỚI CHÍNH NÓ: sợi dây vào ô ở (10,0) và ra ở (10,120), cùng một x.
+ * Lệch một đơn vị là mỗi 120px có một chỗ gấp khúc, và mắt bắt được ngay cái nhịp
+ * đều đặn ấy — đó là lúc hoa văn tự tố nó là hoa văn.
+ *
+ * HAI BÊN LỆCH PHA 46px, và đó không phải cho đẹp. Bên phải là bên trái lật ngang
+ * (`-scale-x-100`), nên nếu cùng pha thì mỗi chiếc lá bên này có một chiếc đối xứng
+ * y hệt bên kia — thành hai dấu ngoặc đơn đóng lấy nội dung, đúng cái mà ghi chú ở
+ * `CanhVien` đã cảnh báo. Lệch pha bằng cách cho hình chữ nhật tô hoa văn bắt đầu ở
+ * y = −46 chứ không phải 0; phần thừa phía dưới bị thẻ <svg> xén, đó là chủ ý.
+ *
+ * KHÔNG có viewBox trên hai thẻ <svg> này, cố ý: một đơn vị người dùng thành đúng
+ * một CSS px, nên `patternUnits="userSpaceOnUse"` với ô 20×120 là 20×120 pixel thật.
+ * Có viewBox là hình co giãn theo chiều cao khung nhìn, tức quay lại đúng cái phải
+ * tránh.
+ */
+const O_DAY_LEO = 'kg-o-day-leo';
+
+function OHoaVan() {
+  return (
+    <pattern
+      id={O_DAY_LEO}
+      patternUnits="userSpaceOnUse"
+      width="20"
+      height="120"
+      /* Lá và hoa vẽ trong ô nào thì nằm trong ô đó; thứ nhô ra khỏi ô sẽ bị chính
+         `<pattern>` xén, không phải bị thẻ svg xén — nên `overflow: visible` ở đây
+         là bắt buộc, thiếu nó là mất đầu mấy chiếc lá chìa ra ngoài ô. */
+      overflow="visible"
+    >
+      {/* Sợi dây: một đường lượn nhẹ, vào ô ở x=10 và ra ở x=10. */}
+      <path
+        d="M10 0C14 20 6 40 10 60 14 80 6 100 10 120"
+        stroke="var(--color-decor-la-dam)"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Tua cuốn: một vòng xoắn nhỏ, thứ làm dây leo ra dây leo chứ không ra sợi
+          chỉ có lá dính vào. */}
+      <path
+        d="M11 74c4 2 5 6 2 7-2 1-3-2-1-3"
+        stroke="var(--color-decor-la-dam)"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Lá so le hai phía. Góc và cỡ khác nhau từng chiếc: sáu chiếc cùng góc là
+          sáu bản sao, và ô lặp lại thì cái nhịp đó nhân lên suốt chiều cao trang. */}
+      <La x={10} y={13} g={-34} t={1} s={0.42} />
+      <La x={9} y={31} g={148} t={0} s={0.4} />
+      <La x={11} y={64} g={-24} t={2} s={0.44} />
+      <La x={9} y={92} g={156} t={1} s={0.42} />
+      <La x={10} y={108} g={-42} t={0} s={0.38} />
+      <Hoa x={13} y={52} mau="var(--color-decor-hoa-hong)" s={0.7} />
+      <Hoa x={7} y={120} mau="var(--color-decor-hoa-vang)" s={0.62} />
+    </pattern>
+  );
+}
+
+export function DayLeoVien() {
+  return (
+    <div
+      aria-hidden="true"
+      data-kg-decor="vien"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden xl:hidden"
+    >
+      <svg className="absolute inset-y-0 left-0 h-full w-5" fill="none" focusable="false">
+        <defs>
+          <OHoaVan />
+        </defs>
+        <rect x="0" y="0" width="20" height="4000" fill={`url(#${O_DAY_LEO})`} />
+      </svg>
+      {/*
+        Bên phải: cùng một ô hoa văn, lật ngang và lệch pha 46px.
+
+        Dùng lại `url(#...)` của thẻ svg bên trên — một `<pattern>` khai một lần thì
+        mọi thẻ trong tài liệu tô được, và đó là điểm chính: hai bản vẽ tay của cùng
+        một sợi dây thì sớm muộn lệch nhau, y như ghi chú ở `Canh` đã nói.
+      */}
+      <svg
+        className="absolute inset-y-0 right-0 h-full w-5 -scale-x-100"
+        fill="none"
+        focusable="false"
+      >
+        <rect x="0" y="-46" width="20" height="4000" fill={`url(#${O_DAY_LEO})`} />
       </svg>
     </div>
   );

@@ -626,12 +626,23 @@ if (FIXTURE) {
        * kiểm luôn xanh và không canh gì cả.
        */
       const veRa = (e) => e.getClientRects().length > 0;
+      /*
+       * Tìm theo `data-kg-decor`, KHÔNG theo hình dạng của phần tử.
+       *
+       * Bản trước nhận ra tranh bên lề bằng "div aria-hidden có position: fixed" —
+       * đúng cho tới lúc có bức trang trí thứ ba (dây leo hai mép) cũng là một div
+       * aria-hidden fixed. Lúc đó phép kiểm đếm được 1 ở chỗ đáng lẽ 0 và báo đỏ vì
+       * một thay đổi hoàn toàn lành. Bám vào một cái nhãn đặt sẵn thì thêm bức thứ
+       * tư cũng không đụng gì tới đây.
+       */
+      const co = (k) => {
+        const e = document.querySelector(`[data-kg-decor="${k}"]`);
+        return e ? veRa(e) : null;
+      };
       return {
-        dat: [...document.querySelectorAll('footer > div[aria-hidden="true"]')].filter(veRa)
-          .length,
-        le: [...document.querySelectorAll('div[aria-hidden="true"]')].filter(
-          (e) => getComputedStyle(e).position === 'fixed' && veRa(e)
-        ).length,
+        dat: co('dat'),
+        le: co('le'),
+        vien: co('vien'),
         /* Điểm tab: tranh trang trí không được thêm cái nào, ở khổ nào cũng vậy. */
         tab: document.querySelectorAll(
           'footer a, footer button, footer [tabindex]:not([tabindex="-1"])'
@@ -650,26 +661,28 @@ if (FIXTURE) {
       };
     });
 
-  for (const [ten, w, datMongDoi, leMongDoi] of [
-    ['điện thoại 390px', 390, 1, 0],
-    ['ngay dưới mốc, 1279px', 1279, 1, 0],
-    ['đúng mốc, 1280px', 1280, 0, 1],
+  for (const [ten, w, hep] of [
+    ['điện thoại 390px', 390, true],
+    ['ngay dưới mốc, 1279px', 1279, true],
+    ['đúng mốc, 1280px', 1280, false],
   ]) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 900 } });
     const p = await ctx.newPage();
     await p.goto(APP, { waitUntil: 'networkidle' });
     const d = await dem(p);
+    /* BA bức tranh, và chúng loại trừ nhau theo đúng một mốc: khổ hẹp thì có dải đất
+       cuối trang và dây leo hai mép, khổ rộng thì có tranh hai bên lề. */
     check(
-      `Dải đất cuối trang — ${ten}`,
-      d.dat === datMongDoi && d.le === leMongDoi,
-      `đất ${d.dat} (cần ${datMongDoi}), lề ${d.le} (cần ${leMongDoi})`
+      `Ba bức trang trí bật đúng bộ — ${ten}`,
+      d.dat === hep && d.vien === hep && d.le === !hep,
+      `đất ${d.dat}, viền ${d.vien}, lề ${d.le} (khổ ${hep ? 'hẹp' : 'rộng'})`
     );
     check(`Chân trang ${ten}: tranh không thêm điểm tab`, d.tab === 2, `${d.tab} điểm tab`);
     /* Dải nền bật đúng ở khổ nào có dải đất, tắt đúng ở khổ nào có tranh bên lề. */
     check(
       `Dải nền chuyển sắc — ${ten}`,
-      d.dai === (datMongDoi === 1),
-      `${d.dai ? 'có' : 'không'} (cần ${datMongDoi === 1 ? 'có' : 'không'})`
+      d.dai === hep,
+      `${d.dai ? 'có' : 'không'} (cần ${hep ? 'có' : 'không'})`
     );
     check(
       `Nền đặc lót dưới còn nguyên — ${ten}`,

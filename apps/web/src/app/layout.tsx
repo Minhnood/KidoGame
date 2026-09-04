@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 import { SiteNav } from '@/components/site-nav';
 import { SiteLogo } from '@/components/site-logo';
 import { NavDecor } from '@/components/nav-decor';
-import { SiteDecor } from '@/components/site-decor';
+import { DayLeoVien, SiteDecor } from '@/components/site-decor';
 import { SiteFooter } from '@/components/site-footer';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Wrap } from '@/components/page';
@@ -160,6 +160,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             trong cây DOM không ảnh hưởng gì tới bố cục — điều đáng quan tâm là nó
             không chen vào thứ tự Tab, và nó không hề focus được. */}
         <SiteDecor />
+        {/* Dây leo hai mép, cho màn hình hẹp — cùng lý do đặt ở đây như `SiteDecor`:
+            nó `fixed` nên chỗ trong cây DOM không ảnh hưởng bố cục, và nó không hề
+            focus được nên không chen vào thứ tự Tab. */}
+        <DayLeoVien />
         {/*
           Nền thanh điều hướng xếp BA LỚP, và thứ tự là thứ tự trong DOM.
 
