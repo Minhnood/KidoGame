@@ -139,7 +139,7 @@ giả kiểu đó làm người ta bỏ luôn cả bộ kiểm.
 cd infra && docker compose up -d --build
 docker compose run --rm web pnpm --filter @kidogame/web db:deploy
 node infra/e2e-prod-cookie.mjs        # 10 kiểm tra — soi kỹ một luồng
-node infra/e2e-prod-routes.mjs        # 14 route  — soi nông toàn bộ bề mặt
+node infra/e2e-prod-routes.mjs        # 15 phép kiểm — soi nông toàn bộ bề mặt
 ```
 
 `e2e-prod-routes.mjs` mở lần lượt mọi trang bằng ba vai (khách, phụ huynh, bé) và
