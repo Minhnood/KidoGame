@@ -26,6 +26,8 @@ import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
+/* Khu quản trị trên origin riêng — xem `infra/e2e-admin-origin.mjs`. */
+const ADMIN = process.env.ADMIN_ORIGIN ?? 'http://admin.localhost:3000';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'demo@kidogame.local';
 const ADMIN_PASS = process.env.ADMIN_PASS ?? 'demo1234ab';
 const CHILD_USER = process.env.CHILD_USER ?? 'beminh';
@@ -84,10 +86,10 @@ const browser = await chromium.launch({ channel: 'chrome' });
 // ---------- Ai vào được trang ----------
 {
   const p = await (await browser.newContext()).newPage();
-  await p.goto(`${APP}/admin/loi`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADMIN}/admin/loi`, { waitUntil: 'networkidle' });
   check(
-    'Khách chưa đăng nhập bị đẩy về trang đăng nhập',
-    new URL(p.url()).pathname === '/dang-nhap',
+    'Khách chưa đăng nhập bị đẩy về cửa đăng nhập quản trị',
+    new URL(p.url()).pathname === '/admin/dang-nhap',
     new URL(p.url()).pathname
   );
 
@@ -99,12 +101,33 @@ const browser = await chromium.launch({ channel: 'chrome' });
   await kid
     .waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 })
     .catch(() => {});
-  const res = await kid.goto(`${APP}/admin/loi`, { waitUntil: 'networkidle' });
+  await kid.goto(`${ADMIN}/admin/loi`, { waitUntil: 'networkidle' });
   /*
-   * 404 chứ không 403, giống hệt /admin: 403 là tự xác nhận trang này có tồn tại và
-   * đáng để dò tiếp.
+   * ĐỔI TỪ "nhận 404" SANG "bị đẩy về cửa đăng nhập", và việc che giấu chuyển sang
+   * tầng khác chứ không mất đi.
+   *
+   * Trước khi tách origin, `/admin/loi` nằm trên app origin và trả 404 cho người
+   * không có quyền — 404 chứ không 403, để không tự xác nhận trang có tồn tại.
+   *
+   * Nay trang này chỉ tồn tại trên admin origin, và ở đó nó PHẢI hiện được cửa đăng
+   * nhập, không thì người có quyền cũng không vào được. Thứ che giấu khu quản trị
+   * giờ là: trên app origin `/admin*` trả 404 với mọi người (phép kiểm trong
+   * `e2e-moderation`), và hostname của admin origin không được công bố ở đâu trên
+   * site — thanh điều hướng không có link tới nó.
+   *
+   * Điều phải giữ, và là điều phép kiểm này canh: một phiên SITE hợp lệ — ở đây là
+   * phiên của một đứa trẻ — không đọc được nội dung khu quản trị.
    */
-  check('Tài khoản bé vào /admin/loi nhận 404', res.status() === 404, String(res.status()));
+  const duongDan = new URL(kid.url()).pathname;
+  check(
+    'Phiên của bé không vào được /admin/loi, bị đẩy về cửa đăng nhập quản trị',
+    duongDan === '/admin/dang-nhap',
+    duongDan
+  );
+  check(
+    'Và không đọc được nội dung nào của trang lỗi',
+    (await kid.locator('[data-testid=error-total]').count()) === 0
+  );
 }
 
 // ---------- Nhận báo cáo ----------
@@ -152,15 +175,19 @@ await post(
 // ---------- Admin xem ----------
 const ctx = await browser.newContext({ viewport: { width: 1300, height: 1000 } });
 const p = await ctx.newPage();
-await p.goto(`${APP}/dang-nhap`, { waitUntil: 'networkidle' });
+/*
+ * Đăng nhập ở CỬA QUẢN TRỊ trên admin origin. Phiên site không mở được khu này —
+ * xem `infra/e2e-admin-origin.mjs`.
+ */
+await p.goto(`${ADMIN}/admin/dang-nhap`, { waitUntil: 'networkidle' });
 await p.fill('#email', ADMIN_EMAIL);
 await p.fill('#password', ADMIN_PASS);
 await p.click('button[type=submit]');
-await p.waitForURL((u) => !/dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
+await p.waitForURL((u) => u.pathname === '/admin', { timeout: 20000 }).catch(() => {});
 
 /** Số nhóm mà bộ lọc đang chọn hiện ra, đọc từ dòng tổng. */
 async function tongNhom(loc = 'chua-xu-ly') {
-  await p.goto(`${APP}/admin/loi?loc=${loc}`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADMIN}/admin/loi?loc=${loc}`, { waitUntil: 'networkidle' });
   const text = await p.locator('[data-testid=error-total]').innerText();
   return Number(/^(\d+)/.exec(text)?.[1] ?? '0');
 }
@@ -169,7 +196,7 @@ async function tongNhom(loc = 'chua-xu-ly') {
 const the = (path) =>
   p.locator('[data-testid=error-group]').filter({ has: p.locator(`text="${path}"`) });
 
-await p.goto(`${APP}/admin/loi`, { waitUntil: 'networkidle' });
+await p.goto(`${ADMIN}/admin/loi`, { waitUntil: 'networkidle' });
 const duong = await p.locator('[data-testid=error-path]').allInnerTexts();
 
 check('Nhóm lỗi mới hiện trên /admin/loi', duong.includes(PATH), duong.slice(0, 5).join(', '));
@@ -220,7 +247,7 @@ check(
  */
 {
   const chuaXuLy = await tongNhom('chua-xu-ly');
-  await p.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const dem = await p.locator('[data-testid=admin-tab-loi-dem]').innerText();
   check(
     'Tab Lỗi trên thanh quản trị hiện đúng số nhóm chưa xử lý',
@@ -237,7 +264,7 @@ check(
 
   check('Bấm "Đã xử lý" thì nhóm rời khỏi mục chưa xử lý', (await tongNhom('chua-xu-ly')) === truoc - 1);
 
-  await p.goto(`${APP}/admin/loi?loc=da-xu-ly`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADMIN}/admin/loi?loc=da-xu-ly`, { waitUntil: 'networkidle' });
   check(
     'Nhóm đã xử lý hiện ở mục "Đã xử lý" kèm mốc thời gian',
     (await the(PATH).locator('[data-testid=error-resolved-at]').count()) === 1
@@ -245,7 +272,7 @@ check(
 
   // Lỗi quay lại SAU khi đánh dấu — thứ quan trọng nhất trang này phải nói ra.
   await post({ source: 'boundary', path: PATH, digest: DIGEST, message: MESSAGE });
-  await p.goto(`${APP}/admin/loi?loc=da-xu-ly`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADMIN}/admin/loi?loc=da-xu-ly`, { waitUntil: 'networkidle' });
   check(
     'Lỗi xảy ra lại sau khi đánh dấu thì thẻ cảnh báo rõ (bản vá không ăn)',
     (await the(PATH).locator('[data-testid=error-resolved-at]').innerText()).includes('xảy ra lại')
@@ -277,7 +304,7 @@ check(
 
 // ---------- Dọn: đưa mọi nhóm về đã xử lý ----------
 {
-  await p.goto(`${APP}/admin/loi`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADMIN}/admin/loi`, { waitUntil: 'networkidle' });
   const nut = p.locator('[data-testid=error-resolve-all]');
   if ((await nut.count()) > 0) {
     await nut.click();

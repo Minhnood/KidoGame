@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { getActor } from '@/lib/session';
+import { getAdmin } from '@/lib/session';
 import { MAX_UNRESOLVED_GROUPS, RETENTION_DAYS } from '@/lib/error-log';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
@@ -58,10 +58,8 @@ export default async function AdminErrorsPage({
 }: {
   searchParams: Promise<{ loc?: string; trang?: string }>;
 }) {
-  const actor = await getActor();
-  if (!actor) redirect('/dang-nhap');
-  // 404 chứ không 403, cùng lý do đã ghi ở /admin: 403 là xác nhận trang có tồn tại.
-  if (actor.kind !== 'parent' || !actor.isAdmin) notFound();
+  const admin = await getAdmin();
+  if (!admin) redirect('/admin/dang-nhap');
 
   const sp = await searchParams;
   const filter = (FILTERS.find((f) => f.key === sp.loc)?.key ?? 'chua-xu-ly') as FilterKey;

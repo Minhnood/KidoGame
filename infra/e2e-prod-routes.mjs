@@ -17,6 +17,28 @@
  * Đổi đích:  APP=https://app.kidogame.vn node infra/e2e-prod-routes.mjs
  */
 import { chromium } from 'playwright';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Khu quản trị đã tách sang origin riêng chưa — đọc từ `infra/.env`.
+ *
+ * KHÔNG đọc `process.env`: biến đó nằm trong container `web`, còn bộ kiểm này chạy
+ * trên máy host. Lần đầu viết đúng như vậy và phép kiểm đỏ với lý do đúng — `/admin`
+ * trên app domain trả 404 theo thiết kế, nhưng danh sách route vẫn duyệt nó.
+ */
+function docAdminDomain() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  try {
+    const raw = readFileSync(join(here, '.env'), 'utf8');
+    const m = raw.match(/^\s*ADMIN_DOMAIN\s*=\s*(.*)$/m);
+    return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+  } catch {
+    return '';
+  }
+}
+const ADMIN_DOMAIN = process.env.ADMIN_DOMAIN ?? docAdminDomain();
 
 const APP = process.env.APP ?? 'https://app.localhost';
 const PARENT_EMAIL = process.env.DEMO_EMAIL ?? 'demo@kidogame.local';
@@ -97,7 +119,13 @@ const ROUTES = [
   { path: '/xac-minh-email?token=sai', as: 'khách' },
   { path: '/dat-lai-mat-khau?token=sai', as: 'khách' },
   { path: '/phu-huynh', as: 'phụ huynh' },
-  { path: '/admin', as: 'phụ huynh' },
+  /*
+   * Khu quản trị chỉ nằm trên app domain khi CHƯA tách origin. Đã khai ADMIN_DOMAIN
+   * thì `/admin` ở đây phải 404, và điều đó được kiểm CHỦ ĐỘNG ở cuối file chứ không
+   * chỉ bỏ qua — bỏ qua im lặng thì một khu quản trị hỏng thành 404 cũng trông y hệt
+   * một khu quản trị đã tách đúng. Phần đã tách do `infra/e2e-admin-origin.mjs` kiểm.
+   */
+  ...(ADMIN_DOMAIN ? [] : [{ path: '/admin', as: 'phụ huynh' }]),
   { path: '/upload', as: 'bé' },
   ...(gameId ? [{ path: `/game/${gameId}`, as: 'khách' }] : []),
 ];
@@ -149,8 +177,35 @@ for (const route of ROUTES) {
   await page.close();
 }
 
+/*
+ * ĐÃ TÁCH THÌ PHẢI KIỂM, không phải bỏ qua.
+ *
+ * Nếu chỉ loại `/admin` khỏi danh sách khi ADMIN_DOMAIN có giá trị thì một khu quản
+ * trị hỏng — build sai, route mất — cũng trả 404 và trông y hệt một khu quản trị đã
+ * tách đúng. Hai phép kiểm dưới đây phân biệt hai chuyện đó: app domain phải 404, và
+ * admin domain phải mở được cửa đăng nhập.
+ */
+if (ADMIN_DOMAIN) {
+  const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+  const page = await ctx.newPage();
+
+  const r1 = await page.goto(`${APP}/admin`, { waitUntil: 'domcontentloaded' }).catch(() => null);
+  const ok1 = r1?.status() === 404;
+  if (!ok1) bad++;
+  console.log(`${ok1 ? '✅' : '❌'} [khách] /admin trên app domain trả 404 — HTTP ${r1?.status() ?? '?'}`);
+
+  const adminUrl = `https://${ADMIN_DOMAIN}/admin/dang-nhap`;
+  const r2 = await page.goto(adminUrl, { waitUntil: 'domcontentloaded' }).catch(() => null);
+  const ok2 = r2?.status() === 200;
+  if (!ok2) bad++;
+  console.log(`${ok2 ? '✅' : '❌'} [khách] cửa đăng nhập quản trị mở được — HTTP ${r2?.status() ?? '?'}`);
+
+  await ctx.close();
+}
+
 if (!gameId) console.log('⚠️  Không có game nào công khai nên BỎ QUA trang /game/<id>.');
 
 await browser.close();
-console.log(`\n${ROUTES.length - bad}/${ROUTES.length} route sạch`);
+const tongPhepKiem = ROUTES.length + (ADMIN_DOMAIN ? 2 : 0);
+console.log(`\n${tongPhepKiem - bad}/${tongPhepKiem} phép kiểm đạt`);
 process.exit(bad ? 1 : 0);

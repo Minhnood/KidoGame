@@ -88,6 +88,10 @@ services:
       APP_ORIGIN: https://${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
       # Vào cả CSP frame-src của app (next.config.ts) và URL file game.
       PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # Origin thứ ba: khu quản trị. RỖNG = chưa tách, /admin nằm trên app domain
+      # như trước. Có giá trị = middleware chỉ phục vụ /admin* trên host này, và
+      # trả 404 cho /admin* trên app domain. Không dùng `:?` vì tách là tuỳ chọn.
+      ADMIN_ORIGIN: ${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}
       # Hai đường gửi mail, phải có MỘT. Không đường nào thì `sendMail` NÉM LỖI ở
       # production, cố ý — in mail chứa token ra log production chính là rò token.
       # Xem src/lib/mail.ts.
@@ -139,6 +143,7 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN}
       PLAYER_DOMAIN: ${PLAYER_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kidogame.vn}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

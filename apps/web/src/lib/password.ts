@@ -32,10 +32,23 @@ export class ScryptBusyError extends Error {
  * Nên chọn 4: đỉnh bộ nhớ ~256MB, còn chỗ cho Next + Prisma trên một VPS nhỏ, mà
  * độ trễ gần như không đổi so với chạy một mình.
  *
- * Hàng chờ 32: quá số đó thì TỪ CHỐI NGAY thay vì xếp hàng vô hạn. Xếp hàng vô hạn
- * chỉ đổi kiểu chết — thay vì hết RAM thì thành hàng nghìn request treo rồi cùng
- * timeout. 32 người chờ, 4 người chạy, mỗi lượt 130ms thì người cuối đợi ~1 giây;
- * đó là lý do KHÔNG cần thêm cơ chế timeout cho hàng chờ.
+ * Hàng chờ: quá số đó thì TỪ CHỐI NGAY thay vì xếp hàng vô hạn. Xếp hàng vô hạn chỉ
+ * đổi kiểu chết — thay vì hết RAM thì thành hàng nghìn request treo rồi cùng timeout.
+ *
+ * ĐÃ NÂNG TỪ 32 LÊN 64 khi rà lại các trần cho lưu lượng mở. Con số 32 cân cho một
+ * nhóm nhỏ: 4 chạy + 32 chờ = 36 người được nhận, người thứ 37 nhận `ScryptBusyError`
+ * và thấy một thông báo "hệ thống đang bận". Nhưng bối cảnh thật của trang này là cả
+ * một lớp học đăng nhập trong cùng vài giây — 40 bé là con số bình thường, và bốn bé
+ * cuối lớp bị từ chối. Với trẻ em thì đó không đọc ra là "thử lại đi", nó đọc ra là
+ * "mình làm sai gì rồi".
+ *
+ * Đo trên máy này: 1 lượt 129ms, 4 lượt song song 161ms, 32 lượt 1063ms — tức hàng
+ * chờ 32 làm người cuối đợi ~1.06 giây, và 64 làm người cuối đợi ~2.1 giây. Vẫn dưới
+ * ngưỡng người ta bỏ đi, và 64 request đang chờ là chi phí bộ nhớ không đáng kể. Đó
+ * cũng là lý do KHÔNG cần thêm cơ chế timeout cho hàng chờ.
+ *
+ * Cả hai con số đọc từ biến môi trường, nên trên VPS ít nhân có thể hạ
+ * `SCRYPT_MAX_CONCURRENT` xuống mà không phải sửa code.
  *
  * Trần này đặt ở ĐÂY chứ không ở tầng route, cố ý: mọi đường dẫn tới scrypt đều đi
  * qua hàm này — đăng nhập, đăng ký, đổi mật khẩu, tạo tài khoản con, cả hash mồi
@@ -43,7 +56,7 @@ export class ScryptBusyError extends Error {
  * sớm muộn sẽ có người quên.
  */
 const MAX_SONG_SONG = Math.max(1, Number(process.env.SCRYPT_MAX_CONCURRENT ?? 4));
-const MAX_HANG_CHO = Math.max(0, Number(process.env.SCRYPT_MAX_QUEUE ?? 32));
+const MAX_HANG_CHO = Math.max(0, Number(process.env.SCRYPT_MAX_QUEUE ?? 64));
 
 let dangChay = 0;
 const hangCho: Array<() => void> = [];

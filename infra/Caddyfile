@@ -52,6 +52,53 @@
 }
 
 # ---------------------------------------------------------------------------
+# Admin origin — ORIGIN THỨ BA. Cùng ứng dụng, cookie khác, host khác.
+#
+# VÌ SAO CẦN MỘT HOSTNAME RIÊNG chứ không phải một đường dẫn trên app domain:
+# cookie phiên quản trị là host-only trên host này, nên trình duyệt KHÔNG gửi nó tới
+# app domain, và mã JavaScript chạy trên app domain không đọc được nó — hai origin
+# khác nhau thì không chạm được cookie jar của nhau.
+#
+# Điều đó bảo vệ đúng một đường tấn công cụ thể: app domain render tên game và mô tả
+# do TRẺ EM nhập, nên đó là chỗ XSS đáng lo nhất của cả dự án. Trước khi tách, một
+# lỗ XSS ở đó đọc được phiên quản trị và POST được tới các server action ẩn game, gỡ
+# hẳn, khoá tài khoản. Cookie không phân biệt theo PORT, nên "một cổng khác" không
+# thay được "một hostname khác" — cùng lý lẽ đã ghi cho player origin.
+#
+# Cùng upstream `web:3000`: middleware của app quyết định host nào phục vụ đường dẫn
+# nào, nên không cần container thứ hai. Trên host này mọi đường dẫn ngoài `/admin*`
+# trả 404, kể cả `/game/<id>` — không thì origin đang giữ cookie quản trị lại render
+# nội dung do trẻ nhập, tức là dựng rào rồi mở cổng.
+#
+# ĐỂ TRỐNG ADMIN_DOMAIN trong infra/.env là TẮT khu quản trị trên bản triển khai:
+# Caddy vẫn nhận site này với tên mặc định nhưng DNS không trỏ tới, còn app thì thấy
+# ADMIN_ORIGIN rỗng và giữ hành vi cũ (/admin nằm trên app domain). Muốn tách thật
+# thì phải khai cả ADMIN_DOMAIN ở đây và trỏ DNS về cùng IP.
+# ---------------------------------------------------------------------------
+{$ADMIN_DOMAIN:admin.kidogame.vn} {
+	encode zstd gzip
+
+	reverse_proxy web:3000 {
+		# Cùng lý lẽ ghi đè như app domain: Caddy là hop duy nhất trước app, nên
+		# giữ chuỗi client gửi lên là để client tự khai IP của mình.
+		header_up X-Forwarded-For {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		# Khu quản trị KHÔNG BAO GIỜ được nhúng vào iframe của ai.
+		X-Frame-Options "DENY"
+		# `no-referrer` chặt hơn app domain (`same-origin`): đường dẫn ở đây mang id
+		# game đang bị khiếu nại và id nhóm lỗi, và không có lý gì để chúng rời khỏi
+		# đây khi người quản trị bấm một link ra ngoài.
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		-Server
+	}
+}
+
+# ---------------------------------------------------------------------------
 # Player origin — chỉ file tĩnh. KHÔNG có ứng dụng, KHÔNG có cookie.
 # ---------------------------------------------------------------------------
 {$PLAYER_DOMAIN:play.kidogame.vn} {

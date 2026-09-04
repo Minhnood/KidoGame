@@ -54,8 +54,24 @@ export async function gameDangBiKhieuNai(gameIds: string[]): Promise<Set<string>
  * mới quyết định cuối cùng, có thời hạn, và có mail báo cho cả hai phía.
  */
 
-/** Hạn mức chống spam, tính theo IP trong 24 giờ. */
-export const TAKEDOWNS_PER_IP_PER_DAY = 5;
+/**
+ * Hạn mức chống spam, tính theo IP trong 24 giờ.
+ *
+ * ĐÃ NÂNG TỪ 5 LÊN 20 khi rà lại các trần cho lưu lượng mở. Đây không phải một biểu
+ * mẫu góp ý, nó là kênh pháp lý — và trần 5 chặn oan đúng người mà kênh này tồn tại
+ * để phục vụ: một chủ bản quyền phát hiện tám game dùng nhân vật của mình phải gửi
+ * tám yêu cầu, mỗi yêu cầu một game, vì form nhận đúng một mã game. Chạm trần thì
+ * đường thay thế duy nhất của họ là gửi mail tới `OPERATOR_EMAIL` và chờ, trong khi
+ * cái họ vừa cố làm là dùng đúng quy trình ta công bố.
+ *
+ * Không nâng cao hơn: mỗi yêu cầu tạo một dòng trong DB và một lá thư gửi cho đơn vị
+ * vận hành, nên trần vẫn phải là một con số mà một người đọc hết được trong ngày.
+ *
+ * Kèm lợi ích cho việc kiểm: với trần 5, `infra/e2e-takedown.mjs` chỉ chạy được
+ * khoảng hai lượt một ngày, và lượt thứ ba đổ ngay bước đầu với triệu chứng trông y
+ * như luồng gỡ bản quyền bị hỏng.
+ */
+export const TAKEDOWNS_PER_IP_PER_DAY = 20;
 
 /**
  * Nhận cả link đầy đủ lẫn mã game trần.

@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { getActor } from '@/lib/session';
+import { getAdmin } from '@/lib/session';
 import { REPORT_AUTO_HIDE_THRESHOLD, REPORT_HARD_HIDE_THRESHOLD } from '@/lib/moderation';
 import { reasonLabel } from '@/lib/report-reasons';
 import { objectUrl } from '@/lib/storage';
@@ -89,15 +89,19 @@ export default async function AdminPage({
 }: {
   searchParams: Promise<{ loc?: string; trang?: string }>;
 }) {
-  const actor = await getActor();
-  if (!actor) redirect('/dang-nhap');
-
+  const admin = await getAdmin();
   /*
-   * Người không phải admin nhận 404 chứ không phải "403 bạn không có quyền".
-   * Báo 403 là xác nhận trang này có tồn tại và đáng để dò tiếp; 404 thì trang
-   * admin đơn giản là không tồn tại đối với họ.
+   * `getAdmin()` đã bao gồm cả việc kiểm lại `isAdmin`, nên ở đây không còn phép
+   * kiểm quyền riêng nữa. Việc "người không có quyền thấy 404 chứ không thấy 403"
+   * giờ do middleware lo, và ở tầng cao hơn: trên app origin thì `/admin` KHÔNG
+   * TỒN TẠI, không phải bị từ chối. Báo 403 là xác nhận trang có thật và đáng dò
+   * tiếp; 404 thì không nói gì cả.
+   *
+   * Vẫn kiểm ở TRANG chứ không chỉ ở layout, cố ý lặp: layout của Next không chạy
+   * lại trên mọi lần điều hướng phía client, nên một layout đóng vai người giữ cửa
+   * duy nhất là một người giữ cửa có lúc ngủ.
    */
-  if (actor.kind !== 'parent' || !actor.isAdmin) notFound();
+  if (!admin) redirect('/admin/dang-nhap');
 
   const sp = await searchParams;
   const filter = (FILTERS.find((f) => f.key === sp.loc)?.key ?? 'can-xem') as FilterKey;

@@ -77,7 +77,90 @@ function buildCsp(nonce: string): string {
   ].join('; ');
 }
 
+/**
+ * Hostname của khu quản trị, hoặc `null` nếu chưa tách.
+ *
+ * Lấy hostname chứ không so cả origin: request tới middleware chỉ mang `Host`, và ở
+ * dev thì cổng nằm trong đó còn ở production thì không (Caddy nói chuyện HTTP với
+ * upstream ở cổng khác). So bằng hostname là thứ đúng ở cả hai nơi.
+ */
+function adminHost(): string | null {
+  const raw = process.env.ADMIN_ORIGIN?.trim();
+  if (!raw) return null;
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Khu quản trị chỉ tồn tại trên origin của nó, và origin đó KHÔNG phục vụ gì khác.
+ *
+ * Hai chiều, và cần cả hai:
+ *
+ *  - `/admin/*` trên app origin trả 404. Không có nó thì việc tách origin chỉ là
+ *    thêm một cửa, không phải chuyển cửa: cookie admin không đi tới app origin,
+ *    nhưng trang vẫn ở đó và ai gõ đúng đường dẫn vẫn thấy nó tồn tại.
+ *  - Mọi đường dẫn KHÁC trên admin origin trả 404. Không có nó thì admin origin
+ *    cũng phục vụ được `/game/<id>`, tức là render tên game do trẻ nhập — đúng cái
+ *    đường XSS mà việc tách origin tồn tại để dựng rào chắn khỏi nó.
+ *
+ * 404 chứ không redirect: redirect từ app origin sang admin origin là công bố khu
+ * quản trị nằm ở đâu cho bất cứ ai gõ thử `/admin`.
+ *
+ * `_next` và `favicon.ico` đi qua được ở cả hai bên — không có chúng thì trang quản
+ * trị không có CSS và không hydrate.
+ */
+function chanTheoHost(request: NextRequest): NextResponse | null {
+  const admin = adminHost();
+  if (!admin) return null; // Chưa tách: giữ nguyên hành vi cũ, /admin ở app origin.
+
+  const { pathname } = request.nextUrl;
+  if (pathname.startsWith('/_next') || pathname === '/favicon.ico') return null;
+
+  /*
+   * Host thật lấy từ header `Host`, KHÔNG từ `request.nextUrl.hostname`.
+   *
+   * Đã đo và đã sai một lượt vì chỗ này: `nextUrl` là URL nội bộ Next dựng lại, và
+   * hostname trong đó không phải host mà client gọi tới. Kết quả là logic đảo ngược
+   * hoàn hảo — `admin.localhost/admin` trả 404 còn `admin.localhost/` trả 200, tức
+   * đúng hai điều mà hàm này tồn tại để ngăn.
+   *
+   * Cắt port: ở dev host là `admin.localhost:3000`, ở production Caddy chuyển tiếp
+   * `Host: admin.kidogame.vn` không kèm port. So bằng hostname là thứ đúng ở cả hai.
+   */
+  const hostThat = (request.headers.get('host') ?? '').split(':')[0].toLowerCase();
+  const laAdminHost = hostThat === admin;
+  const laDuongAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
+
+  if (laAdminHost !== laDuongAdmin) {
+    /*
+     * 404 CÓ THÂN, không phải thân rỗng.
+     *
+     * Chrome coi một response 4xx không có thân là lỗi tải trang
+     * (`ERR_HTTP_RESPONSE_CODE_FAILURE`), nên `page.goto` của Playwright NÉM thay vì
+     * trả về response — và phép kiểm "gõ /admin trên app origin phải nhận 404" đổ
+     * với một thông điệp về mạng, không chỉ vào đây chút nào. Người dùng thật thì
+     * thấy trang trắng.
+     *
+     * Một dòng chữ trơn, không link, không gợi ý đường khác: chỗ này cố ý không nói
+     * gì thêm. Không rewrite sang trang 404 của site, vì middleware chạy lại cho
+     * đường dẫn sau rewrite và trên admin origin đường dẫn đó lại không phải
+     * `/admin*` — tức là một vòng lặp.
+     */
+    return new NextResponse('Không tìm thấy trang này.', {
+      status: 404,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    });
+  }
+  return null;
+}
+
 export function middleware(request: NextRequest) {
+  const chan = chanTheoHost(request);
+  if (chan) return chan;
+
   const nonce = makeNonce();
   const csp = buildCsp(nonce);
 
