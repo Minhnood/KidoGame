@@ -204,6 +204,47 @@ services:
     # Image postgres có entrypoint riêng lo việc khởi tạo cluster, phải ghi đè.
     entrypoint: ['/bin/bash', '/backup.sh', 'loop']
 
+  # ---------------------------------------------------------------------------
+  # DỌN ĐỊNH KỲ: xoá hẳn game đã gỡ quá 7 ngày, rồi xoá file thành rác.
+  #
+  # Là một service chứ không phải cron trên host, cùng lý do như `backup`: việc phải
+  # có người nhớ chạy thì đúng bằng không có. "Game đã gỡ thì một tuần sau xoá luôn"
+  # mà không ai chạy lệnh thì đó không phải một hạn, đó là một câu trong tài liệu.
+  #
+  # DÙNG LẠI IMAGE CỦA `web`, không build image thứ năm: hai script dọn là tsx +
+  # prisma CLI, và image web CỐ Ý giữ devDependencies (xem chú thích trong
+  # infra/Dockerfile). `build` trỏ cùng context nên compose không build lại lần hai.
+  #
+  # PRUNE_HOUR mặc định 4, tức MỘT TIẾNG SAU `BACKUP_HOUR`=3. Thứ tự đó là điều kiện
+  # để cửa sổ sửa sai thật sự tồn tại: bản sao lưu của chính ngày xoá vẫn còn chứa
+  # game. Đổi hai con số này mà đảo thứ tự thì bản sao lưu gần nhất đã không có game
+  # nữa, và "xoá sau 7 ngày" lặng lẽ thành "mất hẳn sau 7 ngày".
+  # ---------------------------------------------------------------------------
+  prune:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://kidogame:${POSTGRES_PASSWORD}@db:5432/kidogame?schema=public
+      STORAGE_DIR: /srv/storage
+      PRUNE_HOUR: ${PRUNE_HOUR:-4}
+      # Hạn giữ game đã gỡ, tính bằng ngày. Rỗng = dùng mặc định 7 trong
+      # `NGAY_GIU_GAME_DA_GO`. Đặt 0 hoặc chữ thì script TỪ CHỐI chạy, không xoá gì.
+      REMOVED_KEEP_DAYS: ${REMOVED_KEEP_DAYS:-}
+      # Cùng lý do như service backup: thiếu dòng này thì container chạy UTC và
+      # PRUNE_HOUR=4 nghĩa là 11 giờ trưa giờ Việt Nam.
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    volumes:
+      - ./prune.sh:/prune.sh:ro
+      # ĐỌC-GHI, khác service backup: việc của nó là xoá file, không phải sao chép.
+      - storage:/srv/storage
+    entrypoint: ['/bin/bash', '/prune.sh', 'loop']
+
 volumes:
   # Hai volume dưới đây là TOÀN BỘ dữ liệu không sinh lại được. Sao lưu nghĩa là
   # sao lưu đúng hai cái này.

@@ -3,7 +3,12 @@ import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getAdmin } from '@/lib/session';
-import { REPORT_AUTO_HIDE_THRESHOLD, REPORT_HARD_HIDE_THRESHOLD } from '@/lib/moderation';
+import {
+  NGAY_GIU_GAME_DA_GO,
+  REPORT_AUTO_HIDE_THRESHOLD,
+  REPORT_HARD_HIDE_THRESHOLD,
+  hanXoaHan,
+} from '@/lib/moderation';
 import { reasonLabel } from '@/lib/report-reasons';
 import { objectUrl } from '@/lib/storage';
 import { EmptyState, PageTitle } from '@/components/page';
@@ -272,15 +277,36 @@ export default async function AdminPage({
                   data-request-id={req.id}
                   className="rounded-card border border-warn-border bg-warn-bg p-5"
                 >
+                  {/*
+                    `req.game` CÓ THỂ NULL, và đó là trạng thái bình thường chứ không
+                    phải dữ liệu hỏng: game gỡ hẳn bị xoá khỏi DB sau hạn giữ
+                    (`NGAY_GIU_GAME_DA_GO`), khoá ngoại là `SetNull`, còn hàng yêu cầu
+                    thì phải sống vì nó là hồ sơ pháp lý. Lúc đó chỉ còn `gameTitle`
+                    đã chụp sẵn, và KHÔNG được render link — link tới một game không
+                    tồn tại là gửi người kiểm duyệt vào trang 404.
+                  */}
                   <p className="text-lg font-bold">
-                    <Link href={`/game/${req.game.id}`}>{req.game.title}</Link>{' '}
-                    <span className="align-middle text-sm font-semibold text-ink-soft">
-                      ({STATUS_LABEL[req.game.status] ?? req.game.status})
-                    </span>
+                    {req.game ? (
+                      <>
+                        <Link href={`/game/${req.game.id}`}>{req.game.title}</Link>{' '}
+                        <span className="align-middle text-sm font-semibold text-ink-soft">
+                          ({STATUS_LABEL[req.game.status] ?? req.game.status})
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {req.gameTitle || '(không còn tên)'}{' '}
+                        <span className="align-middle text-sm font-semibold text-ink-soft">
+                          (đã xoá hẳn khỏi hệ thống)
+                        </span>
+                      </>
+                    )}
                   </p>
-                  <p className="text-sm text-ink-soft">
-                    Của bé {req.game.child.displayName} ({req.game.child.username})
-                  </p>
+                  {req.game && (
+                    <p className="text-sm text-ink-soft">
+                      Của bé {req.game.child.displayName} ({req.game.child.username})
+                    </p>
+                  )}
 
                   <p className="mt-2 text-sm">
                     <span className="font-semibold">Người khiếu nại:</span> {req.claimantName}{' '}
@@ -409,6 +435,44 @@ export default async function AdminPage({
                     {game.reportCount} báo cáo ({game.trustedReportCount} đã xác minh) ·{' '}
                     {game.playCount} lượt chơi
                   </p>
+
+                  {/*
+                    HẠN XOÁ HẲN, chỉ hiện với game đã gỡ.
+                    
+                    Phải nằm ngay đây, cạnh nút "Cho hiện lại", vì sau hạn này chính
+                    cái nút ấy không còn gì để hiện lại: hàng trong DB, file `.sb3`
+                    của bé, HTML và ảnh bìa đều đi hẳn. Người trực cần biết mình còn
+                    mấy ngày để đổi ý, chứ không phải phát hiện ra bằng cách bấm một
+                    cái nút không làm gì cả.
+                  */}
+                  {game.status === 'REMOVED' && (
+                    <p className="text-sm font-semibold" data-testid="admin-han-xoa">
+                      {(() => {
+                        const han = hanXoaHan(game.removedAt);
+                        if (!han) {
+                          return (
+                            <span className="text-ink-soft">
+                              Chưa có mốc thời gian gỡ — đồng hồ {NGAY_GIU_GAME_DA_GO} ngày bắt
+                              đầu ở lần dọn kế tiếp.
+                            </span>
+                          );
+                        }
+                        const conMs = han.getTime() - Date.now();
+                        const conNgay = Math.ceil(conMs / 86400_000);
+                        return conMs <= 0 ? (
+                          <span className="text-danger">
+                            Đã quá hạn giữ — sẽ bị XOÁ HẲN ở lần dọn kế tiếp, không hoàn tác được.
+                          </span>
+                        ) : (
+                          <span className="text-danger">
+                            Sẽ bị xoá hẳn{' '}
+                            <time dateTime={han.toISOString()}>{han.toLocaleDateString('vi-VN')}</time>{' '}
+                            — còn {conNgay} ngày để cho hiện lại.
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  )}
 
                   {game.reports.length > 0 && (
                     <ul className="mt-2 list-none space-y-1 p-0 text-sm" data-testid="admin-reasons">

@@ -27,6 +27,46 @@ export const REPORT_AUTO_HIDE_THRESHOLD = 3;
 export const REPORT_HARD_HIDE_THRESHOLD = REPORT_AUTO_HIDE_THRESHOLD * 2;
 
 /**
+ * Game đã gỡ hẳn còn được giữ bao nhiêu NGÀY trước khi xoá khỏi DB và khỏi đĩa.
+ *
+ * Bảy ngày là quyết định sản phẩm, không phải một hằng số kỹ thuật: đây là cửa sổ
+ * để sửa một quyết định sai. Sau nó thì hàng trong DB, file `.sb3` của bé, HTML đã
+ * đóng gói và ảnh bìa đều đi hẳn — nút "Cho hiện lại" trong khu quản trị không còn
+ * gì để hiện lại.
+ *
+ * BA HỆ QUẢ đã cân, đừng đổi con số này mà không đọc lại cả ba:
+ *
+ * 1. File `.sb3` GỐC của đứa trẻ cũng bị xoá. Đó là công nó tự làm, và hệ thống
+ *    hiện không gửi cho phụ huynh lá thư nào kèm link tải về trước khi xoá.
+ * 2. Bảng `TakedownRequest` PHẢI sống sót, vì nó là hồ sơ pháp lý — nên khoá ngoại
+ *    của nó là `SetNull` kèm cột `gameTitle` chụp sẵn. Xem schema.
+ * 3. `BACKUP_KEEP` mặc định là 7 BẢN, và hai con số này gặp nhau: game gỡ ngày 0 bị
+ *    xoá ngày 7, bản sao lưu cuối cùng còn chứa nó là bản ngày 7 (sao lưu chạy giờ
+ *    `BACKUP_HOUR`=3, dọn chạy `PRUNE_HOUR`=4, nên bản sao lưu hôm đó vẫn còn game),
+ *    và bản ấy bị xoay vòng khoảng ngày 14. Tức cửa sổ cứu thật là ~14 ngày, nhưng
+ *    nửa sau đòi phải phục hồi từ sao lưu chứ không bấm một cái nút.
+ */
+/*
+ * `||` chứ KHÔNG phải `??`, và đây là chỗ đã sai một lần.
+ *
+ * `docker-compose.yml` khai `REMOVED_KEEP_DAYS: ${REMOVED_KEEP_DAYS:-}`, tức khi
+ * không đặt gì thì container nhận CHUỖI RỖNG, không phải undefined. `??` chỉ đỡ
+ * undefined, nên `Number('')` ra 0 — và 0 là giá trị mà script dọn TỪ CHỐI chạy.
+ * Hệ quả: service dọn khởi động bình thường rồi mỗi ngày in một dòng "hạn giữ không
+ * hợp lệ (0)" và không xoá gì, tức cả cơ chế đứng im ở đúng cấu hình MẶC ĐỊNH.
+ *
+ * `||` không làm hỏng chốt an toàn: chuỗi `'0'` vẫn là truthy nên nó đi qua và thành
+ * số 0, và script vẫn từ chối như thiết kế. Chỉ chuỗi rỗng mới rơi về mặc định.
+ */
+export const NGAY_GIU_GAME_DA_GO = Number(process.env.REMOVED_KEEP_DAYS || 7);
+
+/** Hạn xoá hẳn của một game đã gỡ, hoặc null nếu game chưa bị gỡ. */
+export function hanXoaHan(removedAt: Date | null): Date | null {
+  if (!removedAt) return null;
+  return new Date(removedAt.getTime() + NGAY_GIU_GAME_DA_GO * 86400_000);
+}
+
+/**
  * Trạng thái mà CỘNG ĐỒNG đang áp cho game, tính thuần từ số báo cáo đáng tin.
  *
  * Một hàm duy nhất cho mọi chỗ cần trả lời "bỏ lệnh ẩn thì game về đâu": phụ huynh
@@ -278,7 +318,10 @@ export async function adminRemoveGame(adminId: string, gameId: string, note: str
   if (!game) throw new AuthError('Không tìm thấy game này.');
 
   await prisma.$transaction(async (tx) => {
-    await tx.game.update({ where: { id: gameId }, data: { status: 'REMOVED' } });
+    await tx.game.update({
+      where: { id: gameId },
+      data: { status: 'REMOVED', removedAt: new Date() },
+    });
     await tx.report.updateMany({
       where: { gameId, status: 'OPEN' },
       data: { status: 'RESOLVED' },
@@ -308,7 +351,10 @@ export async function adminRestoreGame(adminId: string, gameId: string, note: st
   await prisma.$transaction(async (tx) => {
     await tx.game.update({
       where: { id: gameId },
-      data: { status: 'PUBLISHED', reportCount: 0, trustedReportCount: 0 },
+      /* `removedAt: null` là bắt buộc, không phải dọn cho sạch: để nguyên thì game
+         vừa được cho hiện lại vẫn mang hạn xoá cũ, và job dọn sẽ xoá nó vài ngày
+         sau trong lúc nó đang chạy bình thường trên trang chủ. */
+      data: { status: 'PUBLISHED', reportCount: 0, trustedReportCount: 0, removedAt: null },
     });
     await tx.report.updateMany({
       where: { gameId, status: 'OPEN' },
