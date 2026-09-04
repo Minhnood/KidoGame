@@ -88,6 +88,25 @@ const browser = await chromium.launch({ channel: 'chrome' });
   const expand = page.locator('[data-testid=stage-expand]');
   check('Điện thoại: có nút "Chơi to hơn"', await expand.isVisible().catch(() => false));
 
+  /*
+   * ĐÚNG MỘT đường phóng to trên điện thoại.
+   *
+   * Nút ⛶ của packager nằm trong iframe, cách nút "Chơi to hơn" chừng 40px, và làm
+   * cùng một việc — trừ trên Safari iPhone, nơi Fullscreen API không nhận phần tử
+   * thường nên bấm vào không có gì xảy ra. Nó bị ẩn bằng CSS chèn lúc đóng gói, xem
+   * `CSS_AN_NUT_TOAN_MAN_HINH` trong packages/sb3/src/package.ts.
+   *
+   * PHẢI KIỂM, vì nó hỏng im lặng theo hai đường và cả hai đều trông như không có
+   * gì xảy ra: đổi một dòng `controls.*.enabled` là đổi luôn selector, còn game đóng
+   * gói TRƯỚC thay đổi này thì giữ nguyên file HTML cũ cho tới khi chạy `db:repackage`
+   * — nút chỉ lặng lẽ hiện lại đúng ở chỗ nó không dùng được.
+   */
+  const nutPackager = frame.locator('.control-button.fullscreen-button');
+  check(
+    'Điện thoại: KHÔNG bày nút toàn màn hình của packager',
+    !(await nutPackager.isVisible().catch(() => false))
+  );
+
   const viewport = page.viewportSize();
   await expand.click();
   await page.waitForTimeout(2500);
@@ -155,6 +174,19 @@ const browser = await chromium.launch({ channel: 'chrome' });
     .isVisible()
     .catch(() => false);
   check('Máy tính: KHÔNG bày nút "Chơi to hơn"', !expandVisible);
+
+  /*
+   * Và ở đây nút của packager PHẢI CÒN. Ẩn nó theo `pointer: coarse` chứ không tắt
+   * hẳn là chủ ý: trên máy có chuột nó chạy thật, và toàn màn hình thật còn ẩn được
+   * cả thanh địa chỉ của trình duyệt — thứ mà một cái div phủ kín khung nhìn không
+   * làm được. Cặp này với phép kiểm bên trên khoá cả hai chiều: mỗi loại thiết bị
+   * thấy đúng MỘT đường phóng to, không phải hai và không phải không có.
+   */
+  const fsVisible = await frame
+    .locator('.control-button.fullscreen-button')
+    .isVisible()
+    .catch(() => false);
+  check('Máy tính: CÒN nút toàn màn hình của packager', fsVisible);
   await ctx.close();
 }
 
