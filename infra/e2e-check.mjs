@@ -601,6 +601,62 @@ if (FIXTURE) {
   await toi.ctx.close();
 }
 
+/*
+ * --- Dải đất cuối trang: ĐÚNG MỘT bức tranh cho mỗi khổ màn hình ---
+ *
+ * Hai bức tranh trang trí loại trừ nhau theo bề rộng: `SiteDecor` vẽ hai bên lề từ
+ * 1280px trở lên, `DatCuoiTrang` vẽ một dải đất ở đáy trang dưới mức đó. Sai một
+ * breakpoint là hoặc hai bức cùng hiện — quả đồi bên lề chạy thẳng xuống gặp một
+ * quả đồi thứ hai nằm ngang — hoặc không bức nào, tức trả lại đúng dải trơn mà cả
+ * hai file tồn tại để tránh.
+ *
+ * Kiểu hỏng này im lặng: cả hai trạng thái đều là một trang chạy bình thường, không
+ * lỗi, không cảnh báo. Và không phép kiểm nào khác thấy được — `a11y-check` chỉ đo
+ * trang có phải vuốt ngang hay không, mà cả hai trạng thái sai đều không vuốt ngang.
+ */
+{
+  const dem = (p) =>
+    p.evaluate(() => {
+      /*
+       * ĐẾM CÁI ĐANG VẼ, KHÔNG ĐẾM CÁI CÓ TRONG DOM — và đây là chỗ phép kiểm này
+       * đã sai ở bản đầu. Cả hai bức tranh luôn có mặt trong DOM ở mọi khổ màn hình,
+       * chúng chỉ tắt bằng `display: none` (`hidden xl:block` và `xl:hidden`). Đếm
+       * bằng `querySelectorAll` không thì con số ra 1 và 1 ở mọi bề rộng, tức phép
+       * kiểm luôn xanh và không canh gì cả.
+       */
+      const veRa = (e) => e.getClientRects().length > 0;
+      return {
+        dat: [...document.querySelectorAll('footer > div[aria-hidden="true"]')].filter(veRa)
+          .length,
+        le: [...document.querySelectorAll('div[aria-hidden="true"]')].filter(
+          (e) => getComputedStyle(e).position === 'fixed' && veRa(e)
+        ).length,
+        /* Điểm tab: tranh trang trí không được thêm cái nào, ở khổ nào cũng vậy. */
+        tab: document.querySelectorAll(
+          'footer a, footer button, footer [tabindex]:not([tabindex="-1"])'
+        ).length,
+      };
+    });
+
+  for (const [ten, w, datMongDoi, leMongDoi] of [
+    ['điện thoại 390px', 390, 1, 0],
+    ['ngay dưới mốc, 1279px', 1279, 1, 0],
+    ['đúng mốc, 1280px', 1280, 0, 1],
+  ]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 900 } });
+    const p = await ctx.newPage();
+    await p.goto(APP, { waitUntil: 'networkidle' });
+    const d = await dem(p);
+    check(
+      `Dải đất cuối trang — ${ten}`,
+      d.dat === datMongDoi && d.le === leMongDoi,
+      `đất ${d.dat} (cần ${datMongDoi}), lề ${d.le} (cần ${leMongDoi})`
+    );
+    check(`Chân trang ${ten}: tranh không thêm điểm tab`, d.tab === 2, `${d.tab} điểm tab`);
+    await ctx.close();
+  }
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

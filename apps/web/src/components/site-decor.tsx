@@ -838,3 +838,202 @@ export function SiteDecor() {
     </div>
   );
 }
+
+/**
+ * Một BỤI nhỏ: mấy cụm cỏ và vài bông hoa, không có cây.
+ *
+ * Tách ra vì cả ba chỗ đứng trong dải đất cuối trang đều cần đúng một thứ này ở ba
+ * cỡ khác nhau, và vì bụi cỏ là thứ duy nhất nhét được vào khe giữa hai cái cây.
+ */
+function BuiCoHoa({
+  co,
+  hoa,
+}: {
+  co: Array<[number, number, number]>;
+  hoa: Array<[number, number, string, number]>;
+}) {
+  return (
+    <>
+      {co.map(([cx, cy, r], i) => (
+        <circle key={i} cx={cx} cy={cy} r={r} fill="var(--color-decor-co)" />
+      ))}
+      {hoa.map(([x, y, mau, s], i) => (
+        <Hoa key={i} x={x} y={y} mau={mau} s={s} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Dải đất cuối trang — tranh trang trí cho MÀN HÌNH HẸP, nơi `SiteDecor` không vẽ.
+ *
+ * VÌ SAO PHẢI LÀ MỘT HÌNH KHÁC, không phải `SiteDecor` bỏ `hidden`: ràng buộc số 4
+ * ở đầu file vẫn đúng nguyên — dưới 1280px KHÔNG có lề nào để vẽ, nội dung chiếm
+ * suốt bề ngang. Bỏ `hidden` là cây đứng đè lên chữ. Trên điện thoại chỗ thừa không
+ * nằm hai bên nữa, nó nằm ở ĐÁY: trang hết, và trước bản này nó hết bằng một khoảng
+ * kem trơn — đúng "dải trắng trơn" mà cả file này tồn tại để tránh, chỉ là trên đúng
+ * cái khổ màn hình mà phần lớn trẻ em sẽ dùng.
+ *
+ * ĐỨNG TRONG DÒNG, KHÔNG `fixed`. Đây là chỗ đã cân và chọn:
+ *
+ *   Bản `fixed` ở đáy khung nhìn thì lúc nào cũng thấy — nghe đúng ý "ở nền" hơn.
+ *   Nhưng trang trên điện thoại là một cột dọc cuộn dài, nên dải đó nằm sau BẤT KỲ
+ *   đoạn chữ nào đang trôi qua đáy màn hình: chữ `ink` trên sườn đồi `decor-doi`.
+ *   Web này đo 82 cặp màu để không có chữ nào nằm trên nền sai, và một quả đồi chạy
+ *   sau chữ là đúng loại lỗi đó, chỉ khác là nó di động nên không cặp nào đo được.
+ *   Đứng trong dòng thì nó không bao giờ ở sau chữ: nó LÀ đoạn kết của trang.
+ *
+ * MẶT ĐẤT GIÃN NGANG, CÂY CỎ THÌ KHÔNG — cùng kỹ thuật hai lớp như `VienDat` ở chân
+ * trang, và cùng lý do: `preserveAspectRatio="none"` trên một đường đồi thoải thì
+ * giãn bao nhiêu cũng không ai thấy, còn bông hoa bị bóp ngang thành hình bầu dục
+ * là nhìn ra ngay.
+ *
+ * ĐỒI Ở ĐÂY PHẢI THOẢI HƠN ĐỒI BÊN LỀ, và đây là chỗ tính chứ không phải chọn cho
+ * đẹp. Khung 1000 đơn vị ngang giãn ra đúng bề rộng khung nhìn, còn chiều dọc thì
+ * 1 đơn vị = 1px (viewBox cao 144, lớp cao 144px). Nên độ nhấp nhô của đường đồi là
+ * số pixel THẬT, còn bụi cây thì rộng cố định — trên màn 390px một bụi 146px phủ tới
+ * 37% bề ngang, tức nó vắt qua cả một khúc đồi. Đo trên đường ban đầu (biên độ 20
+ * đơn vị): hai đầu bụi lệch nhau 15px, gốc cây một bên lún vào đất một bên lơ lửng.
+ * Đường hiện tại chỉ nhấp nhô trong khoảng y 99–105, nên lệch tối đa 3px và bị chính
+ * cái mép đất che đi.
+ *
+ * Mọi bụi vì thế dùng CÙNG một `bottom`, và đó là hệ quả trực tiếp của việc trên:
+ * đất phẳng thì không cần tính lại độ cao cho từng chỗ đứng.
+ *
+ * THỨ TỰ VẼ vẫn là luật của `SiteDecor`: nhỏ trước, to sau. Trên màn 320px bụi giữa
+ * và bụi trái chồng lên nhau 23px — vẽ bụi giữa sau là bông hoa nổi lên trên tán cây,
+ * đọc ra ngay là hình sai.
+ */
+export function DatCuoiTrang() {
+  return (
+    <div
+      aria-hidden="true"
+      /* `overflow-hidden`: ràng buộc số 3 ở đầu file. Một cái cây thò ra ngoài mép
+         là cả trang phải vuốt ngang, và có một bộ kiểm tràn ngang đang canh đúng
+         chuyện đó. */
+      className="pointer-events-none relative h-36 w-full overflow-hidden xl:hidden"
+    >
+      {/* Mặt đất. Hai đầu chạy quá mép (−10 và 1010) cho chỗ giao với mép màn hình
+          không lộ ra một nhát cắt dọc — cùng lý do như quả đồi bên lề. */}
+      <svg
+        viewBox="0 0 1000 144"
+        preserveAspectRatio="none"
+        className="absolute inset-0 size-full"
+        fill="none"
+        focusable="false"
+      >
+        <path
+          d="M-10 144V104C120 99 220 107 340 104 460 101 560 98 680 100 800 102 900 107 1010 105V144Z"
+          fill="var(--color-decor-doi)"
+        />
+      </svg>
+
+      {/* Bụi giữa: chỉ cỏ và hoa, không cây. Nó tồn tại cho khổ máy tính bảng —
+          hai bụi hai đầu cách nhau 700px ở 1024px thì khúc giữa trơ ra một dải đất
+          trống. Trên điện thoại nó nằm gọn trong khe giữa hai bụi kia. */}
+      <svg
+        viewBox="-28 -22 62 32"
+        className="absolute bottom-6 left-1/2 h-8 w-15.5 -translate-x-1/2"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[
+            [0, -2, 7],
+            [22, -1, 5],
+          ]}
+          hoa={[
+            [-14, 0, 'var(--color-decor-hoa-vang)', 0.8],
+            [16, 1, 'var(--color-decor-hoa-hong)', 0.95],
+          ]}
+        />
+      </svg>
+
+      {/*
+        Hai bụi xen giữa, ở 32% và 68%. Lý do là khổ máy tính bảng: đo ở 820px thì
+        bụi trái dừng ở 162px và bụi giữa mới bắt đầu ở 379px, tức 217px mặt đất trơn
+        nằm ngay giữa dải — đúng cái dải trơn thu nhỏ lại. Trên điện thoại 390px hai
+        bụi này chồng một phần vào hai bụi lớn, và chồng thì không sao: chúng vẽ TRƯỚC
+        nên tán cây phủ lên, hoa nằm sau cây là đúng chiều xa gần.
+
+        Khác nhau về số cụm cỏ và cỡ hoa — hai bụi giống nhau đặt cách đều thì đọc ra
+        là hoa văn lặp chứ không ra cỏ mọc.
+      */}
+      <svg
+        viewBox="-24 -20 50 30"
+        className="absolute bottom-6 left-[32%] h-7.5 w-12.5 -translate-x-1/2"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[[2, -2, 6]]}
+          hoa={[
+            [-14, 1, 'var(--color-decor-hoa-hong)', 0.7],
+            [16, 0, 'var(--color-decor-hoa-vang)', 0.85],
+          ]}
+        />
+      </svg>
+      <svg
+        viewBox="-24 -20 50 30"
+        className="absolute bottom-6 left-[68%] h-7.5 w-12.5 -translate-x-1/2"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[
+            [-6, -1, 5],
+            [14, -3, 7],
+          ]}
+          hoa={[[-18, 0, 'var(--color-decor-hoa-vang)', 0.75]]}
+        />
+      </svg>
+
+      {/* Bụi phải: MỘT cây. Bên trái hai — số lượng lệch nhau là chủ ý, hai bên bằng
+          nhau thì dải đất thành một hoa văn soi gương chứ không ra khung cảnh. */}
+      <svg
+        viewBox="-52 -76 114 86"
+        className="absolute bottom-6 right-[2%] h-21.5 w-28.5"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[
+            [-26, -2, 7],
+            [30, -3, 9],
+          ]}
+          hoa={[
+            [-42, 0, 'var(--color-decor-hoa-hong)', 0.85],
+            [16, 2, 'var(--color-decor-hoa-vang)', 0.7],
+            [48, 1, 'var(--color-decor-hoa-vang)', 1],
+          ]}
+        />
+        <Cay x={0} y={0} s={0.33} delay={-3.5} />
+      </svg>
+
+      {/* Bụi trái: cây to nhất của cả dải, kèm một cây con. Cây con KHÔNG lật, cây to
+          thì lật — hai cái cạnh nhau mà cùng dáng thì lộ ra là một hình dùng hai lần,
+          khác cỡ cũng không cứu được vì mắt nhận ra hình dáng trước kích thước. */}
+      <svg
+        viewBox="-46 -90 146 100"
+        className="absolute bottom-6 left-[2%] h-25 w-36.5"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[
+            [-30, -3, 8],
+            [24, -2, 6],
+          ]}
+          hoa={[
+            [-12, 0, 'var(--color-decor-hoa-vang)', 1],
+            [44, 1, 'var(--color-decor-hoa-hong)', 0.8],
+            [92, 0, 'var(--color-decor-hoa-hong)', 0.9],
+          ]}
+        />
+        {/* Cây con vẽ TRƯỚC cây to: tán có chồng nhau thì cây to phải che cây nhỏ. */}
+        <Cay x={62} y={0} s={0.26} delay={-6} />
+        <Cay x={0} y={0} s={0.4} delay={0} lat />
+      </svg>
+    </div>
+  );
+}
