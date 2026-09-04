@@ -56,7 +56,7 @@ export MAIL_LOG=/tmp/kg-mail.log
 SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                     # 51 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 61
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 43
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 46
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 12, chạy riêng
@@ -1311,7 +1311,8 @@ cho chúng ta, không phải cho phụ huynh. Chuyển tiếp danh tính đó l�
 Chống trùng khoá theo **email người khiếu nại**, không theo IP — khác hẳn `Report`. Ở đây
 người gửi tự khai danh tính, và IP là danh tính tồi: hai người khác nhau cùng một mạng
 công ty cùng khiếu nại thì người thứ hai bị nuốt yêu cầu trong im lặng. IP chỉ dùng để
-đếm hạn mức (`TAKEDOWNS_PER_IP_PER_DAY` = 5).
+đếm hạn mức (`TAKEDOWNS_PER_IP_PER_DAY` = 20 — nâng từ 5, vì một chủ bản quyền phát hiện
+tám game vi phạm phải gửi tám yêu cầu, mỗi yêu cầu một mã game).
 
 Ô cam đoan trung thực **không có cột trong DB**: `submitTakedownRequest` từ chối mọi yêu
 cầu chưa cam đoan, nên mọi hàng đều đã cam đoan, và một cột luôn `true` không nói lên gì.

@@ -25,8 +25,21 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-/** Trần số khoá giữ trong bộ nhớ, để bản thân bộ đếm không thành chỗ rò bộ nhớ. */
-const MAX_BUCKETS = 5000;
+/**
+ * Trần số khoá giữ trong bộ nhớ, để bản thân bộ đếm không thành chỗ rò bộ nhớ.
+ *
+ * ĐÃ NÂNG TỪ 5000 LÊN 20000 khi rà lại các trần cho lưu lượng mở, và lý do nằm ở
+ * cách xử lý khi chạm trần: `buckets.clear()` xoá SẠCH bảng, tức mọi trần đang đếm
+ * của mọi người bị reset cùng lúc. Với 5000 khoá thì chỉ cần độ một hai nghìn người
+ * dùng đồng thời — mỗi người vài mục đích đếm — là bộ đếm tự xoá chính nó vì trang
+ * đông khách, chứ không vì bị tấn công. Một cơ chế chống lụt mà mất hiệu lực đúng
+ * lúc đông người là không có cơ chế nào.
+ *
+ * Mỗi khoá là 64 ký tự hex cộng hai số, nên 20000 khoá cỡ 4MB — rẻ hơn hẳn việc mất
+ * trần. Vẫn giữ trần, vì không có trần thì đây là chỗ rò bộ nhớ do người ngoài điều
+ * khiển được.
+ */
+const MAX_BUCKETS = 20000;
 
 /**
  * Đếm một lượt và trả về `true` nếu lượt này đã VƯỢT trần trong cửa sổ hiện tại.
