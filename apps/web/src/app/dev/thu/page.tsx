@@ -55,7 +55,7 @@ export default async function DevMailboxPage() {
           Ở máy dev, <code className="font-bold">sendMail</code> in thư ra log thay vì gửi đi, nên
           không cần tài khoản nhà cung cấp mail nào để thử hết luồng xác minh email và quên mật
           khẩu. Trang này chỉ bày lại đúng những lá thư đó. Nó <strong>không tồn tại</strong> khi
-          chạy production — ở đó thư đi qua Resend và tới hòm thư thật.
+          chạy production — ở đó thư đi qua SMTP hoặc Resend và tới hòm thư thật.
         </Notice>
 
         <div className="mt-6 flex flex-col items-center gap-3">
@@ -117,6 +117,27 @@ export default async function DevMailboxPage() {
                 </p>
 
                 <MailLinks text={t.text} />
+
+                {/*
+                  Bản HTML mở ở TAB MỚI, không nhúng iframe: `frame-src` của app chỉ
+                  cho phép player origin, và nới nó cho cả site chỉ vì một trang dev
+                  là để một trang dev làm yếu chính sách của production.
+
+                  Vẫn đáng có: bản chữ ở trên là thứ bộ lọc rác đọc, còn bản HTML là
+                  thứ PHỤ HUYNH đọc — và trước khi có nút này, cách duy nhất để biết
+                  lá thư trông thế nào là tự gửi một lá vào hòm thư thật rồi mở ra xem.
+                */}
+                <p className="mt-6 text-center">
+                  <a
+                    href={`/dev/thu/${i}/html`}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-testid="dev-mail-html"
+                    className="text-base"
+                  >
+                    Xem bản HTML — đúng như phụ huynh nhìn thấy ↗
+                  </a>
+                </p>
               </li>
             ))}
           </ul>
