@@ -118,6 +118,40 @@ const CAP = [
   { ten: 'Chữ trên vệt sáng quanh logo', fg: 'chrome-ink', bg: 'nav-glow', min: 7 },
   { ten: 'Link cam trên nền trang', fg: 'accent-text', bg: 'bg', min: 4.5 },
   { ten: 'Link cam trên thẻ/khung', fg: 'accent-text', bg: 'surface', min: 4.5 },
+  /*
+   * HAI ĐẦU DẢI NỀN Ở MÀN HÌNH HẸP (`--color-bg-troi`, `--color-bg-dat`).
+   *
+   * Dưới 1280px nền trang là một dải chuyển sắc, nên `bg` không còn là màu duy nhất
+   * nằm dưới chữ — đo mỗi `bg` thì hai đầu dải không được kiểm gì cả.
+   *
+   * Cặp CHẶN ở giao diện sáng là `accent-text`, không phải `ink`: nền đậm thêm thì
+   * chữ cam đậm tụt trước, hiện 4.95 so với ngưỡng 4.5, trong khi `ink` còn 14.7. Ai
+   * nhìn con số của `ink` rồi kết luận "còn nhiều chỗ để đậm thêm" là nhìn sai cột.
+   *
+   * KHÔNG đo `ink-faint` ở đây, và đó là một lựa chọn: nó chỉ hơn ngưỡng 0.09 trên
+   * nền cũ nên nó loại sạch mọi sắc màu đáng nhìn, mà nó lại đo một thứ không có trên
+   * giao diện — `ink-faint` dùng đúng một chỗ, `placeholder:text-ink-faint` trong
+   * `field.tsx`, và ô nhập có nền `surface`. Danh sách này là "cặp THẬT SỰ xuất hiện";
+   * thêm một cặp không có thật thì không được thêm hàng rào nào, chỉ mất chỗ để làm.
+   */
+  { ten: 'Chữ chính trên chặng trời của nền', fg: 'ink', bg: 'bg-troi', min: 7 },
+  { ten: 'Chữ phụ trên chặng trời của nền', fg: 'ink-soft', bg: 'bg-troi', min: 4.5 },
+  { ten: 'Link cam trên chặng trời của nền', fg: 'accent-text', bg: 'bg-troi', min: 4.5 },
+  { ten: 'Chữ chính trên chặng đất của nền', fg: 'ink', bg: 'bg-dat', min: 7 },
+  { ten: 'Chữ phụ trên chặng đất của nền', fg: 'ink-soft', bg: 'bg-dat', min: 4.5 },
+  { ten: 'Link cam trên chặng đất của nền', fg: 'accent-text', bg: 'bg-dat', min: 4.5 },
+  /*
+   * THẺ CÒN PHẢI NỔI LÊN KHỎI NỀN — hai cặp không phải chữ, ngưỡng 1.05 là của riêng
+   * dự án.
+   *
+   * Đây là cặp CHẶN của giao diện tối, và nó chặn theo chiều ngược với mọi cặp khác
+   * trong file: ở đó nền đậm thêm thì chữ càng dễ đọc, nên nếu chỉ đo chữ thì bầu
+   * trời đêm được phép sáng lên bao nhiêu cũng xanh. Mà `--toi-surface` chỉ hơn
+   * `--toi-bg` 1.107:1 — nền sáng lên một chút là thẻ game phẳng bằng nền, đúng ở đầu
+   * trang nơi có nhiều thẻ nhất. Đo được hiện tại: trời 1.119, đất 1.106.
+   */
+  { ten: 'Thẻ nổi trên chặng trời của nền', fg: 'surface', bg: 'bg-troi', min: 1.05 },
+  { ten: 'Thẻ nổi trên chặng đất của nền', fg: 'surface', bg: 'bg-dat', min: 1.05 },
   { ten: 'Chữ lỗi trong hộp lỗi', fg: 'danger', bg: 'danger-bg', min: 4.5 },
   { ten: 'Chữ trên nút danger lúc hover', fg: 'surface', bg: 'danger', min: 4.5 },
   { ten: 'Chữ cảnh báo trong hộp cảnh báo', fg: 'warn-ink', bg: 'warn-bg', min: 4.5 },

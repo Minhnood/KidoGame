@@ -602,17 +602,18 @@ if (FIXTURE) {
 }
 
 /*
- * --- Dải đất cuối trang: ĐÚNG MỘT bức tranh cho mỗi khổ màn hình ---
+ * --- Trang trí theo khổ màn hình: ĐÚNG MỘT bức tranh, và nền đúng một kiểu ---
  *
- * Hai bức tranh trang trí loại trừ nhau theo bề rộng: `SiteDecor` vẽ hai bên lề từ
- * 1280px trở lên, `DatCuoiTrang` vẽ một dải đất ở đáy trang dưới mức đó. Sai một
- * breakpoint là hoặc hai bức cùng hiện — quả đồi bên lề chạy thẳng xuống gặp một
- * quả đồi thứ hai nằm ngang — hoặc không bức nào, tức trả lại đúng dải trơn mà cả
- * hai file tồn tại để tránh.
+ * BA thứ đổi cùng lúc ở mốc 1280px, và cả ba phải đổi CÙNG một mốc: `SiteDecor` vẽ
+ * hai bên lề từ 1280px trở lên, `DatCuoiTrang` vẽ dải đất ở đáy trang dưới mức đó,
+ * và nền trang chuyển từ một màu đặc sang dải chuyển sắc trời-xuống-đất. Lệch một
+ * mốc là kéo cửa sổ qua đó thấy hai cú giật thay vì một; sai hẳn thì hoặc hai bức
+ * tranh cùng hiện — quả đồi bên lề chạy xuống gặp một quả đồi thứ hai nằm ngang —
+ * hoặc không bức nào, tức trả lại đúng dải trơn mà cả hai file tồn tại để tránh.
  *
- * Kiểu hỏng này im lặng: cả hai trạng thái đều là một trang chạy bình thường, không
+ * Kiểu hỏng này im lặng: mọi trạng thái sai đều là một trang chạy bình thường, không
  * lỗi, không cảnh báo. Và không phép kiểm nào khác thấy được — `a11y-check` chỉ đo
- * trang có phải vuốt ngang hay không, mà cả hai trạng thái sai đều không vuốt ngang.
+ * trang có phải vuốt ngang hay không, mà không trạng thái sai nào vuốt ngang cả.
  */
 {
   const dem = (p) =>
@@ -635,6 +636,17 @@ if (FIXTURE) {
         tab: document.querySelectorAll(
           'footer a, footer button, footer [tabindex]:not([tabindex="-1"])'
         ).length,
+        /*
+         * Nền: có dải chuyển sắc hay không, VÀ màu đặc lót dưới còn không.
+         *
+         * Đo cả `backgroundColor` chứ không chỉ `backgroundImage`, vì viết
+         * `background:` gộp thay cho `background-image:` là một cách hỏng thật đã
+         * xảy ra: dải vẫn hiện đúng, mắt không thấy gì khác, nhưng màu đặc bị reset
+         * về trong suốt — và đó chính là chỗ mấy phép kiểm giao diện ở trên đọc để
+         * biết đang sáng hay tối.
+         */
+        dai: getComputedStyle(document.documentElement).backgroundImage.includes('gradient'),
+        nenDac: getComputedStyle(document.documentElement).backgroundColor,
       };
     });
 
@@ -653,6 +665,17 @@ if (FIXTURE) {
       `đất ${d.dat} (cần ${datMongDoi}), lề ${d.le} (cần ${leMongDoi})`
     );
     check(`Chân trang ${ten}: tranh không thêm điểm tab`, d.tab === 2, `${d.tab} điểm tab`);
+    /* Dải nền bật đúng ở khổ nào có dải đất, tắt đúng ở khổ nào có tranh bên lề. */
+    check(
+      `Dải nền chuyển sắc — ${ten}`,
+      d.dai === (datMongDoi === 1),
+      `${d.dai ? 'có' : 'không'} (cần ${datMongDoi === 1 ? 'có' : 'không'})`
+    );
+    check(
+      `Nền đặc lót dưới còn nguyên — ${ten}`,
+      /^rgb\(\d/.test(d.nenDac),
+      d.nenDac
+    );
     await ctx.close();
   }
 }

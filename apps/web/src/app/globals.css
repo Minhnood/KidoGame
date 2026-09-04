@@ -27,6 +27,14 @@
   --color-bg: #f8f7f3;
   --color-surface: #fffdf8;
 
+  /* Hai đầu của dải nền ở màn hình hẹp: trời ở đầu trang, đất ở cuối trang.
+     Cái CHẶN độ đậm của hai màu này không phải màu chữ chính (`ink` còn tới 14.7:1)
+     mà là `accent-text` — link cam đậm trên nền trang, chỉ còn 4.95:1, tức cách
+     ngưỡng 4.5 đúng 0.45. Đậm thêm một bậc nữa (#deedff) là 4.75 và bậc nữa là hụt.
+     Xem khối `@media (width < 80rem)` ở cuối file. */
+  --color-bg-troi: #e6f1ff;
+  --color-bg-dat: #e5f5da;
+
   /* Viền TRANG TRÍ: mép thẻ, đường kẻ. Nhạt là có chủ đích. */
   --color-border: #d9d9e4;
 
@@ -225,6 +233,15 @@
   --toi-surface: #1c1c2b;
   --toi-border: #2f2f45;
 
+  /* Hai đầu dải nền, bản TỐI. Ở giao diện tối cái chặn KHÔNG phải màu chữ — chữ sáng
+     trên nền gần đen thì còn 15:1 — mà là THẺ CÒN PHẢI NỔI LÊN. `--toi-surface` chỉ
+     hơn `--toi-bg` 1.107:1; nền sáng lên một chút là thẻ game phẳng bằng nền đúng ở
+     đầu trang, chỗ có nhiều thẻ nhất. Nên hai màu này đi theo hướng ĐẬM SẮC mà không
+     sáng lên: bớt đỏ và lục, dồn vào lam (trời) hoặc lục (đất). Đo được: trời 1.119
+     và đất 1.106, tức thẻ nổi y như cũ. `contrast-check` canh cả hai cặp đó. */
+  --toi-bg-troi: #0c0c34;
+  --toi-bg-dat: #08160c;
+
   /* Năm tông nền thẻ game, bản TỐI. Cùng năm sắc với bản sáng nhưng tối hơn nền
      trang một bậc, để thẻ vẫn nổi lên. Không có nhóm này thì ở giao diện tối các thẻ
      giữ nguyên màu pastel sáng, và chữ `--toi-ink` (gần trắng) đặt lên đó là không
@@ -290,6 +307,8 @@
     --color-ink-soft: var(--toi-ink-soft);
     --color-ink-faint: var(--toi-ink-faint);
     --color-bg: var(--toi-bg);
+    --color-bg-troi: var(--toi-bg-troi);
+    --color-bg-dat: var(--toi-bg-dat);
     --color-surface: var(--toi-surface);
     --color-border: var(--toi-border);
     --color-the-1: var(--toi-the-1);
@@ -334,6 +353,8 @@
   --color-ink-soft: var(--toi-ink-soft);
   --color-ink-faint: var(--toi-ink-faint);
   --color-bg: var(--toi-bg);
+  --color-bg-troi: var(--toi-bg-troi);
+  --color-bg-dat: var(--toi-bg-dat);
   --color-surface: var(--toi-surface);
   --color-border: var(--toi-border);
   --color-the-1: var(--toi-the-1);
@@ -390,6 +411,62 @@
  */
 html {
   background: var(--color-bg);
+}
+
+/*
+ * NỀN CHUYỂN SẮC, CHỈ Ở MÀN HÌNH HẸP: trời ở đầu trang, đất ở cuối trang.
+ *
+ * Từ 1280px trở lên nền vẫn là một màu đặc, cố ý. Ở đó tranh hai bên lề đã có trời
+ * ở trên và đồi ở dưới, nên bầu trời thứ hai vẽ bằng nền là thừa. Dưới mức đó tranh
+ * ấy tắt và trang trở lại một cột kem trơn từ đầu tới cuối.
+ *
+ * ĐÚNG BREAKPOINT của `SiteDecor` / `DatCuoiTrang` (80rem = 1280px = `xl`), và điều
+ * đó có lý do: kéo cửa sổ qua mốc này thì cả bức tranh vốn đã đổi rồi. Đặt nền đổi ở
+ * một mốc KHÁC là thêm một cú nhảy thứ hai ở một chỗ khác, tức hai lần giật thay vì
+ * một.
+ *
+ * PHỦ THEO CHIỀU CAO TÀI LIỆU, không phải chiều cao khung nhìn: nền của <html> ăn
+ * theo hộp của chính nó, nên chặng cuối rơi đúng vào chỗ dải đất cuối trang đứng, và
+ * màu nền chảy vào mặt đất chứ không cắt ngang một đường ở đáy khung nhìn.
+ *
+ * MỖI GIAO DIỆN BỊ CHẶN BỞI MỘT THỨ KHÁC NHAU, và đó là chỗ đáng biết trước khi sửa
+ * hai token màu:
+ *
+ *  - Giao diện SÁNG bị chặn bởi `accent-text`, màu chữ của link trên nền trang. Nền
+ *    đậm thêm là cặp đó tụt: hiện 4.95:1, cách ngưỡng 4.5 có 0.45, và bậc màu đậm
+ *    hơn kế tiếp đo ra 4.75. Chữ chính thì thoải mái, còn tới 14.7:1 — nhìn `ink`
+ *    rồi tưởng còn nhiều chỗ là tưởng sai.
+ *  - Giao diện TỐI không bị chặn bởi chữ (còn 15:1) mà bởi việc THẺ PHẢI NỔI LÊN:
+ *    `--toi-surface` chỉ hơn `--toi-bg` 1.107:1, nên nền sáng lên một chút là thẻ
+ *    game phẳng bằng nền, đúng ở đầu trang nơi có nhiều thẻ nhất.
+ *
+ * Cả tám cặp — sáu cặp chữ và hai cặp "thẻ nổi trên nền" — đều có phép đo riêng trong
+ * `contrast-check`, ở cả hai giao diện. Đổi hai token này mà không đo lại là CI đỏ.
+ *
+ * ĐÃ BỎ một phép đo: `ink-faint` trên nền. Nó chỉ hơn ngưỡng 0.09 nên nó chặn hết mọi
+ * màu đáng nhìn, mà nó lại đo một thứ KHÔNG tồn tại — `ink-faint` chỉ dùng đúng một
+ * chỗ, `placeholder:text-ink-faint` trong `field.tsx`, và ô nhập có nền `surface`. Một
+ * cặp không có thật trên giao diện thì không phải hàng rào, chỉ là một ràng buộc bịa.
+ */
+@media (width < 80rem) {
+  html {
+    /*
+     * `background-image`, KHÔNG phải `background`. Cú pháp gộp reset luôn
+     * `background-color` về trong suốt, và mất màu đặc ấy thì hai thứ vỡ: dải nào
+     * không phân giải được là trang trắng trơn không có gì đỡ, và
+     * `getComputedStyle(html).backgroundColor` trả về `rgba(0,0,0,0)` — chỗ mà
+     * `e2e-check` đọc để biết đang ở giao diện nào, và cũng đúng cái bẫy ghi trong
+     * chính phép kiểm đó: hai giao diện "giống nhau" vì cùng đo nhầm một chỗ trong
+     * suốt. Đặt riêng background-image thì màu đặc ở luật trên còn nguyên làm nền lót.
+     */
+    background-image: linear-gradient(
+      to bottom,
+      var(--color-bg-troi) 0%,
+      var(--color-bg) 46%,
+      var(--color-bg) 62%,
+      var(--color-bg-dat) 100%
+    );
+  }
 }
 
 body {
