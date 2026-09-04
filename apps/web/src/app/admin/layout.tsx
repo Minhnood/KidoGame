@@ -1,9 +1,10 @@
-import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
-import { getActor } from '@/lib/session';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { getAdmin } from '@/lib/session';
 import { prisma } from '@/lib/db';
+import { appOrigin } from '@/lib/mail';
 import { AdminNav } from './admin-nav';
-import { logoutAction } from '@/lib/actions';
+import { adminLogoutAction } from '@/lib/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,11 +28,24 @@ export const dynamic = 'force-dynamic';
  * thật vẫn nằm trong từng trang.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const actor = await getActor();
-  if (!actor) redirect('/dang-nhap');
-  // 404 chứ không 403, cùng lý do đã ghi ở `/admin/page.tsx`: 403 là xác nhận trang
-  // này có tồn tại và đáng để dò tiếp.
-  if (actor.kind !== 'parent' || !actor.isAdmin) notFound();
+  /*
+   * Trang đăng nhập KHÔNG được bọc khung này, và phải kiểm trước mọi thứ khác.
+   *
+   * Khung dưới đây đòi có phiên quản trị rồi mới vẽ được, nên nếu nó bọc luôn cửa
+   * vào thì thành một vòng lặp: chưa đăng nhập bị đẩy về `/admin/dang-nhap`, mà vào
+   * đó lại bị đòi đăng nhập. Đọc `x-pathname` do middleware đặt vào — cùng cái header
+   * layout gốc đang dùng, vì server component không tự đọc được pathname.
+   */
+  const pathname = (await headers()).get('x-pathname') ?? '';
+  if (pathname === '/admin/dang-nhap') return <>{children}</>;
+
+  /*
+   * PHIÊN QUẢN TRỊ, không phải phiên site. Đây là chỗ việc tách origin thành thật:
+   * một phụ huynh có `isAdmin` đang đăng nhập ở site KHÔNG vào được đây, họ phải
+   * đăng nhập lần nữa ở cửa này để nhận một phiên khác trên một cookie khác.
+   */
+  const admin = await getAdmin();
+  if (!admin) redirect('/admin/dang-nhap');
 
   /*
    * Số đếm cho thanh điều hướng: việc đang chờ ở mỗi mục.
@@ -68,17 +82,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
           <div className="ml-auto flex items-center gap-4 text-sm">
             <span className="hidden text-chrome-ink/60 sm:inline" data-testid="admin-who">
-              {actor.email}
+              {admin.email}
             </span>
             {/*
-              "Về site" là link RA NGOÀI khu này, nên nó không nằm trong nhóm tab bên
-              trái — trộn vào đó là một tab dẫn đi mất, và mắt phải đọc chữ mới biết
-              tab nào là tab nào.
+              "Về site" không nằm trong nhóm tab bên trái — trộn vào đó là một tab dẫn
+              đi mất, và mắt phải đọc chữ mới biết tab nào là tab nào.
+
+              Link TUYỆT ĐỐI sang app origin, không phải `href="/"`.
+              Trên admin origin, `/` bị middleware trả 404 — đó chính là điều làm
+              origin này chỉ phục vụ khu quản trị. Nên đường về site phải nêu rõ host,
+              và `<a>` chứ không `<Link>`: đây là điều hướng sang một origin khác,
+              không phải một route của app này.
             */}
-            <Link href="/" className="text-chrome-ink/80 underline-offset-2 hover:underline">
+            <a
+              href={appOrigin()}
+              className="text-chrome-ink/80 underline-offset-2 hover:underline"
+              data-testid="admin-ve-site"
+            >
               Về site
-            </Link>
-            <form action={logoutAction}>
+            </a>
+            <form action={adminLogoutAction}>
               <button
                 type="submit"
                 data-testid="admin-logout"

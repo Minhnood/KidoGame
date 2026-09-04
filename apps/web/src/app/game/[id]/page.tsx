@@ -39,6 +39,27 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
    * Lưu ý phạm vi: đây CHỈ nới cho admin. Phụ huynh vẫn không xem được game đã ẩn
    * của con mình qua đường này.
    */
+  /*
+   * DỰA VÀO PHIÊN SITE + cờ isAdmin, KHÔNG dùng `getAdmin()` — và đây là một quyết
+   * định có chủ ý, không phải chỗ bị bỏ sót khi tách origin.
+   *
+   * Trang này nằm trên app origin, nên cookie phiên quản trị (host-only trên admin
+   * origin) không tới được đây. Dùng `getAdmin()` ở đây thì luôn là null và người
+   * kiểm duyệt mất hẳn khả năng NHÌN THẤY nội dung mình đang quyết định — đúng cái
+   * mà đoạn trên vừa gọi là kiểm duyệt mù.
+   *
+   * Phân biệt ĐỌC với GHI, và cái giá của hai bên khác nhau hẳn:
+   *
+   *  - GHI (ẩn, gỡ hẳn, khoá tài khoản) đòi phiên quản trị. Đó là những việc không
+   *    đảo lại được và là những việc một lỗ XSS sẽ muốn gọi tới.
+   *  - ĐỌC một game đã bị ẩn thì chỉ cần phiên site có isAdmin. Nếu ai đó khai thác
+   *    được XSS trên app origin bằng phiên của một admin, thứ họ thêm được là xem
+   *    một game đã bị ẩn — mà nội dung đó chính họ vừa upload cũng xem được. Không
+   *    đáng đánh đổi bằng việc làm người kiểm duyệt không thấy gì.
+   *
+   * Nghĩa là người kiểm duyệt đăng nhập ở HAI cửa: cửa site để xem game, cửa quản
+   * trị để bấm nút. Phiên site sống 30 ngày nên trong thực tế đó là một lần.
+   */
   const actor = await getActor();
   const isAdmin = actor?.kind === 'parent' && actor.isAdmin;
 

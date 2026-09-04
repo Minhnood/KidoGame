@@ -78,10 +78,102 @@ export async function createSession(
       childId: owner.childId ?? null,
       expiresAt: new Date(Date.now() + maxAge * 1000),
       clientHash,
+      scope: 'SITE',
     },
   });
 
   (await cookies()).set(SESSION_COOKIE, token, cookieOptions(maxAge));
+}
+
+// --- Phiên khu quản trị ------------------------------------------------------
+
+/**
+ * Cookie phiên của khu quản trị, TÁCH HẲN khỏi cookie phiên site.
+ *
+ * Đây là chỗ toàn bộ giá trị bảo mật của việc tách origin nằm. Cookie không có
+ * `Domain`, nên nó là host-only trên admin origin: trình duyệt không gửi nó tới app
+ * origin, và mã JavaScript chạy trên app origin không đọc được nó — khác origin thì
+ * không có đường nào chạm tới cookie jar của nhau.
+ *
+ * VÌ SAO ĐIỀU ĐÓ QUAN TRỌNG Ở ĐÂY hơn ở phần lớn trang web: app origin render tên
+ * game và mô tả do TRẺ EM nhập. Đó là đường XSS đáng lo nhất của cả dự án, và trước
+ * bản này một lỗ XSS ở đó đọc được phiên quản trị vì hai bên dùng chung một cookie
+ * trên chung một host. Nay thì lỗ đó vẫn là lỗ, nhưng nó không còn với tới được
+ * quyền ẩn game và khoá tài khoản.
+ *
+ * Tên khác hẳn cookie site, không phải thêm hậu tố: hai cookie cùng tên trên hai
+ * host khác nhau là chuyện bình thường và trình duyệt phân biệt được, nhưng người
+ * đọc log và người debug thì không — và `__Host-` chỉ chặn được cookie có `Domain`,
+ * chứ không chặn một origin khác ghi cookie trùng tên trên chính host của nó.
+ */
+export const ADMIN_SESSION_COOKIE = IS_PROD ? '__Host-kidogame_admin' : 'kidogame_admin';
+
+/**
+ * Phiên quản trị sống ngắn hơn phiên site: 1 ngày thay vì `SESSION_DAYS`.
+ *
+ * Phiên site dài là để một đứa trẻ không phải gõ lại mật khẩu mỗi lần vào chơi. Phiên
+ * quản trị thì ngược lại — nó mở ra quyền ẩn game của người khác và khoá tài khoản,
+ * nên một cái laptop bỏ quên ở trung tâm không nên còn đăng nhập vào tuần sau.
+ */
+const ADMIN_SESSION_HOURS = 24;
+
+export async function createAdminSession(parentId: string, clientHash = ''): Promise<void> {
+  const token = randomBytes(32).toString('base64url');
+  const maxAge = ADMIN_SESSION_HOURS * 60 * 60;
+
+  await prisma.session.create({
+    data: {
+      tokenHash: hashToken(token),
+      parentId,
+      expiresAt: new Date(Date.now() + maxAge * 1000),
+      clientHash,
+      scope: 'ADMIN',
+    },
+  });
+
+  (await cookies()).set(ADMIN_SESSION_COOKIE, token, cookieOptions(maxAge));
+}
+
+/**
+ * Đọc phiên quản trị. `null` nếu không có, hết hạn, sai `scope`, hoặc mất `isAdmin`.
+ *
+ * KIỂM `scope === 'ADMIN'` là bắt buộc, và nó là lý do cột `Session.scope` tồn tại:
+ * không có phép kiểm này thì một token phiên phụ huynh bình thường — thứ chính chủ
+ * đọc được từ cookie jar của mình — dán vào cookie admin sẽ tra ra một hàng hợp lệ.
+ *
+ * KIỂM LẠI `isAdmin` mỗi lần chứ không tin vào lúc phát phiên: quyền quản trị thu
+ * hồi được bằng `db:make-admin --bo`, và thu hồi phải có hiệu lực ngay, không phải
+ * sau khi phiên hết hạn.
+ */
+export async function getAdmin(): Promise<{ id: string; email: string } | null> {
+  const token = (await cookies()).get(ADMIN_SESSION_COOKIE)?.value;
+  if (!token) return null;
+
+  const session = await prisma.session.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: { parent: { select: { id: true, email: true, isAdmin: true } } },
+  });
+
+  if (!session || session.scope !== 'ADMIN') return null;
+
+  if (session.expiresAt < new Date()) {
+    await prisma.session.delete({ where: { tokenHash: session.tokenHash } }).catch(() => {});
+    return null;
+  }
+
+  if (!session.parent?.isAdmin) return null;
+
+  return { id: session.parent.id, email: session.parent.email };
+}
+
+/** Đăng xuất khỏi khu quản trị. Không ảnh hưởng phiên site của cùng người đó. */
+export async function destroyAdminSession(): Promise<void> {
+  const jar = await cookies();
+  const token = jar.get(ADMIN_SESSION_COOKIE)?.value;
+  if (token) {
+    await prisma.session.delete({ where: { tokenHash: hashToken(token) } }).catch(() => {});
+  }
+  jar.set(ADMIN_SESSION_COOKIE, '', cookieOptions(0));
 }
 
 /**
@@ -104,6 +196,16 @@ export async function getActor(): Promise<Actor | null> {
   });
 
   if (!session) return null;
+
+  /*
+   * Phiên quản trị KHÔNG dùng được làm phiên site, dù cùng một con người.
+   *
+   * Phép kiểm này là nửa còn lại của `getAdmin`, và nó cần vì cách ly cookie chỉ
+   * chặn được trình duyệt tự động gửi sai chỗ — nó không chặn ai đó cầm token của
+   * chính mình dán sang cookie bên kia. Chặn cả hai chiều thì `scope` mới thật sự
+   * là "phiên này phát cho cửa nào", chứ không phải một cái nhãn.
+   */
+  if (session.scope !== 'SITE') return null;
 
   if (session.expiresAt < new Date()) {
     await prisma.session.delete({ where: { tokenHash: session.tokenHash } }).catch(() => {});

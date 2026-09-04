@@ -31,6 +31,12 @@ import { randomBytes } from 'node:crypto';
 import { batBuocMailLog, choMailToi, taoBoBamLink, taoBoXacMinh } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
+/*
+ * Khu quản trị nằm trên ORIGIN RIÊNG, và đăng nhập ở cửa site KHÔNG mở được nó —
+ * phiên site và phiên quản trị là hai phiên khác nhau trên hai cookie khác nhau.
+ * Xem `infra/e2e-admin-origin.mjs`, bộ kiểm dành riêng cho việc tách đó.
+ */
+const ADMIN = process.env.ADMIN_ORIGIN ?? 'http://admin.localhost:3000';
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
 const MAIL_LOG = batBuocMailLog('e2e-moderation');
 
@@ -91,7 +97,7 @@ async function createVerifiedParent(email) {
 
 /** Số báo cáo đã xác minh mà trang admin đang hiện cho một game. */
 async function trustedCountOf(adminPage, id) {
-  await adminPage.goto(`${APP}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
+  await adminPage.goto(`${ADMIN}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
   const row = adminPage.locator(`[data-testid=admin-game][data-game-id="${id}"]`);
   const text = await row.locator('[data-testid=admin-report-count]').innerText();
   return Number(text.match(/\((\d+) đã xác minh\)/)?.[1] ?? -1);
@@ -238,13 +244,30 @@ const admin = await adminCtx.newPage();
   check('Báo cáo trùng vẫn thấy lời cảm ơn, không lộ là đã có người báo', (await submitReport(p, gameUrl)) === 'cam-on');
   await p.close();
 
+  /*
+   * ĐĂNG NHẬP HAI CỬA, và đó là luồng thật của người kiểm duyệt sau khi tách origin:
+   *
+   *  - cửa SITE cho quyền ĐỌC: xem được game đã bị ẩn để biết mình đang quyết định
+   *    về cái gì (xem `app/game/[id]/page.tsx`);
+   *  - cửa QUẢN TRỊ cho quyền GHI: ẩn, gỡ hẳn, khoá tài khoản.
+   *
+   * Cookie của hai bên host-only trên hai host khác nhau, nên một cửa không mở được
+   * việc của cửa kia. Phiên site sống 30 ngày còn phiên quản trị 24 giờ, nên trong
+   * thực tế đây là "đăng nhập lại khu quản trị mỗi ngày", không phải hai lần mỗi lần.
+   */
   await admin.goto(`${APP}/dang-nhap`, { waitUntil: 'networkidle' });
   await admin.fill('#email', ADMIN_EMAIL);
   await admin.fill('#password', ADMIN_PASS);
   await admin.click('[data-testid=auth-form] button[type=submit]');
   await admin.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
 
-  const res = await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin/dang-nhap`, { waitUntil: 'networkidle' });
+  await admin.fill('#email', ADMIN_EMAIL);
+  await admin.fill('#password', ADMIN_PASS);
+  await admin.click('[data-testid=auth-form] button[type=submit]');
+  await admin.waitForURL((u) => u.pathname === '/admin', { timeout: 20000 }).catch(() => {});
+
+  const res = await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   check('Admin vào được /admin', res?.status() === 200, `HTTP ${res?.status()}`);
   /*
    * Khu quản trị có KHUNG RIÊNG: thanh tab của nó, và không có thanh điều hướng trẻ
@@ -315,7 +338,7 @@ const admin = await adminCtx.newPage();
   check('Trang admin đếm 0 báo cáo đã xác minh', (await trustedCountOf(admin, gameId)) === 0);
 
   // Dọn để vòng sau đếm từ 0, đồng thời kiểm luôn việc bác bỏ xoá cả hai bộ đếm.
-  await admin.goto(`${APP}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
   await confirmClick(admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`), 'admin-dismiss');
 }
 
@@ -433,7 +456,7 @@ const verifiedCtxs = [];
 
 // ---------- Lịch sử kiểm duyệt và bộ lọc ----------
 {
-  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const row = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
   await row.locator('[data-testid=admin-log] summary').click();
   const logText = await row.locator('[data-testid=admin-log]').innerText();
@@ -449,7 +472,7 @@ const verifiedCtxs = [];
    */
   const num = (s) => Number(s.match(/^(\d+)/)?.[1] ?? -1);
   const totalOf = async (loc) => {
-    await admin.goto(`${APP}/admin?loc=${loc}`, { waitUntil: 'networkidle' });
+    await admin.goto(`${ADMIN}/admin?loc=${loc}`, { waitUntil: 'networkidle' });
     /*
      * KHOANH vào nhóm bộ lọc. `[aria-current=page]` trần khớp HAI phần tử từ khi khu
      * quản trị có thanh tab riêng — tab "Kiểm duyệt" cũng đánh dấu trang hiện tại —
@@ -491,7 +514,7 @@ const verifiedCtxs = [];
 
 // ---------- Admin khoá thẳng tài khoản bé ----------
 {
-  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const row = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
   await confirmClick(row, 'admin-child-lock');
 
@@ -507,7 +530,7 @@ const verifiedCtxs = [];
    * Vết của tài khoản nằm ở danh sách RIÊNG, không lẫn vào lịch sử của game:
    * "gỡ một game" và "chặn một đứa trẻ đăng nhập" là hai mức độ khác nhau.
    */
-  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const afterLock = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
   await afterLock.locator('[data-testid=admin-child-log] summary').click();
   const childLog = await afterLock.locator('[data-testid=admin-child-log]').innerText();
@@ -524,13 +547,13 @@ const verifiedCtxs = [];
 
 // ---------- Admin cho hiện lại ----------
 {
-  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const row = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
   await confirmClick(row, 'admin-restore');
 
   check('Admin cho hiện lại thì khách xem được game', (await status(anonCtx, gameUrl)) === 200);
 
-  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const stillListed = await admin
     .locator(`[data-testid=admin-game][data-game-id="${gameId}"]`)
     .count();

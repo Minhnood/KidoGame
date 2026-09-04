@@ -94,6 +94,17 @@ model Session {
   createdAt DateTime @default(now())
   /// Hash của IP + user agent, chỉ để phụ huynh nhận ra phiên lạ. Không lưu IP thô.
   clientHash String @default("")
+  /// `SITE` cho phiên phụ huynh và bé, `ADMIN` cho phiên khu quản trị.
+  ///
+  /// VÌ SAO CẦN CỘT NÀY. Khu quản trị nằm trên origin riêng với cookie riêng, và
+  /// điều đó chỉ có nghĩa nếu hai loại phiên KHÔNG dùng lẫn được. Không có cột này
+  /// thì một token phiên phụ huynh, lấy được từ máy của chính họ rồi dán vào cookie
+  /// admin, sẽ tra ra đúng một hàng Session hợp lệ — tức cả việc tách origin trở
+  /// thành trang trí. Phiên phải biết nó được phát ra cho cửa nào.
+  ///
+  /// Mặc định `SITE`: hàng đã có từ trước là phiên site, và đó cũng là hướng an
+  /// toàn — đoán sai kiểu này thì một phiên bị coi là ít quyền hơn thực tế.
+  scope String @default("SITE")
 
   parent Parent? @relation(fields: [parentId], references: [id], onDelete: Cascade)
   child  Child?  @relation(fields: [childId], references: [id], onDelete: Cascade)

@@ -60,8 +60,22 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 46
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 12, chạy riêng
-node infra/e2e-errorlog.mjs                                        # 26, không cần .sb3
+node infra/e2e-errorlog.mjs                                        # 27, không cần .sb3
+node infra/e2e-admin-origin.mjs                                    # 20, không cần .sb3
 ```
+
+**`e2e-admin-origin.mjs` cần `ADMIN_ORIGIN` được đặt cho CẢ server dev**, không chỉ cho
+bộ kiểm. Không đặt thì middleware giữ hành vi cũ — `/admin` nằm trên app origin — và bộ
+này báo đỏ đúng. Trong `apps/web/.env` đã có sẵn `ADMIN_ORIGIN="http://admin.localhost:3000"`.
+
+`admin.localhost` phân giải về 127.0.0.1 giống `localhost` nhưng là một **host khác**, nên
+cách ly cookie ở dev là thật chứ không phải mô phỏng: cookie phiên quản trị host-only trên
+`admin.localhost` không đi tới `localhost`, và ngược lại.
+
+**`e2e-errorlog.mjs` phải đặt CUỐI, và cách nhau ít nhất một phút giữa hai lượt.** Bước
+cuối của nó bắn hơn 40 báo cáo để kiểm trần 30 báo cáo/phút; chạy hai lượt liền nhau thì
+lượt sau không ghi được nhóm nào và báo đỏ ở những phép kiểm không liên quan gì tới trần
+— triệu chứng trông như trang `/admin/loi` bị hỏng.
 
 **Vì sao gần như bộ nào cũng cần `MAIL_LOG`:** `createChild` từ chối tạo tài khoản cho
 bé khi email phụ huynh chưa xác minh, mà đường duy nhất để xác minh là bấm link trong
@@ -1226,7 +1240,48 @@ Trang `/admin` có bộ lọc (`?loc=can-xem|tat-ca|dang-hien|da-an|da-go`), ph�
 game mỗi trang (`?trang=N`), thumbnail, lý do báo cáo, lịch sử `ModerationLog`, và nút
 khoá thẳng tài khoản bé.
 
-### Khu quản trị là một khu RIÊNG
+### Khu quản trị là một ORIGIN riêng
+
+**`admin.<domain>` là origin thứ ba, cạnh app origin và player origin.** Cookie phiên
+quản trị (`__Host-kidogame_admin`) là host-only trên host đó, nên trình duyệt không gửi
+nó tới app domain và JavaScript chạy ở app domain không đọc được nó.
+
+Nó bảo vệ đúng một đường tấn công: **app origin render tên game và mô tả do trẻ em
+nhập**, nên đó là chỗ XSS đáng lo nhất của cả dự án. Trước khi tách, một lỗ XSS ở đó
+đọc được phiên quản trị và POST được tới tám server action ẩn game, gỡ hẳn, khoá tài
+khoản. Nay lỗ đó vẫn là lỗ, nhưng không với tới được những quyền ấy.
+
+Cookie **không** phân biệt theo port, nên đây phải là hostname khác — không phải cổng
+khác. Cùng lý lẽ đã ghi cho player origin.
+
+Ba thứ làm nên việc tách, thiếu một là hỏng cả:
+
+| | |
+|---|---|
+| `Session.scope` | `SITE` hay `ADMIN`. Không có cột này thì một token phiên phụ huynh — thứ chính chủ đọc được từ cookie jar của mình — dán vào cookie admin sẽ tra ra một hàng hợp lệ. Kiểm cả hai chiều: `getActor()` từ chối phiên `ADMIN`, `getAdmin()` từ chối phiên `SITE`. |
+| Chặn theo host ở middleware | `/admin*` trên app origin trả **404** (không phải 403, không redirect — redirect là công bố khu quản trị nằm ở đâu). Mọi đường dẫn khác trên admin origin cũng 404, kể cả `/game/<id>`: không thì origin đang giữ cookie quản trị lại render nội dung do trẻ nhập. |
+| `requireAdmin()` đọc `getAdmin()` | Tám server action ghi đi qua đây. Nếu chốt này còn đọc cookie phiên site thì cả việc tách chỉ là hai cái tên miền. |
+
+**Người kiểm duyệt đăng nhập ở HAI cửa**, và đó là cố ý:
+
+- cửa site cho quyền **đọc** — xem được game đã bị ẩn để biết mình đang quyết định về
+  cái gì. Trang `/game/<id>` nằm trên app origin nên nó dùng phiên site + `isAdmin`.
+- cửa quản trị cho quyền **ghi** — ẩn, gỡ hẳn, khoá tài khoản.
+
+Phân biệt vì cái giá hai bên khác nhau hẳn: ghi là việc không đảo lại được, còn đọc một
+game đã ẩn thì kẻ khai thác XSS cũng chỉ thấy nội dung mà chính họ upload cũng xem
+được. Phiên site sống 30 ngày, phiên quản trị **24 giờ** — khu này mở ra quyền ẩn game
+của người khác, nên một laptop bỏ quên ở trung tâm không nên còn đăng nhập tuần sau.
+
+Đăng nhập sai ở cửa quản trị **đếm riêng** (`admin:` chứ không `parent:`): đếm chung thì
+một người ngoài dò mật khẩu ở cửa quản trị sẽ khoá luôn cửa site của chính người đó. Và
+sai mật khẩu với không-phải-admin trả về **cùng một** thông điệp — nói "tài khoản này
+không có quyền quản trị" là xác nhận email tồn tại và mật khẩu vừa gõ đúng.
+
+`ADMIN_DOMAIN` để trống là **không tách**: `/admin` nằm trên app domain như trước. Bộ
+kiểm dành riêng: [`infra/e2e-admin-origin.mjs`](infra/e2e-admin-origin.mjs), 20 phép
+kiểm. Cần nó vì cơ chế này hỏng im lặng — admin vẫn vào được, vẫn ẩn được game, chỉ
+lớp phòng thủ là mất, và không phép kiểm nào khác trong repo nhìn thấy điều đó.
 
 `/admin` và `/admin/loi` **không dùng khung của site**: không thanh điều hướng trẻ em,
 không tranh đồi cây, không chân trang. Chúng có

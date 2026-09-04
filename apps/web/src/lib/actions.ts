@@ -7,6 +7,7 @@ import {
   AuthError,
   createChild,
   loginChild,
+  loginAdmin,
   loginParent,
   registerParent,
   REGISTRATIONS_PER_IP_PER_HOUR,
@@ -32,7 +33,14 @@ import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from 
 import { resolveAllErrors, setErrorResolved } from './error-log';
 import { rateKey, tooMany } from './rate-limit';
 import { xoaHopThuDev } from './mail';
-import { clientFingerprint, destroySession, getActor } from './session';
+import {
+  clientFingerprint,
+  createAdminSession,
+  destroyAdminSession,
+  destroySession,
+  getActor,
+  getAdmin,
+} from './session';
 import { prisma } from './db';
 
 /** Kết quả trả về form. `null` nghĩa là chưa submit lần nào. */
@@ -217,6 +225,38 @@ export async function logoutAction(): Promise<void> {
   redirect('/');
 }
 
+/**
+ * Đăng nhập vào khu quản trị. Chỉ dùng được trên admin origin.
+ *
+ * `redirect('/admin')` là đường dẫn TƯƠNG ĐỐI, cố ý: action này chỉ chạy khi form
+ * trên admin origin gửi tới, nên tương đối là ở lại đúng origin đó. Ghi origin
+ * tuyệt đối vào đây thì phải đọc biến môi trường, và sai biến là chuyển người vừa
+ * đăng nhập sang một host không có cookie của họ.
+ */
+export async function adminLoginAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const state = await run(async () => {
+    await loginAdmin(
+      String(form.get('email') ?? ''),
+      String(form.get('password') ?? ''),
+      await fingerprint()
+    );
+  });
+  if (state && 'ok' in state) redirect('/admin');
+  return state;
+}
+
+/**
+ * Đăng xuất khỏi khu quản trị.
+ *
+ * KHÔNG gọi `destroySession()`: phiên site của cùng người đó là một phiên khác, trên
+ * một origin khác, và họ có thể đang mở nó ở tab bên cạnh với tư cách phụ huynh.
+ * Đăng xuất khỏi khu quản trị không có lý gì đăng xuất họ khỏi trang của con mình.
+ */
+export async function adminLogoutAction(): Promise<void> {
+  await destroyAdminSession();
+  redirect('/admin/dang-nhap');
+}
+
 // --- Phụ huynh quản lý tài khoản con ----------------------------------------
 
 /** Bảo đảm người gọi là phụ huynh. Trẻ không được gọi các action dưới đây. */
@@ -395,13 +435,26 @@ export async function submitTakedownAction(_prev: FormState, form: FormData): Pr
 
 // --- Admin -------------------------------------------------------------------
 
-/** Bảo đảm người gọi là phụ huynh CÓ cờ isAdmin. */
+/**
+ * Bảo đảm người gọi đang có PHIÊN QUẢN TRỊ, không chỉ là một phụ huynh có isAdmin.
+ *
+ * Đổi từ `getActor()` sang `getAdmin()` là chỗ quan trọng nhất của việc tách origin,
+ * và nếu bỏ sót thì cả việc tách thành trang trí: tám server action bên dưới ẩn game
+ * của trẻ, gỡ hẳn, khoá tài khoản. Chúng là những thứ một lỗ XSS trên app origin sẽ
+ * muốn gọi tới — và server action gọi được bằng một POST kèm cookie của trang đang
+ * mở. Nếu chốt này còn đọc cookie phiên site thì kẻ tấn công có XSS ở app origin vẫn
+ * bấm được mọi nút quản trị, dù trang `/admin` đã dời sang origin khác.
+ *
+ * `getAdmin()` đọc cookie khác, host-only trên admin origin, nên POST phát ra từ app
+ * origin không mang nó theo. Cộng với `sameSite: 'lax'`, một POST từ origin khác
+ * cũng không mang được cookie admin.
+ */
 async function requireAdmin(): Promise<string> {
-  const actor = await getActor();
-  if (!actor || actor.kind !== 'parent' || !actor.isAdmin) {
+  const admin = await getAdmin();
+  if (!admin) {
     throw new AuthError('Bạn không có quyền vào khu vực này.');
   }
-  return actor.id;
+  return admin.id;
 }
 
 export async function adminRemoveGameAction(_prev: FormState, form: FormData): Promise<FormState> {

@@ -33,6 +33,8 @@ const FIXTURE = process.env.SB3_FIXTURE ?? '';
 const MAIL_LOG = batBuocMailLog('e2e-takedown');
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'demo@kidogame.local';
+/* Khu quản trị trên origin riêng — xem `infra/e2e-admin-origin.mjs`. */
+const ADMIN = process.env.ADMIN_ORIGIN ?? 'http://admin.localhost:3000';
 const ADMIN_PASS = process.env.ADMIN_PASS ?? 'demo1234ab';
 
 const suffix = randomBytes(4).toString('hex');
@@ -325,13 +327,23 @@ const admin = await adminCtx.newPage();
     check('Có mail báo cho phụ huynh biết game của bé đang tạm ẩn', log.includes(PARENT_EMAIL));
   }
 
+  /*
+   * Hai cửa: site cho quyền đọc (xem game đã ẩn), quản trị cho quyền ghi. Xem chú
+   * thích dài hơn trong `e2e-moderation.mjs`.
+   */
   await admin.goto(`${APP}/dang-nhap`, { waitUntil: 'networkidle' });
   await admin.fill('#email', ADMIN_EMAIL);
   await admin.fill('#password', ADMIN_PASS);
   await admin.click('[data-testid=auth-form] button[type=submit]');
   await admin.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
 
-  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin/dang-nhap`, { waitUntil: 'networkidle' });
+  await admin.fill('#email', ADMIN_EMAIL);
+  await admin.fill('#password', ADMIN_PASS);
+  await admin.click('[data-testid=auth-form] button[type=submit]');
+  await admin.waitForURL((u) => u.pathname === '/admin', { timeout: 20000 }).catch(() => {});
+
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const queue = admin.locator('[data-testid=admin-takedowns]');
   check('Trang kiểm duyệt có hàng đợi yêu cầu gỡ', (await queue.count()) > 0);
 
@@ -356,7 +368,7 @@ const admin = await adminCtx.newPage();
   check('Chấp nhận xong thì hàng đợi rỗng', (await admin.locator('[data-testid=admin-takedown]').count()) === 0);
   check('Game bị gỡ hẳn, khách vẫn 404', (await status(anonCtx, games[0].url)) === 404);
 
-  await admin.goto(`${APP}/admin?loc=da-go`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin?loc=da-go`, { waitUntil: 'networkidle' });
   const removed = admin.locator(`[data-testid=admin-game][data-game-id="${games[0].id}"]`);
   check('Game nằm trong bộ lọc "Đã gỡ"', (await removed.count()) > 0);
 
@@ -382,7 +394,7 @@ const admin = await adminCtx.newPage();
 
   check('Nhận mã game trần cũng ẩn được game', (await status(anonCtx, games[1].url)) === 404);
 
-  await admin.goto(`${APP}/admin`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
   const row = admin.locator('[data-testid=admin-takedown]').first();
   await row.locator('[data-testid=takedown-reject]').click();
   await row.locator('textarea[name=note]').fill('Hai game khác nhau hoàn toàn.');
@@ -392,7 +404,7 @@ const admin = await adminCtx.newPage();
   check('Bác bỏ xong thì game hiện lại cho khách', (await status(anonCtx, games[1].url)) === 200);
   check('Hàng đợi rỗng sau khi bác bỏ', (await admin.locator('[data-testid=admin-takedown]').count()) === 0);
 
-  await admin.goto(`${APP}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
+  await admin.goto(`${ADMIN}/admin?loc=tat-ca`, { waitUntil: 'networkidle' });
   const back = admin.locator(`[data-testid=admin-game][data-game-id="${games[1].id}"]`);
   await back.locator('[data-testid=admin-log] summary').click();
   const logText = await back.locator('[data-testid=admin-log]').innerText();

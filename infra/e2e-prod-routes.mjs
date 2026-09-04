@@ -97,7 +97,14 @@ const ROUTES = [
   { path: '/xac-minh-email?token=sai', as: 'khách' },
   { path: '/dat-lai-mat-khau?token=sai', as: 'khách' },
   { path: '/phu-huynh', as: 'phụ huynh' },
-  { path: '/admin', as: 'phụ huynh' },
+  /*
+   * Khu quản trị chỉ nằm trên app domain khi CHƯA tách origin. Đã khai
+   * ADMIN_DOMAIN thì `/admin` ở đây trả 404 đúng thiết kế, nên đưa nó vào danh
+   * sách này là tự tạo một phép kiểm đỏ vì lý do đúng. Phần đã tách do
+   * `infra/e2e-admin-origin.mjs` kiểm, và bộ đó kiểm nhiều hơn hẳn: cách ly
+   * cookie, hai phiên song song, và server action không gọi được từ app origin.
+   */
+  ...(process.env.ADMIN_ORIGIN ? [] : [{ path: '/admin', as: 'phụ huynh' }]),
   { path: '/upload', as: 'bé' },
   ...(gameId ? [{ path: `/game/${gameId}`, as: 'khách' }] : []),
 ];

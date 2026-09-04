@@ -5,7 +5,7 @@ import {
   hashPassword,
   verifyPassword,
 } from './password';
-import { createSession, revokeAllSessions } from './session';
+import { createAdminSession, createSession, revokeAllSessions } from './session';
 
 /** Lỗi có thông báo an toàn để hiện thẳng cho người dùng. */
 export class AuthError extends Error {
@@ -213,6 +213,45 @@ export async function loginParent(
 
   await clearFailures(identity);
   await createSession({ parentId: parent.id }, clientHash);
+}
+
+/**
+ * Đăng nhập vào KHU QUẢN TRỊ. Cùng email và mật khẩu, phiên khác.
+ *
+ * BA ĐIỂM KHÁC `loginParent`, mỗi điểm một lý do:
+ *
+ * 1. Khoá theo danh tính đếm RIÊNG (`admin:` chứ không `parent:`). Nếu đếm chung thì
+ *    ai đó dò mật khẩu ở cửa quản trị sẽ khoá luôn cửa site của chính người đó — tức
+ *    một người ngoài khoá được phụ huynh ra khỏi tài khoản của họ bằng cách gõ sai ở
+ *    một cửa mà họ chưa từng mở.
+ *
+ * 2. Sai mật khẩu và không-phải-admin trả về CÙNG một thông điệp. Nói "tài khoản này
+ *    không có quyền quản trị" là xác nhận email đó tồn tại và mật khẩu vừa gõ đúng —
+ *    biến cửa quản trị thành công cụ kiểm tra mật khẩu cho toàn site.
+ *
+ * 3. `verifyOrDecoy` vẫn chạy kể cả khi không tìm thấy tài khoản, và vẫn chạy khi tài
+ *    khoản không phải admin. Bỏ bước băm ở một trong hai nhánh là để lại một khác biệt
+ *    thời gian đo được, đủ để tách "email này có tài khoản admin" khỏi "không có".
+ */
+export async function loginAdmin(
+  emailRaw: string,
+  password: string,
+  clientHash: string
+): Promise<void> {
+  const email = normalizeEmail(emailRaw);
+  const identity = `admin:${email}`;
+  await assertNotLocked(identity);
+
+  const parent = await prisma.parent.findUnique({ where: { email } });
+  const ok = await verifyOrDecoy(password, parent?.passwordHash ?? null);
+
+  if (!parent || !ok || !parent.isAdmin) {
+    await recordFailure(identity);
+    throw new AuthError('Email hoặc mật khẩu không đúng.');
+  }
+
+  await clearFailures(identity);
+  await createAdminSession(parent.id, clientHash);
 }
 
 // --- Trẻ ---------------------------------------------------------------------
