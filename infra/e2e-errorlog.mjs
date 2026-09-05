@@ -302,6 +302,51 @@ check(
   );
 }
 
+// ---------- Phân trang ----------
+{
+  /*
+   * PHÂN TRANG CHƯA TỪNG CÓ PHÉP KIỂM NÀO, ở cả ba danh sách của khu quản trị. Đặt ở
+   * bộ này vì đây là chỗ DUY NHẤT tự sinh ra đủ dữ liệu để có trang thứ hai: bước
+   * kiểm trần ở trên bắn hơn 40 lỗi, mà trang lỗi để 30 nhóm một trang.
+   *
+   * Hướng hỏng đáng lo không phải "thanh phân trang không hiện" — cái đó thấy ngay.
+   * Nó là SANG TRANG THÌ RƠI MẤT BỘ LỌC: danh sách đổi, và không có gì trên màn hình
+   * nói vì sao, vì bộ lọc chỉ sống trong URL. Người trực đang lọc "chưa xử lý", bấm
+   * sang trang 2, rồi đọc một danh sách gồm cả nhóm đã xử lý mà tưởng là chưa.
+   */
+  const tong = await tongNhom('tat-ca');
+  check('Bước kiểm trần đã tạo đủ nhóm để có trang thứ hai', tong > 30, `${tong} nhóm`);
+
+  await p.goto(`${ADMIN}/admin/loi?loc=tat-ca`, { waitUntil: 'networkidle' });
+  check(
+    'Có hơn một trang thì thanh phân trang hiện ra',
+    (await p.locator('[data-testid=error-pager]').count()) === 1
+  );
+  check(
+    'Trang đang mở được đánh dấu aria-current, không chỉ đổi màu',
+    (await p.locator('[data-testid=error-pager-so-1]').getAttribute('aria-current')) === 'page'
+  );
+
+  const dauTrang1 = await p.locator('[data-testid=error-group]').first().innerText();
+
+  await p.locator('[data-testid=error-pager-so-2]').click();
+  await p.waitForURL(/trang=2/, { timeout: 20000 }).catch(() => {});
+  check('Bấm số 2 thì sang đúng trang 2', /trang=2/.test(p.url()), p.url());
+  check(
+    'Sang trang thì bộ lọc đi theo, không lặng lẽ về mặc định',
+    /loc=tat-ca/.test(p.url()) &&
+      (await p.locator('[data-testid=error-filter-tat-ca]').getAttribute('aria-current')) ===
+        'page',
+    p.url()
+  );
+
+  /* Trang 2 phải là NỘI DUNG KHÁC. Một lỗi `skip` sai — ví dụ quên nhân với PAGE_SIZE
+     — vẫn cho ra thanh phân trang đúng, URL đúng, và một trang 2 lặp lại y hệt trang
+     1; nhìn từ ngoài không có gì sai cả. */
+  const dauTrang2 = await p.locator('[data-testid=error-group]').first().innerText();
+  check('Trang 2 hiện nhóm khác trang 1, không lặp lại', dauTrang1 !== dauTrang2);
+}
+
 // ---------- Dọn: đưa mọi nhóm về đã xử lý ----------
 {
   await p.goto(`${ADMIN}/admin/loi`, { waitUntil: 'networkidle' });

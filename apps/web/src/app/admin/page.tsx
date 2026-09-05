@@ -23,6 +23,7 @@ import {
   RestoreGameButton,
 } from './admin-controls';
 import { TakedownControls } from './takedown-controls';
+import { Pager } from './pager';
 
 export const dynamic = 'force-dynamic';
 
@@ -569,12 +570,15 @@ export default async function AdminPage({
         </ul>
       )}
 
-      {lastPage > 1 && (
-        <nav className="mb-12 flex flex-wrap items-center gap-3" data-testid="admin-pager">
-          {page > 1 && <Link href={linkTo(filter, page - 1)}>← Trang trước</Link>}
-          {page < lastPage && <Link href={linkTo(filter, page + 1)}>Trang sau →</Link>}
-        </nav>
-      )}
+      {/* `Pager` tự trả null khi chỉ có một trang — không bọc thêm điều kiện ở đây,
+          hai chỗ cùng quyết định một việc thì sớm muộn lệch nhau. */}
+      <Pager
+        page={page}
+        lastPage={lastPage}
+        href={(p) => linkTo(filter, p)}
+        testId="admin-pager"
+        className="mb-12"
+      />
     </>
   );
 }

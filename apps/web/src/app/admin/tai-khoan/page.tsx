@@ -9,6 +9,7 @@ import { MAT_THE } from '@/components/card';
 import { Button } from '@/components/button';
 import { TextInput } from '@/components/field';
 import { ChildLockButton } from '../admin-controls';
+import { Pager } from '../pager';
 
 export const dynamic = 'force-dynamic';
 
@@ -323,12 +324,13 @@ export default async function AdminTaiKhoanPage({
         </ul>
       )}
 
-      {soTrang > 1 && (
-        <nav className="mt-6 flex flex-wrap items-center gap-3" data-testid="tk-trang">
-          {page > 1 && <Link href={linkTo(filter, q, page - 1)}>← Trang trước</Link>}
-          {page < soTrang && <Link href={linkTo(filter, q, page + 1)}>Trang sau →</Link>}
-        </nav>
-      )}
+      <Pager
+        page={page}
+        lastPage={soTrang}
+        href={(p) => linkTo(filter, q, p)}
+        testId="tk-trang"
+        className="mt-6"
+      />
 
       <Notice tone="info">
         Khoá tài khoản bé thì bé không đăng nhập được nữa, và mọi phiên đang mở của bé
