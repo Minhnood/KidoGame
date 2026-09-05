@@ -92,6 +92,9 @@ duyệt, vốn là một phân hoạch.
 
 **Lỗi** — `/admin/loi?loc=chua-xu-ly` (mặc định) · `tat-ca` · `da-xu-ly`
 
+Cả ba danh sách dùng chung một thanh phân trang có **số trang bấm được**; `&trang=<n>`,
+và số trang luôn mang theo bộ lọc lẫn chuỗi đang tìm.
+
 ---
 
 ## 4. Tài khoản

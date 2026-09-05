@@ -61,7 +61,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
-node infra/e2e-errorlog.mjs                                        # 27, không cần .sb3
+node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 ```
 
