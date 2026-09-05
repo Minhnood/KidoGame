@@ -244,6 +244,30 @@ console.log('\n── Khu quản trị không mặc khung của site ───�
   const site = await doNen();
   check('Trang site ở cùng 390px thì VẪN có dải', site.dai === true, `khu=${site.khu}`);
 
+  /*
+   * HÀNG CHỜ PHẢI ĐỌC ĐƯỢC TRÊN ĐIỆN THOẠI. Việc số 7 trong danh sách trước khi mở
+   * cho người thật là "người trực đọc hàng chờ hằng ngày", và người trực thì đọc trên
+   * máy đang cầm.
+   *
+   * Đo BỀ NGANG CỘT CHỮ, không đo chiều cao thẻ: chiều cao đổi theo dữ liệu (tên game
+   * dài ngắn, có mấy vết kiểm duyệt) nên một ngưỡng chiều cao sẽ đỏ oan ngay lần đầu
+   * ai đó thêm một game tên dài. Bề ngang thì do bố cục quyết, chỉ đổi khi có người
+   * sửa bố cục — đúng thứ cần canh. Ảnh bìa quay lại làm ô flex 160px thì cột chữ tụt
+   * về 132px và phép này đỏ.
+   */
+  await p.goto(`${ADMIN}/admin?loc=tat-ca`, { waitUntil: 'load' });
+  const cot = await p.evaluate(() => {
+    const the = document.querySelector('[data-testid=admin-game]');
+    if (!the) return null;
+    const tieuDe = the.querySelector('p');
+    return tieuDe ? Math.round(tieuDe.getBoundingClientRect().width) : null;
+  });
+  check(
+    'Hàng chờ ở 390px: cột chữ rộng ít nhất 280px',
+    cot !== null && cot >= 280,
+    cot === null ? 'hàng chờ trống, không đo được — cần db:seed' : `${cot}px`
+  );
+
   await ctx.close();
 }
 

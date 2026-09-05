@@ -218,7 +218,14 @@ export default async function AdminPage({
   /** Dùng chung cho vết của game và vết của tài khoản — hai danh sách, một cách hiển thị. */
   const logList = (logs: LogRow[], label: string, testId: string) =>
     logs.length > 0 ? (
-      <details className="mt-2 text-sm" data-testid={testId}>
+      /*
+        `clear-left` vì trên khổ điện thoại ảnh bìa là một float trái. `<summary>` là
+        inline-flex, tức một BFC, nên nó KHÔNG chảy quanh float — nó bị ép hẹp lại nằm
+        cạnh ảnh. Chỉ xảy ra với thẻ ít chữ nhất (ba dòng, ~84px, so với ảnh ~80px) nên
+        đây là mép sát chứ không phải chuyện xa xôi. Ở khổ rộng không có float nào nên
+        luật này không làm gì cả.
+      */
+      <details className="mt-2 clear-left text-sm" data-testid={testId}>
         <summary className="min-h-touch inline-flex cursor-pointer items-center font-semibold text-ink-soft">
           {label} ({logs.length})
         </summary>
@@ -394,10 +401,26 @@ export default async function AdminPage({
               data-testid="admin-game"
               data-game-id={game.id}
             >
-              <div className="flex flex-wrap items-start gap-4 xl:min-w-0 xl:flex-1">
+              <div className="sm:flex sm:flex-wrap sm:items-start sm:gap-4 xl:min-w-0 xl:flex-1">
                 {/*
                   Ảnh nằm trên player origin nên dùng <img> thường, giống game-card:
                   next/image sẽ đòi cấu hình remotePatterns mà chẳng được lợi gì thêm.
+
+                  DƯỚI `sm` LÀ FLOAT, KHÔNG PHẢI Ô FLEX. Ảnh 160px cạnh một ô flex ở
+                  màn 390px để lại đúng 132px cho chữ: tên game xuống 7 dòng và thẻ cao
+                  608px, mà dưới ảnh thì trống một cột 120px không ai dùng. Ô flex
+                  không chảy được xuống dưới ảnh — float thì có, nên mấy dòng sau nhận
+                  cả 308px. Đo ở 390px: cột chữ 132 -> 308, thẻ dài nhất 608 -> 433,
+                  cả trang 4138 -> 3501.
+
+                  Thu ảnh còn `w-24` là bước đầu và MỘT MÌNH NÓ KHÔNG ĐỦ: nó chỉ đưa
+                  cột chữ lên 196px, thẻ thường 320 -> 300, vì cái tốn chỗ không phải
+                  ảnh mà là mọi dòng chữ đều bị bó trong phần bề ngang còn lại.
+
+                  Không xếp ảnh thành một hàng riêng phía trên: đo ra không hơn gì (ảnh
+                  chiếm trọn một dòng cao bằng đúng chỗ nó vừa nhường), mà lại mất luôn
+                  việc nhìn bìa và tên game trong cùng một tia mắt — việc chính của
+                  người trực khi lướt hàng chờ.
                 */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -406,10 +429,10 @@ export default async function AdminPage({
                   loading="lazy"
                   width={160}
                   height={120}
-                  className="block aspect-4/3 w-40 shrink-0 rounded-field bg-bg object-cover"
+                  className="float-left mr-3 mb-2 aspect-4/3 w-24 rounded-field bg-bg object-cover sm:float-none sm:m-0 sm:block sm:w-40 sm:shrink-0"
                 />
 
-                <div className="min-w-0 flex-1">
+                <div className="sm:min-w-0 sm:flex-1">
                   <p className="text-lg font-bold">
                     {/* Admin xem được cả game đã ẩn — xem ngoại lệ trong /game/[id]/page.tsx */}
                     <Link href={`/game/${game.id}`}>{game.title}</Link>{' '}
@@ -507,7 +530,7 @@ export default async function AdminPage({
                 cụm nút của mọi thẻ thẳng lề nhau — nút "Gỡ hẳn" nhảy trái phải theo
                 độ dài tiêu đề game là kiểu bố cục làm người ta bấm nhầm.
               */}
-              <div className="mt-4 flex flex-wrap items-center gap-2 xl:mt-0 xl:w-56 xl:shrink-0 xl:flex-col xl:items-stretch">
+              <div className="mt-4 clear-left flex flex-wrap items-center gap-2 xl:mt-0 xl:w-56 xl:shrink-0 xl:flex-col xl:items-stretch">
                 {game.status !== 'PUBLISHED' && <RestoreGameButton gameId={game.id} />}
                 {/* Game vẫn đang hiện mà dính báo cáo sai: dọn báo cáo, giữ nguyên game. */}
                 {game.status === 'PUBLISHED' && game.reportCount > 0 && (
