@@ -21,3 +21,7 @@ dist/
 BANGIAO*.md
 TODO.md
 KICHBAN-VIDEO.md
+
+# Script tạm để tự chụp ảnh bằng Playwright — phải nằm TRONG repo thì
+# `import { chromium } from "playwright"` mới giải được, nhưng không thuộc về repo.
+infra/.tmp-*

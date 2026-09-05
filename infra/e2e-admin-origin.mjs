@@ -72,6 +72,13 @@ console.log('\n── Hai origin, hai phần việc ─────────�
    */
   check('App origin: /admin KHÔNG tồn tại', (await status(`${APP}/admin`)) === 404);
   check('App origin: /admin/loi KHÔNG tồn tại', (await status(`${APP}/admin/loi`)) === 404);
+  /* Mỗi trang quản trị thêm sau đều phải rơi vào luật `/admin*` của middleware. Kiểm
+     TỪNG trang chứ không tin vào luật: một `matcher` gõ hẹp lại là cả một trang mới
+     lặng lẽ mở trên app origin, đúng nơi trẻ em nhập chữ. */
+  check(
+    'App origin: /admin/tong-quan KHÔNG tồn tại',
+    (await status(`${APP}/admin/tong-quan`)) === 404
+  );
 
   check('Admin origin: cửa đăng nhập mở được', (await status(`${ADMIN}/admin/dang-nhap`)) === 200);
   /*

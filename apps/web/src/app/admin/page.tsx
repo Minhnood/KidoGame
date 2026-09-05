@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getAdmin } from '@/lib/session';
 import {
+  actionLabel,
   NGAY_GIU_GAME_DA_GO,
   REPORT_AUTO_HIDE_THRESHOLD,
   REPORT_HARD_HIDE_THRESHOLD,
@@ -32,22 +33,6 @@ const STATUS_LABEL: Record<string, string> = {
   LIMITED: 'ẩn mềm — chỉ vào được bằng link',
   HIDDEN: 'đang ẩn',
   REMOVED: 'đã gỡ hẳn',
-};
-
-/** Nhãn cho `ModerationLog.action`. Mã lạ thì hiện nguyên mã chứ không vỡ trang. */
-const ACTION_LABEL: Record<string, string> = {
-  AUTO_LIMIT: 'Hệ thống tự ẩn khỏi danh sách (đủ ngưỡng báo cáo)',
-  AUTO_HIDE: 'Hệ thống tự ẩn (đủ ngưỡng báo cáo)',
-  PARENT_HIDE: 'Phụ huynh ẩn game',
-  PARENT_UNHIDE: 'Phụ huynh cho hiện lại',
-  ADMIN_REMOVE: 'Admin gỡ hẳn',
-  ADMIN_RESTORE: 'Admin cho hiện lại',
-  ADMIN_DISMISS_REPORTS: 'Admin bỏ qua báo cáo',
-  ADMIN_LOCK_CHILD: 'Admin khoá tài khoản của bé',
-  ADMIN_UNLOCK_CHILD: 'Admin mở khoá tài khoản của bé',
-  TAKEDOWN_HIDE: 'Tạm ẩn vì có yêu cầu gỡ bản quyền',
-  TAKEDOWN_ACCEPT: 'Admin chấp nhận yêu cầu gỡ bản quyền',
-  TAKEDOWN_REJECT: 'Admin bác bỏ yêu cầu gỡ bản quyền',
 };
 
 /**
@@ -232,7 +217,7 @@ export default async function AdminPage({
         <ul className="mt-1 list-none space-y-1 p-0 text-ink-soft">
           {logs.map((log) => (
             <li key={log.id}>
-              — {ACTION_LABEL[log.action] ?? log.action} · {actorName(log.actorId)} ·{' '}
+              — {actionLabel(log.action)} · {actorName(log.actorId)} ·{' '}
               <time dateTime={log.createdAt.toISOString()}>
                 {log.createdAt.toLocaleString('vi-VN')}
               </time>

@@ -72,6 +72,36 @@ export const NGAY_GIU_GAME_DA_GO = Number(process.env.REMOVED_KEEP_DAYS || 7);
  * viết `han ? ... : ''` cho một nhánh không bao giờ chạy — và một nhánh không bao
  * giờ chạy trong thư gửi người thật là chỗ để lọt một lá thư trống ngày.
  */
+/**
+ * Nhãn tiếng Việt cho `ModerationLog.action`.
+ *
+ * Ở LIB chứ không ở trang, vì đã có HAI trang cùng đọc bảng vết này (`/admin` và
+ * `/admin/tong-quan`). Hai bản sao của cùng một từ điển thì sớm muộn lệch nhau, và
+ * lệch ở đây nghĩa là cùng một dòng lịch sử đọc ra hai chuyện khác nhau tuỳ người
+ * trực đang mở tab nào — điều tệ nhất có thể xảy ra với một sổ ghi việc đã làm.
+ *
+ * Mã lạ trả về nguyên mã: một action thêm sau mà quên khai ở đây vẫn hiện ra được,
+ * thô nhưng đọc được, chứ không thành một ô trống.
+ */
+export const ACTION_LABEL: Record<string, string> = {
+  AUTO_LIMIT: 'Hệ thống tự ẩn khỏi danh sách (đủ ngưỡng báo cáo)',
+  AUTO_HIDE: 'Hệ thống tự ẩn (đủ ngưỡng báo cáo)',
+  PARENT_HIDE: 'Phụ huynh ẩn game',
+  PARENT_UNHIDE: 'Phụ huynh cho hiện lại',
+  ADMIN_REMOVE: 'Admin gỡ hẳn',
+  ADMIN_RESTORE: 'Admin cho hiện lại',
+  ADMIN_DISMISS_REPORTS: 'Admin bỏ qua báo cáo',
+  ADMIN_LOCK_CHILD: 'Admin khoá tài khoản của bé',
+  ADMIN_UNLOCK_CHILD: 'Admin mở khoá tài khoản của bé',
+  TAKEDOWN_HIDE: 'Tạm ẩn vì có yêu cầu gỡ bản quyền',
+  TAKEDOWN_ACCEPT: 'Admin chấp nhận yêu cầu gỡ bản quyền',
+  TAKEDOWN_REJECT: 'Admin bác bỏ yêu cầu gỡ bản quyền',
+};
+
+export function actionLabel(action: string): string {
+  return ACTION_LABEL[action] ?? action;
+}
+
 export function hanXoaHan(removedAt: Date): Date;
 export function hanXoaHan(removedAt: Date | null): Date | null;
 export function hanXoaHan(removedAt: Date | null): Date | null {

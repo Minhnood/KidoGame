@@ -560,6 +560,61 @@ const verifiedCtxs = [];
   check('Cho hiện lại đã xoá số đếm báo cáo (game rời khỏi mục Cần xem)', stillListed === 0);
 }
 
+// ---------- Bảng tổng quan ----------
+{
+  /*
+   * Phép kiểm ở đây đo tính NHẤT QUÁN, không đo con số tuyệt đối.
+   *
+   * DB dev mang dữ liệu của những lượt chạy trước và của chính fen, nên một ngưỡng
+   * kiểu "phải bằng 4" sẽ đỏ oan ở máy khác và ở lượt chạy sau. Thứ luôn đúng, và
+   * cũng là thứ duy nhất đáng canh: ô số trên bảng tổng quan phải khớp CHÍNH DANH
+   * SÁCH mà nó dẫn tới. Lệch một cái là người trực đọc "5 game cần xem" rồi bấm vào
+   * thấy 3 — và từ lúc đó họ không tin bảng nữa, tức cả trang thành vô dụng.
+   */
+  await admin.goto(`${ADMIN}/admin/tong-quan`, { waitUntil: 'networkidle' });
+  check(
+    'Có tab Tổng quan và nó là tab đang mở',
+    (await admin.locator('[data-testid=admin-tab-tong-quan]').getAttribute('aria-current')) ===
+      'page'
+  );
+
+  const soCanXem = Number(
+    await admin.locator('[data-testid=o-can-xem]').getAttribute('data-so')
+  );
+  const soBaoCao = Number(
+    await admin.locator('[data-testid=o-bao-cao-24h]').getAttribute('data-so')
+  );
+
+  await admin.goto(`${ADMIN}/admin?loc=can-xem`, { waitUntil: 'networkidle' });
+  const demThat = await admin.locator('[data-testid=admin-game]').count();
+  check(
+    'Ô "Game cần xem" khớp đúng số dòng trong danh sách nó dẫn tới',
+    soCanXem === demThat,
+    `ô ${soCanXem} · danh sách ${demThat}`
+  );
+
+  /* Bài này vừa tạo sáu báo cáo đã xác minh, nên con số 24 giờ không thể là 0. */
+  check('Ô "Báo cáo mới 24 giờ" đếm được báo cáo bài kiểm vừa tạo', soBaoCao > 0, `${soBaoCao}`);
+
+  await admin.goto(`${ADMIN}/admin/tong-quan`, { waitUntil: 'networkidle' });
+  const hoatDong = await admin.locator('[data-testid=tq-hoat-dong]').innerText();
+  check(
+    'Hoạt động gần đây ghi lại thao tác admin vừa làm, kèm email admin',
+    /cho hiện lại/i.test(hoatDong) && hoatDong.includes(ADMIN_EMAIL)
+  );
+  /*
+   * `actorId` không phải khoá ngoại nên phải tra ngược ra email bằng một truy vấn
+   * riêng. Quên bước đó thì trang vẫn chạy, vẫn đủ số dòng, chỉ là mỗi dòng ghi một
+   * cuid — hỏng đúng theo kiểu không ai báo. Bắt bằng hình dạng cuid (`c` + 24 ký
+   * tự), thứ không bao giờ được xuất hiện trong chữ người đọc.
+   */
+  check(
+    'Hoạt động gần đây in tên người, không in cuid thô',
+    !/\bc[a-z0-9]{24}\b/.test(hoatDong),
+    hoatDong.match(/\bc[a-z0-9]{24}\b/)?.[0] ?? ''
+  );
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
