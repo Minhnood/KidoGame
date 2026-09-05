@@ -25,6 +25,7 @@ import { usePathname } from 'next/navigation';
 const MUC = [
   { href: '/admin/tong-quan', id: 'tong-quan', label: 'Tổng quan', dem: null },
   { href: '/admin', id: 'go', label: 'Kiểm duyệt', dem: 'go' as const },
+  { href: '/admin/tai-khoan', id: 'tai-khoan', label: 'Tài khoản', dem: null },
   { href: '/admin/loi', id: 'loi', label: 'Lỗi', dem: 'loi' as const },
 ];
 

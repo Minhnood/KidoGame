@@ -79,6 +79,10 @@ console.log('\n── Hai origin, hai phần việc ─────────�
     'App origin: /admin/tong-quan KHÔNG tồn tại',
     (await status(`${APP}/admin/tong-quan`)) === 404
   );
+  check(
+    'App origin: /admin/tai-khoan KHÔNG tồn tại',
+    (await status(`${APP}/admin/tai-khoan`)) === 404
+  );
 
   check('Admin origin: cửa đăng nhập mở được', (await status(`${ADMIN}/admin/dang-nhap`)) === 200);
   /*

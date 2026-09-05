@@ -77,7 +77,7 @@ function whereFor(filter: FilterKey): Prisma.GameWhereInput {
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ loc?: string; trang?: string }>;
+  searchParams: Promise<{ loc?: string; trang?: string; be?: string }>;
 }) {
   const admin = await getAdmin();
   /*
@@ -96,7 +96,30 @@ export default async function AdminPage({
   const sp = await searchParams;
   const filter = (FILTERS.find((f) => f.key === sp.loc)?.key ?? 'can-xem') as FilterKey;
   const page = Math.max(1, Number(sp.trang ?? '1') || 1);
-  const where = whereFor(filter);
+
+  /*
+   * `be` — lọc thêm theo MỘT đứa trẻ, dùng khi đi từ trang Tài khoản sang.
+   *
+   * VUÔNG GÓC với `loc`, không phải một giá trị nữa của nó: bốn bộ lọc trạng thái
+   * phải rời nhau và cộng lại đúng bằng "Tất cả" (e2e-moderation canh bất biến này
+   * bằng phép cộng), nên nhét "theo bé" vào cùng danh sách đó là phá đúng thứ đang
+   * được canh. Ở đây nó AND vào sau, tức "game của bé này, trong nhóm đang xem".
+   *
+   * Không kiểm id có tồn tại: id sai chỉ ra danh sách rỗng, và một trang rỗng kèm
+   * dòng chữ "đang lọc theo bé" đã tự nói ra chuyện gì xảy ra.
+   */
+  const be = (sp.be ?? '').trim();
+  const loc = whereFor(filter);
+  const where: Prisma.GameWhereInput = be ? { AND: [loc, { childId: be }] } : loc;
+
+  /* Tên bé để hiện trên dòng "đang lọc" — không có tên thì người trực chỉ thấy một
+     cuid trong URL và không biết mình đang xem con của nhà nào. */
+  const beDangLoc = be
+    ? await prisma.child.findUnique({
+        where: { id: be },
+        select: { displayName: true, username: true },
+      })
+    : null;
 
   const [total, games, takedowns] = await Promise.all([
     prisma.game.count({ where }),
@@ -229,7 +252,11 @@ export default async function AdminPage({
     ) : null;
 
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const linkTo = (f: FilterKey, p: number) => `/admin?loc=${f}${p > 1 ? `&trang=${p}` : ''}`;
+  /* `be` phải đi theo MỌI link đổi bộ lọc và đổi trang: rơi mất nó thì bấm sang tab
+     khác là lặng lẽ nhảy về toàn bộ game, trong khi dòng "đang lọc theo bé" vừa biến
+     mất cũng lặng lẽ như vậy. */
+  const linkTo = (f: FilterKey, p: number) =>
+    `/admin?loc=${f}${p > 1 ? `&trang=${p}` : ''}${be ? `&be=${encodeURIComponent(be)}` : ''}`;
 
   return (
     <>
@@ -337,6 +364,19 @@ export default async function AdminPage({
             })}
           </ul>
         </section>
+      )}
+
+      {be && (
+        <Notice tone="info" role="status">
+          <span data-testid="admin-loc-be">
+            Đang lọc theo bé{' '}
+            <strong>
+              {beDangLoc ? `${beDangLoc.displayName} (${beDangLoc.username})` : 'không tìm thấy'}
+            </strong>
+            .
+          </span>{' '}
+          <Link href={`/admin?loc=${filter}`}>Bỏ lọc, xem tất cả</Link>
+        </Notice>
       )}
 
       <nav className="mb-5 flex flex-wrap gap-2" data-testid="admin-filters">

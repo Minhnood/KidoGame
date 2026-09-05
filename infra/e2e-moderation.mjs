@@ -615,6 +615,60 @@ const verifiedCtxs = [];
   );
 }
 
+// ---------- Tra cứu tài khoản ----------
+{
+  /*
+   * Lỗ hổng chức năng mà trang này vá: trước nó, nút khoá tài khoản bé CHỈ có trên
+   * dòng game trong hàng đợi. Bé chưa đăng game nào thì không có đường nào khoá, dù
+   * lý do khoá thường đến từ chỗ khác — phụ huynh viết thư báo con bị mượn tài khoản.
+   * Nên phép kiểm cuối ở đây bấm nút khoá TỪ TRANG TÀI KHOẢN, không phải từ hàng đợi.
+   */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${encodeURIComponent(OWNER_EMAIL)}`, {
+    waitUntil: 'networkidle',
+  });
+  const theoEmail = await admin.locator('[data-testid=tk-gia-dinh]').count();
+  check('Tìm theo email phụ huynh ra đúng một gia đình', theoEmail === 1, `${theoEmail}`);
+
+  /* Hai cửa vào phải dẫn tới CÙNG một gia đình: người trực cầm email khi phụ huynh
+     viết thư, cầm tên đăng nhập khi đi từ trang game. Nếu hai đường ra hai loại kết
+     quả khác nhau thì không so được với nhau. */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  const theoTenBe = await admin.locator('[data-testid=tk-gia-dinh]').innerText();
+  check(
+    'Tìm theo tên đăng nhập của bé cũng ra đúng gia đình đó',
+    theoTenBe.includes(OWNER_EMAIL),
+    theoTenBe.split('\n')[0]
+  );
+
+  const dongBe = admin.locator('[data-testid=tk-be]').first();
+  const linkGame = await dongBe.locator('a').first().getAttribute('href');
+  await admin.goto(`${ADMIN}${linkGame}`, { waitUntil: 'networkidle' });
+  const demGame = await admin.locator('[data-testid=admin-game]').count();
+  const chuTrang = await admin.locator('[data-testid=admin-game]').first().innerText();
+  check('Số game của bé dẫn sang hàng đợi đã lọc theo đúng bé đó', demGame > 0 && chuTrang.includes(CHILD_USER), `${demGame} game`);
+  check(
+    'Hàng đợi nói rõ đang lọc theo bé nào',
+    (await admin.locator('[data-testid=admin-loc-be]').innerText()).includes(CHILD_USER)
+  );
+
+  /*
+   * Bé này đang bị khoá từ bước trước, nên nút ở đây là "Mở khoá" — và mở khoá được
+   * từ trang tài khoản chính là điều cần chứng minh. Cũng trả tài khoản về trạng thái
+   * bình thường, để lượt chạy sau không thừa hưởng một tài khoản đang khoá.
+   */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  check(
+    'Trang tài khoản hiện đúng trạng thái đang khoá',
+    (await admin.locator('[data-testid=tk-be-khoa]').count()) === 1
+  );
+  await confirmClick(admin.locator('[data-testid=tk-be]').first(), 'admin-child-lock');
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  check(
+    'Mở khoá được tài khoản bé ngay từ trang tài khoản',
+    (await admin.locator('[data-testid=tk-be-khoa]').count()) === 0
+  );
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
