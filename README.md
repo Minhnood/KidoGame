@@ -55,14 +55,14 @@ export MAIL_LOG=/tmp/kg-mail.log
 
 SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 63 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 61
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 72
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 27, không cần .sb3
-node infra/e2e-admin-origin.mjs                                    # 25, không cần .sb3
+node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 ```
 
 **`e2e-prune-removed.mjs` phải chạy SAU `e2e-takedown.mjs`.** Lượt nào đổ giữa đường thì
@@ -1312,6 +1312,48 @@ Trang `/admin` có bộ lọc (`?loc=can-xem|tat-ca|dang-hien|da-an|da-go`), ph�
 game mỗi trang (`?trang=N`), thumbnail, lý do báo cáo, lịch sử `ModerationLog`, và nút
 khoá thẳng tài khoản bé.
 
+### Bốn tab của khu quản trị
+
+| Tab | Trả lời câu hỏi |
+|---|---|
+| `/admin/tong-quan` | Hôm nay có việc gì gấp không |
+| `/admin` (Kiểm duyệt) | Có gì trong hàng đợi nội dung |
+| `/admin/tai-khoan` | Gia đình này là ai, và khoá/mở khoá tài khoản bé |
+| `/admin/loi` | Lỗi ở máy người dùng thật |
+
+**Tổng quan có mặt vì hai hàng đợi trả lời "có gì trong đống", không trả lời "cái nào
+sắp muộn".** Ba thứ trên đó không đọc ra được từ hàng đợi dù ngồi đọc hết:
+
+- **Yêu cầu gỡ bản quyền quá hạn.** Hàng đợi xếp cũ nhất lên đầu, nhưng *cũ nhất* và
+  *quá hạn* là hai chuyện: hạn tính theo NGÀY LÀM VIỆC, nên một yêu cầu gửi chiều thứ
+  sáu và một yêu cầu gửi sáng thứ hai không cùng một đồng hồ. Đây là hạn duy nhất đã
+  hứa công khai với người ngoài.
+- **Game đã gỡ sắp bị xoá hẳn.** Sau hạn đó nút "Cho hiện lại" không còn gì để hiện
+  lại — việc duy nhất trong cả khu quản trị mà bỏ lỡ là mất vĩnh viễn — và nó nằm
+  trong bộ lọc "Đã gỡ", tức tab ít người mở nhất.
+- **Game bị hệ thống tự siết mà chưa ai xem.** Bộ lọc "Cần xem" gộp chúng chung với
+  game mới chỉ dính báo cáo, trong khi nhóm này đang *bị phạt* rồi.
+
+Hai luật của bảng số, cả hai đều có phép kiểm:
+
+1. **Mỗi ô là một link, và con số phải bằng đúng danh sách nó dẫn tới.** Một con số
+   không bấm được là một câu đố: người đọc vẫn phải tự đi tìm, và nếu họ chọn nhầm bộ
+   lọc thì số không khớp danh sách mà không ai biết bên nào sai.
+2. **Chỉ việc CÓ HẠN hoặc KHÔNG ĐẢO ĐƯỢC mới tô đỏ.** Tô mọi số khác 0 thì màu đỏ hết
+   nghĩa, và hai thứ thật sự không chờ được sẽ nằm lẫn giữa những con số chỉ đang bận.
+
+**Tài khoản vá một lỗ hổng chức năng thật**: trước nó, nút khoá tài khoản bé CHỈ có
+trên dòng game trong hàng đợi — nên một bé chưa đăng game nào thì không có đường nào
+khoá, dù lý do khoá thường là phụ huynh viết thư báo con bị người lạ mượn tài khoản.
+Đường còn lại là vào thẳng database. Tìm được theo email phụ huynh HOẶC tên đăng nhập
+của bé, và cả hai đường đều trả về **một gia đình** — trả về hai loại kết quả khác nhau
+tuỳ chuỗi gõ vào thì hai danh sách không so được với nhau.
+
+Số game của mỗi bé dẫn sang hàng đợi đã lọc theo bé đó, qua tham số **`be`**. Nó VUÔNG
+GÓC với `loc` chứ không phải một giá trị nữa của `loc`: bốn bộ lọc trạng thái phải rời
+nhau và cộng lại đúng bằng "Tất cả" (`e2e-moderation` canh bằng phép cộng), nên nhét
+"theo bé" vào cùng danh sách đó là phá đúng thứ đang được canh.
+
 ### Khu quản trị là một ORIGIN riêng
 
 **`admin.<domain>` là origin thứ ba, cạnh app origin và player origin.** Cookie phiên
@@ -1351,7 +1393,7 @@ sai mật khẩu với không-phải-admin trả về **cùng một** thông đi
 không có quyền quản trị" là xác nhận email tồn tại và mật khẩu vừa gõ đúng.
 
 `ADMIN_DOMAIN` để trống là **không tách**: `/admin` nằm trên app domain như trước. Bộ
-kiểm dành riêng: [`infra/e2e-admin-origin.mjs`](infra/e2e-admin-origin.mjs), 25 phép
+kiểm dành riêng: [`infra/e2e-admin-origin.mjs`](infra/e2e-admin-origin.mjs), 27 phép
 kiểm. Cần nó vì cơ chế này hỏng im lặng — admin vẫn vào được, vẫn ẩn được game, chỉ
 lớp phòng thủ là mất, và không phép kiểm nào khác trong repo nhìn thấy điều đó.
 
