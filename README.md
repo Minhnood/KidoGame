@@ -53,16 +53,23 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                     # 51 kiểm tra
+SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 63 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 61
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 46
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
-GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 12, chạy riêng
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 26, cần psql
+GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 27, không cần .sb3
-node infra/e2e-admin-origin.mjs                                    # 20, không cần .sb3
+node infra/e2e-admin-origin.mjs                                    # 25, không cần .sb3
 ```
+
+**`e2e-prune-removed.mjs` phải chạy SAU `e2e-takedown.mjs`.** Lượt nào đổ giữa đường thì
+để lại một hàng trong hàng đợi yêu cầu gỡ, mà `e2e-takedown` khẳng định hàng đợi có ĐÚNG
+một hàng — nó sẽ đỏ ở phép kiểm "gửi trùng không tạo thêm hàng thứ hai" rồi đổ ở `strict
+mode violation`, một triệu chứng không chỉ về đâu cả. Dọn bằng:
+`delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';`
 
 **`e2e-admin-origin.mjs` cần `ADMIN_ORIGIN` được đặt cho CẢ server dev**, không chỉ cho
 bộ kiểm. Không đặt thì middleware giữ hành vi cũ — `/admin` nằm trên app origin — và bộ
@@ -656,7 +663,7 @@ xác minh được thì không tạo được tài khoản cho con, tức đứa
 hỏng cả cửa vào.
 
 Cái khó là nó hỏng **im lặng**. `docker compose up` vẫn xanh, trang chủ vẫn chạy,
-bốn service vẫn healthy. Lỗi chỉ lộ ra khi một phụ huynh thật bấm nút và không
+năm service vẫn healthy. Lỗi chỉ lộ ra khi một phụ huynh thật bấm nút và không
 nhận được thư — lúc đó họ đã bỏ đi rồi. Nên có script riêng để hỏi thẳng:
 
 ```bash
@@ -912,6 +919,51 @@ Image cố ý **không** dùng multi-stage, **không** dùng `output: 'standalon
 **không** `prune --prod`. Lý do từng cái nằm trong comment đầu `infra/Dockerfile`
 — tóm gọn: node_modules của pnpm là một rừng symlink, và `prisma`/`tsx` là
 devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoảng 1.5GB.
+
+### Dọn định kỳ — game đã gỡ thì một tuần sau xoá hẳn
+
+Service thứ năm, `prune`. Game bị admin gỡ (`REMOVED`) nằm lại **7 ngày** rồi mới bị
+xoá thật: hàng trong DB, HTML đã đóng gói, ảnh bìa, và cả `.sb3` gốc của bé.
+
+Là một service trong stack chứ không phải cron trên host, **cùng lý do như `backup`**:
+một việc phải có người nhớ chạy thì đúng bằng không có. "Xoá sau 7 ngày" mà không ai
+chạy lệnh thì đó không phải một hạn, đó là một câu trong tài liệu.
+
+**`PRUNE_HOUR=4` phải SAU `BACKUP_HOUR=3`, và thứ tự đó là điều kiện để cửa sổ sửa sai
+tồn tại**: bản sao lưu của chính ngày xoá vẫn còn chứa game, nên gỡ nhầm vẫn phục hồi
+được. Đảo lại thì bản gần nhất đã không còn game, và "xoá sau 7 ngày" lặng lẽ thành
+"mất hẳn sau 7 ngày".
+
+Dùng lại image của `web`, không build image thứ sáu: hai script dọn là `tsx` + Prisma
+CLI, mà image `web` cố ý giữ devDependencies.
+
+Chạy tay một lượt (mặc định của cả hai script là **chạy khô**, phải thêm `--xoa`):
+
+```bash
+cd infra
+docker compose run --rm --entrypoint bash prune -c \
+  "pnpm --filter @kidogame/web db:prune-removed"      # xem trước, không xoá gì
+docker compose run --rm --entrypoint bash prune -c "bash /prune.sh once"   # xoá thật
+docker compose logs prune --tail 20                   # xem nó hẹn giờ lúc mấy giờ
+```
+
+**Đã dựng thử thật trên stack Docker**, không chỉ đọc code: service lên, hẹn đúng
+`4:00` giờ Việt Nam, và một lượt `once` chạy đủ hai bước đúng thứ tự — xoá hàng DB
+trước, rồi mới dọn file thành rác (9 file rác, 12.3 MB). Bước 1 đọc ra `Hạn giữ game
+đã gỡ: 7 ngày`, tức chốt `||` cho `REMOVED_KEEP_DAYS` chịu được đúng thứ compose gửi
+vào: **chuỗi rỗng, không phải undefined** — `?? 7` không đỡ được chuỗi rỗng, và
+`Number('')` ra 0, mà 0 là giá trị script từ chối chạy. Không có chốt đó thì ở **đúng
+cấu hình mặc định** service vẫn khởi động bình thường rồi mỗi ngày in "hạn giữ không
+hợp lệ" và không xoá gì cả.
+
+Cột `Game.removedAt` bấm giờ cho hạn này, và nó **về `null` khi cho hiện lại** — không
+thì game được cho hiện lại vẫn mang hạn cũ và bị xoá lúc đang chạy bình thường. Game
+đã gỡ từ TRƯỚC khi có cột này thì `removedAt` là null, và script **không xoá** chúng,
+nó bấm đồng hồ: coi null là quá hạn thì lần chạy đầu tiên xoá sạch toàn bộ lịch sử gỡ.
+
+Hồ sơ pháp lý thì **ở lại**. `TakedownRequest.gameId` là `SetNull` chứ không phải
+`Cascade`, kèm cột `gameTitle` chụp lại lúc nhận đơn — nếu không, việc dọn sẽ xoá luôn
+bằng chứng đã xử lý đúng một khiếu nại, tức càng làm đúng thì hồ sơ càng mất.
 
 ## Cấu trúc
 
@@ -1279,7 +1331,7 @@ sai mật khẩu với không-phải-admin trả về **cùng một** thông đi
 không có quyền quản trị" là xác nhận email tồn tại và mật khẩu vừa gõ đúng.
 
 `ADMIN_DOMAIN` để trống là **không tách**: `/admin` nằm trên app domain như trước. Bộ
-kiểm dành riêng: [`infra/e2e-admin-origin.mjs`](infra/e2e-admin-origin.mjs), 20 phép
+kiểm dành riêng: [`infra/e2e-admin-origin.mjs`](infra/e2e-admin-origin.mjs), 25 phép
 kiểm. Cần nó vì cơ chế này hỏng im lặng — admin vẫn vào được, vẫn ẩn được game, chỉ
 lớp phòng thủ là mất, và không phép kiểm nào khác trong repo nhìn thấy điều đó.
 

@@ -12,7 +12,7 @@
 # mà in ra lỗi quyền là thứ khiến người ta hoặc hoảng, hoặc quen mắt rồi bỏ qua cả
 # những lỗi thật sau này.
 #
-# BỐN SERVICE: db, web, caddy, backup. KHÔNG có service nào chạy
+# NĂM SERVICE: db, web, caddy, backup, prune. KHÔNG có service nào chạy
 # player-server.mjs — file đó chỉ dùng khi dev trên máy local. Ở production chính
 # Caddy serve thư mục storage, đúng như infra/Caddyfile đã viết sẵn từ M0.
 #
@@ -29,7 +29,7 @@
 name: kidogame
 
 # ---------------------------------------------------------------------------
-# GIỚI HẠN LOG, áp cho cả bốn service qua YAML anchor.
+# GIỚI HẠN LOG, áp cho cả năm service qua YAML anchor.
 #
 # Docker mặc định dùng driver `json-file` KHÔNG GIỚI HẠN: file log lớn mãi tới khi
 # container bị xoá. Trên một VPS nhỏ đó là một cách hết đĩa rất chậm và rất im —
