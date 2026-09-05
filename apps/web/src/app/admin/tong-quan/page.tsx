@@ -16,6 +16,25 @@ export const dynamic = 'force-dynamic';
 const SAP_XOA_NGAY = 2;
 
 /**
+ * "12 phút trước" thay cho "13:41:07 5/9/2026".
+ *
+ * Câu hỏi thật khi liếc danh sách hoạt động là "cái này vừa xảy ra hay từ tuần
+ * trước", và một dấu thời gian tuyệt đối bắt người đọc tự trừ hai con số để trả lời
+ * — mỗi dòng một lần, tám dòng một lượt. Quá một ngày thì đổi ngược lại: lúc đó
+ * "hôm nào" mới là thứ cần biết, và "97 giờ trước" là một phép trừ nữa.
+ *
+ * Dấu thời gian tuyệt đối KHÔNG mất: nó nằm trong `dateTime` và `title` của thẻ
+ * `<time>`, tức di chuột vào là thấy, và trình đọc màn hình vẫn lấy được.
+ */
+function khiNao(luc: Date, bayGio: Date): string {
+  const giay = Math.max(0, Math.round((bayGio.getTime() - luc.getTime()) / 1000));
+  if (giay < 60) return 'vừa xong';
+  if (giay < 3600) return `${Math.floor(giay / 60)} phút trước`;
+  if (giay < 86400) return `${Math.floor(giay / 3600)} giờ trước`;
+  return luc.toLocaleDateString('vi-VN');
+}
+
+/**
  * Một ô số.
  *
  * `href` là BẮT BUỘC, không phải tuỳ chọn. Một con số trên bảng tổng quan mà không
@@ -33,47 +52,94 @@ function O({
   nhan,
   phu,
   href,
-  gap = false,
+  muc = 'viec',
   testId,
 }: {
   so: number;
   nhan: string;
   phu: string;
   href: string;
-  gap?: boolean;
+  /**
+   * Con số này là VIỆC hay là SỐ NỀN.
+   *
+   * `nen` không bao giờ tô màu, kể cả khi khác 0 — "6 game đang hiện" không phải một
+   * việc chưa ai làm, nó là tỉ lệ để đọc mấy con số bên trên. Bản trước dùng một cờ
+   * `gap` hai trạng thái nên cả nhóm Số nền cũng lên vạch cam, tức bảng nói có ba
+   * việc đang chờ trong khi không có việc nào.
+   */
+  muc?: 'gap' | 'viec' | 'nen';
   testId: string;
 }) {
-  const coViec = so > 0;
+  const coViec = so > 0 && muc !== 'nen';
+  const gap = muc === 'gap';
+  /*
+   * VẠCH MÀU BÊN TRÁI, không phải nền màu.
+   *
+   * Cần một tín hiệu đọc được bằng ĐUÔI MẮT, vì mười hai ô giống hệt nhau thì phải
+   * đọc từng cái mới biết cái nào đang có việc — đúng thứ mà một bảng tổng quan tồn
+   * tại để khỏi phải làm. Ba mức: đỏ (gấp), cam (có việc), xám (rỗng).
+   *
+   * Vạch chứ không tô nền cả thẻ: đổi nền là đổi cặp màu của MỌI dòng chữ nằm trên
+   * nó, tức ba cặp mới cho mỗi mức, chín phép đo thêm vào `contrast-check` cho một
+   * thứ mà một vạch 4px nói xong. Viền không phải chữ nên không có ngưỡng đọc nào bị
+   * động tới.
+   */
+  const vach = gap && coViec ? 'border-l-danger' : coViec ? 'border-l-accent' : 'border-l-border';
   return (
     <Link
       href={href}
       data-testid={testId}
       data-so={so}
       className={[
-        'block p-5 no-underline',
+        'group block border-l-4 p-5 no-underline transition-colors',
         MAT_THE,
-        'hover:border-accent',
+        vach,
+        'hover:border-accent hover:border-l-accent',
         gap && coViec ? 'border-danger-border' : '',
       ].join(' ')}
     >
       <p
         className={[
-          'text-4xl font-extrabold tabular-nums',
-          gap && coViec ? 'text-danger' : coViec ? 'text-ink' : 'text-ink-soft',
+          /*
+             `tabular-nums` để cột số không nhảy khi 9 thành 10, và `leading-none` vì
+             con số cao 40px mà mang theo cả khoảng dòng mặc định thì cách nhãn bên
+             dưới xa hơn hẳn khoảng cách giữa nhãn và dòng phụ — mắt sẽ đọc nó như
+             một khối rời chứ không phải cùng một thẻ.
+          */
+          'text-[2.5rem] font-extrabold leading-none tabular-nums',
+            gap && coViec
+            ? 'text-danger'
+            : coViec || (muc === 'nen' && so > 0)
+              ? 'text-ink'
+              : 'text-ink-soft/70',
         ].join(' ')}
       >
         {so}
       </p>
-      <p className="mt-1 font-bold text-ink">{nhan}</p>
-      <p className="mt-0.5 text-sm text-ink-soft">{phu}</p>
+      <p className="mt-2.5 font-bold text-ink group-hover:text-accent-text">{nhan}</p>
+      <p className="mt-1 text-sm leading-snug text-ink-soft">{phu}</p>
     </Link>
   );
 }
 
-function Nhom({ title, children }: { title: string; children: React.ReactNode }) {
+function Nhom({
+  title,
+  phu,
+  children,
+}: {
+  title: string;
+  phu?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mb-9">
-      <h2 className="mb-3 text-xl font-extrabold tracking-tight">{title}</h2>
+    <section className="mb-8">
+      {/* Tiêu đề nhóm kèm một vạch chạy hết bề ngang: ba nhóm ô vuông giống nhau xếp
+          liền nhau thì ranh giới giữa chúng chỉ còn là khoảng trắng, mà khoảng trắng
+          thì cùng một cỡ với khoảng cách giữa các ô trong nhóm. */}
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-border pb-2">
+        <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
+        {phu && <p className="text-sm text-ink-soft">{phu}</p>}
+      </div>
       {/*
         Một cột trên điện thoại. Ô số ép thành hai cột ở 390px thì con số to phải thu
         nhỏ lại, mà con số chính là thứ duy nhất cần đọc được từ xa trên bảng này.
@@ -169,6 +235,11 @@ export default async function AdminTongQuanPage() {
   ]);
 
   const goQuaHan = goDangMo.filter((r) => slaDueAt(r.createdAt) < bayGio).length;
+  /* "Gấp" = đúng ba ô có vạch đỏ ở nhóm đầu. Cố ý KHÔNG gồm "cần xem" hay "báo cáo
+     mới": hai cái đó gần như luôn khác 0 ở một trang đang sống, nên gộp vào là dòng
+     yên tĩnh dưới đây không bao giờ hiện, mà một câu không bao giờ hiện thì bằng
+     không có. */
+  const khongCoViecGap = goQuaHan === 0 && sapXoa + quaHanXoa === 0 && nhomLoiChuaXuLy === 0;
   const cuNhat = goDangMo[0]?.createdAt ?? null;
 
   /*
@@ -238,8 +309,26 @@ export default async function AdminTongQuanPage() {
           nút &quot;Cho hiện lại&quot; không còn gì để hiện lại.
         </Notice>
       )}
+      {/*
+        NÓI RA KHI KHÔNG CÓ VIỆC GẤP, chứ không để bốn số 0 tự nói hộ.
+        Bốn ô 0 và một trang chưa tải xong nhìn giống nhau, và "chắc nó chưa chạy" là
+        kết luận rẻ hơn "hôm nay không có gì" — người trực sẽ đi kiểm lại bằng tay,
+        tức bảng này không tiết kiệm cho họ việc gì cả. Một câu khẳng định thì đắt hơn
+        hẳn để nghi ngờ.
+      */}
+      {khongCoViecGap && (
+        <Notice tone="info" role="status">
+          <span data-testid="tq-yen">
+            <strong>Không có việc gấp.</strong> Không yêu cầu gỡ nào quá hạn, không game nào
+            sắp bị xoá hẳn, không nhóm lỗi nào chưa xử lý.
+          </span>
+        </Notice>
+      )}
 
-      <Nhom title="Việc có hạn">
+      <Nhom
+        title="Việc có hạn"
+        phu="bỏ lỡ là muộn hạn đã hứa, hoặc mất vĩnh viễn"
+      >
         <O
           testId="o-go-qua-han"
           so={goQuaHan}
@@ -252,7 +341,7 @@ export default async function AdminTongQuanPage() {
                 : ''
           }
           href="/admin"
-          gap
+          muc="gap"
         />
         <O
           testId="o-go-dang-mo"
@@ -271,7 +360,7 @@ export default async function AdminTongQuanPage() {
               : `Còn ${SAP_XOA_NGAY} ngày hoặc ít hơn để cho hiện lại`
           }
           href="/admin?loc=da-go"
-          gap
+          muc="gap"
         />
         <O
           testId="o-loi-chua-xu-ly"
@@ -282,7 +371,7 @@ export default async function AdminTongQuanPage() {
         />
       </Nhom>
 
-      <Nhom title="Nội dung chờ người xem">
+      <Nhom title="Nội dung chờ người xem" phu="chưa có hạn, nhưng có trẻ con ở đầu bên kia">
         <O
           testId="o-can-xem"
           so={canXem}
@@ -313,13 +402,14 @@ export default async function AdminTongQuanPage() {
         />
       </Nhom>
 
-      <Nhom title="Số nền">
+      <Nhom title="Số nền" phu="để đọc mấy con số trên kia theo tỉ lệ nào">
         <O
           testId="o-game-hien"
           so={gameDangHien}
           nhan="Game đang hiện"
           phu={`${gameMoi7ngay} game mới trong 7 ngày`}
           href="/admin?loc=dang-hien"
+          muc="nen"
         />
         <O
           testId="o-be-moi"
@@ -327,6 +417,7 @@ export default async function AdminTongQuanPage() {
           nhan="Bé mới trong 7 ngày"
           phu="Tài khoản do phụ huynh tạo hộ"
           href="/admin?loc=tat-ca"
+          muc="nen"
         />
         <O
           testId="o-chua-xac-minh"
@@ -334,6 +425,7 @@ export default async function AdminTongQuanPage() {
           nhan="Phụ huynh chưa xác minh"
           phu="Chưa xác minh thì không tạo được tài khoản cho con, và báo cáo không tính ngưỡng"
           href="/admin?loc=tat-ca"
+          muc="nen"
         />
         <O
           testId="o-chua-bam-dong-ho"
@@ -341,6 +433,7 @@ export default async function AdminTongQuanPage() {
           nhan="Đã gỡ, chưa bấm đồng hồ"
           phu="Gỡ từ trước khi có cột hạn — lượt dọn kế tiếp sẽ bấm giờ, không xoá"
           href="/admin?loc=da-go"
+          muc="nen"
         />
       </Nhom>
 
@@ -354,42 +447,70 @@ export default async function AdminTongQuanPage() {
         gian.
       */}
       <section className="mb-9">
-        <h2 className="mb-3 text-xl font-extrabold tracking-tight">Hoạt động gần đây</h2>
+        <div className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-border pb-2">
+          <h2 className="text-lg font-extrabold tracking-tight">Hoạt động gần đây</h2>
+          <p className="text-sm text-ink-soft">tám thao tác mới nhất, của người và của hệ thống</p>
+        </div>
         {vet.length === 0 ? (
           <p className="text-ink-soft">Chưa có thao tác kiểm duyệt nào được ghi.</p>
         ) : (
           <ul className={`list-none space-y-0 p-0 ${MAT_THE}`} data-testid="tq-hoat-dong">
-            {vet.map((v, i) => (
-              <li
-                key={v.id}
-                className={`px-5 py-3 text-sm ${i > 0 ? 'border-t border-border' : ''}`}
-              >
-                <span className="font-semibold text-ink">{actionLabel(v.action)}</span>
-                {v.game && (
-                  <>
-                    {' · '}
-                    {/* Link sang trang game trên APP origin: cửa quản trị chỉ cho quyền
-                        GHI, quyền ĐỌC một game đã ẩn nằm ở cửa site. */}
-                    <a href={`${appOrigin()}/game/${v.game.id}`}>{v.game.title}</a>
-                  </>
-                )}
-                {v.child && (
-                  <>
-                    {' · bé '}
-                    {v.child.displayName} ({v.child.username})
-                  </>
-                )}
-                <span className="text-ink-soft">
-                  {' · '}
-                  {tenNguoiLam(v.actorId)}
-                  {' · '}
-                  <time dateTime={v.createdAt.toISOString()}>
-                    {v.createdAt.toLocaleString('vi-VN')}
+            {vet.map((v, i) => {
+              /* Việc của HỆ THỐNG đánh dấu khác việc của người. Cả hai phải nằm chung
+                 một danh sách theo thời gian (một tràng AUTO_HIDE liên tiếp là dấu
+                 hiệu có người đang dùng nút báo cáo để đánh hội đồng, và nó chỉ lộ ra
+                 khi xếp cạnh nhau), nhưng "ai làm" là câu hỏi đầu tiên người trực hỏi
+                 về mỗi dòng — nên nó phải trả lời được mà không cần đọc hết dòng. */
+              const laHeThong = v.actorId === 'system';
+              return (
+                <li
+                  key={v.id}
+                  className={`flex flex-wrap items-baseline gap-x-2 px-5 py-3 text-sm ${
+                    i > 0 ? 'border-t border-border' : ''
+                  }`}
+                >
+                  {/* Cột thời gian đứng TRƯỚC và rộng cố định: mắt đi dọc một cột thẳng
+                      để tìm "cái nào vừa xảy ra", chứ không nhặt dấu thời gian ở cuối
+                      mỗi dòng dài ngắn khác nhau. */}
+                  <time
+                    dateTime={v.createdAt.toISOString()}
+                    title={v.createdAt.toLocaleString('vi-VN')}
+                    className="w-24 shrink-0 tabular-nums text-ink-soft"
+                  >
+                    {khiNao(v.createdAt, bayGio)}
                   </time>
-                  {v.note && ` · ${v.note}`}
-                </span>
-              </li>
-            ))}
+                  {/* Cả hai nhãn dùng chung nền `bg` — cặp màu đã có phép đo trong
+                      `contrast-check` cho cả `ink-soft` lẫn `accent-text`. Phân biệt
+                      bằng MÀU CHỮ chứ không bằng nền thứ hai: một nền mới là một cặp
+                      mới phải đo, cho một khác biệt mà màu chữ đã nói xong. */}
+                  <span
+                    className={`shrink-0 rounded-full border border-border bg-bg px-2 py-0.5 text-xs font-bold ${
+                      laHeThong ? 'text-ink-soft' : 'text-accent-text'
+                    }`}
+                  >
+                    {laHeThong ? 'hệ thống' : tenNguoiLam(v.actorId)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-semibold text-ink">{actionLabel(v.action)}</span>
+                    {v.game && (
+                      <>
+                        {' · '}
+                        {/* Link sang trang game trên APP origin: cửa quản trị chỉ cho
+                            quyền GHI, quyền ĐỌC một game đã ẩn nằm ở cửa site. */}
+                        <a href={`${appOrigin()}/game/${v.game.id}`}>{v.game.title}</a>
+                      </>
+                    )}
+                    {v.child && (
+                      <>
+                        {' · bé '}
+                        {v.child.displayName} ({v.child.username})
+                      </>
+                    )}
+                    {v.note && <span className="text-ink-soft"> · {v.note}</span>}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -596,7 +596,26 @@ const verifiedCtxs = [];
   /* Bài này vừa tạo sáu báo cáo đã xác minh, nên con số 24 giờ không thể là 0. */
   check('Ô "Báo cáo mới 24 giờ" đếm được báo cáo bài kiểm vừa tạo', soBaoCao > 0, `${soBaoCao}`);
 
+  /*
+   * Dòng "Không có việc gấp" phải hiện KHI VÀ CHỈ KHI ba ô đỏ đều bằng 0.
+   *
+   * Kiểm hai chiều bằng một phép tương đương, không kiểm "có hiện không": DB dev mang
+   * dữ liệu của lượt chạy trước nên hôm nay có thể có việc gấp mà mai thì không, và
+   * một phép kiểm chỉ đúng một chiều sẽ đỏ oan tuỳ ngày. Hướng hỏng thật nằm ở chỗ
+   * khác: dòng yên tĩnh hiện ra TRONG KHI vẫn còn việc quá hạn, tức bảng nói dối đúng
+   * cái nó sinh ra để nói.
+   */
   await admin.goto(`${ADMIN}/admin/tong-quan`, { waitUntil: 'networkidle' });
+  const doSo = async (id) =>
+    Number(await admin.locator(`[data-testid=${id}]`).getAttribute('data-so'));
+  const tongGap = (await doSo('o-go-qua-han')) + (await doSo('o-sap-xoa')) + (await doSo('o-loi-chua-xu-ly'));
+  const coDongYen = (await admin.locator('[data-testid=tq-yen]').count()) === 1;
+  check(
+    'Dòng "không có việc gấp" hiện đúng khi và chỉ khi hết việc gấp',
+    (tongGap === 0) === coDongYen,
+    `gấp ${tongGap} · dòng yên ${coDongYen}`
+  );
+
   const hoatDong = await admin.locator('[data-testid=tq-hoat-dong]').innerText();
   check(
     'Hoạt động gần đây ghi lại thao tác admin vừa làm, kèm email admin',
