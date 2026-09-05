@@ -56,10 +56,10 @@ export MAIL_LOG=/tmp/kg-mail.log
 SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 63 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 61
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 46
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 26, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 27, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 25, không cần .sb3
@@ -955,6 +955,26 @@ vào: **chuỗi rỗng, không phải undefined** — `?? 7` không đỡ đư�
 `Number('')` ra 0, mà 0 là giá trị script từ chối chạy. Không có chốt đó thì ở **đúng
 cấu hình mặc định** service vẫn khởi động bình thường rồi mỗi ngày in "hạn giữ không
 hợp lệ" và không xoá gì cả.
+
+**Phụ huynh được báo ngay lúc gỡ, kèm link tải file gốc.** Không có lá thư đó thì bảy
+ngày là một cửa sổ chỉ tồn tại cho người tình cờ biết mình đang đứng trong nó: game gỡ
+im lặng, `.sb3` của bé xoá im lặng. Thư đi từ `adminRemoveGame`, ngoài transaction và
+nuốt lỗi — việc gỡ đã ghi xong, mail trượt là chậm chứ không phải sai, còn ném lỗi ở đó
+thì admin thấy đỏ cho một việc đã làm xong và sẽ bấm lại.
+
+Link trỏ thẳng player origin theo hash, đúng cái URL mà nút "Tải file .sb3 gốc" ở trang
+game vẫn dùng và `/dieu-khoan` đã nói công khai — thư **không mở thêm quyền gì**, nó chỉ
+nói địa chỉ cho người sở hữu trước khi địa chỉ đó biến mất.
+
+Đường gỡ thứ hai — chấp nhận một khiếu nại bản quyền — cũng báo hạn, nhưng **cố ý không
+kèm link**: game vừa bị kết luận là có nội dung của người khác, nên tự tay gửi đi một
+link tải chính nội dung đó là quyết định của bên vận hành chứ không phải của code. Phụ
+huynh trả lời thư để lấy lại. File vẫn nằm ở URL cũ, đây không phải chặn đường ai.
+
+Ngày in trong thư là ngày `removedAt + N`, còn job dọn chạy lúc 4:00 và so theo mốc
+`now - N ngày` — nên game gỡ lúc 15:10 ngày 5/9 thật ra bị xoá rạng sáng 13/9 chứ không
+phải 12/9 như thư ghi. Lệch về phía **thừa thời gian cho phụ huynh**, đúng hướng cần
+lệch nếu phải lệch.
 
 Cột `Game.removedAt` bấm giờ cho hạn này, và nó **về `null` khi cho hiện lại** — không
 thì game được cho hiện lại vẫn mang hạn cũ và bị xoá lúc đang chạy bình thường. Game

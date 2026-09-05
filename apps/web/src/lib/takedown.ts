@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AuthError } from './auth';
 import { prisma } from './db';
 import { appOrigin, sendMail } from './mail';
-import { communityStatus } from './moderation';
+import { communityStatus, hanXoaHan, ngayVi } from './moderation';
 import { operator, TAKEDOWN_SLA_WORKING_DAYS } from './operator';
 import {
   MAX_CLAIMANT_EMAIL_LENGTH,
@@ -394,6 +394,8 @@ export async function adminResolveTakedown(
   }
 
   const game = request.game;
+  /* Một mốc duy nhất cho cả hàng DB lẫn hạn in trong thư báo phụ huynh. */
+  const goLuc = new Date();
   let restored = false;
   /** Mức được hiện lại tới. Cần riêng vì "đã hiện lại" và "hiện lại tới đâu" khác nhau. */
   let restoredTo: 'PUBLISHED' | 'LIMITED' | 'HIDDEN' | null = null;
@@ -406,7 +408,7 @@ export async function adminResolveTakedown(
            REMOVED — đây và `adminRemoveGame` — không thì game gỡ theo đường bản
            quyền nằm lại mãi, và cái đó hỏng im lặng: hàng đợi vẫn sạch, chỉ có việc
            dọn là không bao giờ tới lượt nó. */
-        data: { status: 'REMOVED', removedAt: new Date() },
+        data: { status: 'REMOVED', removedAt: goLuc },
       });
       // Game đã gỡ hẳn thì mọi báo cáo đang mở về nó cũng hết việc.
       await tx.report.updateMany({
@@ -502,6 +504,23 @@ export async function adminResolveTakedown(
             '',
             'Đây là chuyện rất hay gặp và không có nghĩa là bé làm gì sai về đạo đức —',
             'nhưng game đăng lên KidoGame cần là do chính bé làm ra.',
+            '',
+            /*
+             * NÓI RA HẠN XOÁ, NHƯNG KHÔNG KÈM LINK TẢI — khác cố ý với lá thư của
+             * `adminRemoveGame`, và đây là chỗ đáng đọc kỹ trước khi "cho đồng bộ".
+             *
+             * Giống nhau ở chỗ: hai đường đều dẫn tới REMOVED, và bảy ngày sau job
+             * dọn xoá file gốc như nhau — nên phụ huynh ở đường này cũng phải biết
+             * mình còn bao nhiêu ngày, im lặng thì file mất mà không ai được báo.
+             *
+             * Khác nhau ở chỗ: game này vừa bị kết luận là có nội dung của người
+             * khác. Chủ động gửi đi một link tải chính nội dung đó, sau khi đã nhận
+             * thông báo và đã công nhận nó đúng, là việc mà bên vận hành phải tự
+             * quyết chứ không phải để cho code quyết. File vẫn nằm ở URL theo hash
+             * như cũ, nên đây không phải là chặn đường ai — chỉ là không tự tay đưa.
+             */
+            `Bản gốc của bé còn được giữ tới ngày ${ngayVi(hanXoaHan(goLuc))}, sau đó xoá hẳn.`,
+            'Nếu bé chưa giữ bản .sb3 trên máy và muốn lấy lại, trả lời thư này trước ngày đó.',
             '',
             `Điều khoản: ${appOrigin()}/dieu-khoan`,
           ].join('\n')

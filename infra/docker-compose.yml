@@ -114,6 +114,12 @@ services:
       # đầy đủ, còn `:?` sẽ chặn cả stack không khởi động được vì một dòng chữ.
       OPERATOR_NAME: ${OPERATOR_NAME:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      # Cùng lý do như hai service backup và prune, nhưng hệ quả ở đây là thứ NGƯỜI
+      # DÙNG đọc: mọi ngày tháng của app đều do container này định dạng. Không có
+      # dòng này thì nó chạy UTC, và mốc nào rơi sau 17:00 giờ ta bị in lùi một ngày
+      # — kể cả hạn "sau ngày này thì file gốc của bé mất hẳn" trong thư báo gỡ game
+      # và trong khu quản trị. Lệch một ngày ở đó không phải chuyện hiển thị.
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     volumes:
       # Ghi được: đây là tiến trình nhận upload và đóng gói game.
       - storage:/srv/storage

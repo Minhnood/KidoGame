@@ -34,7 +34,7 @@ import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
+import { batBuocMailLog, choMailToi, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const ADMIN = process.env.ADMIN_ORIGIN ?? 'http://admin.localhost:3000';
@@ -204,6 +204,38 @@ const admin = await adminCtx.newPage();
   );
   const chuHan = (await han.count()) > 0 ? await han.innerText() : '';
   check('Khu quản trị hiện hạn xoá hẳn của game đã gỡ', /còn \d+ ngày/.test(chuHan), chuHan);
+
+  /*
+   * THƯ BÁO PHỤ HUYNH, KÈM LINK TẢI FILE GỐC.
+   *
+   * Đây là phép kiểm cho cái đắt nhất của cả cơ chế này: bảy ngày nữa file `.sb3`
+   * của một đứa trẻ bị xoá không lấy lại được, và phụ huynh chỉ kịp cứu nếu họ BIẾT.
+   * Đường hỏng thì im hoàn toàn — game vẫn gỡ đúng, hạn vẫn chạy đúng, chỉ có lá thư
+   * là không bao giờ tới, và không ai phát hiện ra cho tới lúc file đã mất.
+   *
+   * Ba phép, ba thứ khác nhau, vì thư tới mà thiếu link thì cũng vô dụng như không
+   * có thư:
+   *  1. thư có tới đúng hòm thư của phụ huynh không,
+   *  2. trong thư có ĐÚNG hash của file game này không (không phải một link chung
+   *     chung, cũng không phải hash của game khác),
+   *  3. có nói ra một cái NGÀY không — "sẽ bị xoá" mà không kèm ngày thì phụ huynh
+   *     không biết mình còn bao lâu.
+   */
+  const sha = sql(`select "sb3Sha256" from "Game" where id = '${GAME_GO}'`);
+  check(
+    'Gỡ hẳn thì phụ huynh nhận được thư báo',
+    await choMailToi(MAIL_LOG, PARENT_EMAIL, /đã bị gỡ khỏi KidoGame/i),
+    PARENT_EMAIL
+  );
+  check(
+    'Thư có link tải đúng file .sb3 gốc của game vừa gỡ',
+    /^[0-9a-f]{64}$/.test(sha) && (await choMailToi(MAIL_LOG, PARENT_EMAIL, new RegExp(sha))),
+    sha.slice(0, 12)
+  );
+  check(
+    'Thư nói rõ ngày file gốc bị xoá hẳn',
+    await choMailToi(MAIL_LOG, PARENT_EMAIL, /XOÁ HẲN NGÀY \d{1,2}\/\d{1,2}\/\d{4}/)
+  );
 }
 
 // ---------- Chạy khô: game vừa gỡ KHÔNG được coi là quá hạn ----------
