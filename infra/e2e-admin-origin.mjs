@@ -204,6 +204,50 @@ console.log('\n── Server action quản trị chỉ nghe cookie quản trị 
 }
 
 // ---------------------------------------------------------------------------
+// 5. Khung của site không chảy sang khu quản trị
+// ---------------------------------------------------------------------------
+console.log('\n── Khu quản trị không mặc khung của site ───────────────────');
+{
+  /*
+   * 390px, tức khổ điện thoại — bề rộng DUY NHẤT mà nền chuyển sắc bật (dưới
+   * 1280px). Đo ở khổ mặc định thì cả hai khu đều "không có dải" và phép kiểm xanh
+   * vĩnh viễn mà không canh gì cả.
+   *
+   * Ba thứ trang trí khác (link nhảy, tranh hai bên lề, thanh điều hướng) đã tự
+   * vắng mặt vì chúng là phần tử React trong nhánh `!laKhuQuanTri`. Nền chuyển sắc
+   * là thứ khác hẳn: một luật CSS toàn cục bám vào <html>, thẻ dùng chung của mọi
+   * trang. Nó rò được vì nó không đi qua nhánh nào cả.
+   */
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 800 } });
+  const p = await ctx.newPage();
+  await dangNhapAdmin(p);
+
+  const doNen = () =>
+    p.evaluate(() => {
+      const s = getComputedStyle(document.documentElement);
+      return { khu: document.documentElement.dataset.khu ?? null, dai: s.backgroundImage !== 'none' };
+    });
+
+  const admin = await doNen();
+  check('Khu quản trị: <html> mang data-khu="quan-tri"', admin.khu === 'quan-tri', `khu=${admin.khu}`);
+  check('Khu quản trị ở 390px: nền là màu đặc, không có dải trời-đất', admin.dai === false);
+
+  await p.goto(`${ADMIN}/admin/loi`, { waitUntil: 'load' });
+  check('Tab Lỗi ở 390px: cũng không có dải', (await doNen()).dai === false);
+
+  /*
+   * Chiều ngược lại, và nó không thừa: mọi phép trên đây cũng xanh y hệt nếu ai đó
+   * xoá hẳn nền chuyển sắc khỏi `globals.css`. Phép này bắt trường hợp đó — cùng bề
+   * rộng, cùng phiên, chỉ khác khu.
+   */
+  await p.goto(`${APP}/`, { waitUntil: 'load' });
+  const site = await doNen();
+  check('Trang site ở cùng 390px thì VẪN có dải', site.dai === true, `khu=${site.khu}`);
+
+  await ctx.close();
+}
+
+// ---------------------------------------------------------------------------
 console.log('\n── Kết ─────────────────────────────────────────────────────');
 console.log(`${pass}/${pass + fail} kiểm tra đạt`);
 await browser.close();

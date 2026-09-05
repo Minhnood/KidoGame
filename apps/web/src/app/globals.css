@@ -449,7 +449,20 @@ html {
  * cặp không có thật trên giao diện thì không phải hàng rào, chỉ là một ràng buộc bịa.
  */
 @media (width < 80rem) {
-  html {
+  /*
+   * `:not([data-khu='quan-tri'])` — KHU QUẢN TRỊ KHÔNG CÓ TRỜI VÀ ĐẤT.
+   *
+   * Ba lớp trang trí kia tự vắng mặt vì chúng là phần tử React nằm trong nhánh
+   * `!laKhuQuanTri` của `layout.tsx`. Luật này thì không tự biết gì cả: nó bám vào
+   * <html>, mà <html> là thẻ dùng chung của mọi trang — nên nó là chỗ DUY NHẤT mà
+   * quyết định "khu quản trị tự dựng khung riêng" bị rò. Trang quản trị là bảng dài
+   * và nút khó đảo, đặt nó trên một dải trời-xuống-đất thì mỗi hàng trong hàng chờ
+   * lại nằm trên một sắc nền khác nhau.
+   *
+   * Lọc ở đây chứ không dựng luật riêng cho `/admin`: thêm một luật là thêm một cặp
+   * màu phải đo, mà cặp ấy chỉ tồn tại để hoàn tác một cặp khác.
+   */
+  html:not([data-khu='quan-tri']) {
     /*
      * `background-image`, KHÔNG phải `background`. Cú pháp gộp reset luôn
      * `background-color` về trong suốt, và mất màu đặc ấy thì hai thứ vỡ: dải nào

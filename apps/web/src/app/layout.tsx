@@ -89,7 +89,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
      * An toàn vì cờ này chỉ có tác dụng MỘT CẤP — riêng thẻ <html> — nên nó không
      * che được lệch hydration ở bất cứ đâu khác trong cây.
      */
-    <html lang="vi" className={nunito.variable} suppressHydrationWarning>
+    /*
+     * `data-khu` là cách DUY NHẤT để CSS biết mình đang ở khu nào.
+     *
+     * Ba thứ trang trí bên dưới tắt được vì chúng là phần tử React nằm trong nhánh
+     * `!laKhuQuanTri`. Nền chuyển sắc thì không: nó là một luật CSS toàn cục đặt
+     * trên chính thẻ <html> này (xem `globals.css`), mà thẻ <html> có mặt ở mọi
+     * trang — nên nếu không đánh dấu, trời và đất chảy thẳng vào khu quản trị, đúng
+     * chỗ vừa nói là không dùng khung của site.
+     *
+     * Đánh dấu khu quản trị chứ không đánh dấu khu site, và CSS thì lọc bằng
+     * `:not()`. Hướng này chịu được trang mới: một trang site thêm sau sẽ tự có nền
+     * mà không ai phải nhớ thêm thuộc tính, còn quên đánh dấu một trang quản trị thì
+     * hỏng là hỏng ở chỗ nhìn thấy ngay, không phải một trang trắng trơn im lặng.
+     *
+     * `undefined` chứ không phải chuỗi rỗng: chuỗi rỗng vẫn khớp `[data-khu]` nếu
+     * sau này có ai viết luật theo dạng đó.
+     */
+    <html
+      lang="vi"
+      className={nunito.variable}
+      data-khu={laKhuQuanTri ? 'quan-tri' : undefined}
+      suppressHydrationWarning
+    >
       {/* flex-col + min-h-screen: giữ chân trang ở đáy màn hình cả trên trang ngắn. */}
       <body className="flex min-h-screen flex-col font-[family-name:var(--font-nunito)] antialiased">
         {/*
