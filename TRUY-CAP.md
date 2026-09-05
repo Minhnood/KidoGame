@@ -75,6 +75,21 @@ Triệu chứng đánh lừa: game PUBLISHED sạch báo cáo không có trong d
 Thêm `&trang=<n>` để sang trang, `&be=<childId>` để chỉ xem game của một bé (đi từ tab
 Tài khoản sang là tự có).
 
+**Tài khoản** — `/admin/tai-khoan?loc=<...>`, kết hợp được với `&q=<chuỗi tìm>`
+(hai thứ AND với nhau, bộ lọc **không** thay thế ô tìm kiếm)
+
+| `loc` | Nghĩa |
+|---|---|
+| `tat-ca` | **mặc định** |
+| `chua-xac-minh` | phụ huynh chưa xác minh email |
+| `co-be-khoa` | gia đình có ít nhất một bé đang khoá |
+| `chua-co-be` | chưa tạo tài khoản cho bé nào |
+| `quan-tri` | có `isAdmin` |
+
+Bốn cái này **không rời nhau** — chưa xác minh thì gần như chắc chắn cũng chưa có bé,
+vì chưa xác minh thì không tạo được tài khoản cho con. Khác với bộ lọc của tab Kiểm
+duyệt, vốn là một phân hoạch.
+
 **Lỗi** — `/admin/loi?loc=chua-xu-ly` (mặc định) · `tat-ca` · `da-xu-ly`
 
 ---
