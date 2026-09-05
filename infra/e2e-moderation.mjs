@@ -640,6 +640,48 @@ const verifiedCtxs = [];
     theoTenBe.split('\n')[0]
   );
 
+  /*
+   * BỘ LỌC PHẢI AND VỚI Ô TÌM KIẾM, KHÔNG THAY THẾ NÓ — và đây là hướng hỏng im lặng
+   * nhất của cả trang: nếu bộ lọc ghi đè chuỗi tìm kiếm thì danh sách VẪN có kết quả,
+   * chỉ là của những gia đình khác. Người trực đọc dòng đầu tưởng là nhà mình vừa tìm
+   * rồi bấm khoá tài khoản một đứa trẻ không liên quan.
+   *
+   * Phụ huynh của bài này ĐÃ xác minh email, nên "khớp email đó" và "chưa xác minh"
+   * không thể cùng đúng: đúng một cặp điều kiện để phân biệt AND với OR.
+   */
+  await admin.goto(
+    `${ADMIN}/admin/tai-khoan?q=${encodeURIComponent(OWNER_EMAIL)}&loc=chua-xac-minh`,
+    { waitUntil: 'networkidle' }
+  );
+  check(
+    'Bộ lọc AND với ô tìm kiếm, không thay thế nó',
+    (await admin.locator('[data-testid=tk-gia-dinh]').count()) === 0
+  );
+
+  await admin.goto(`${ADMIN}/admin/tai-khoan?loc=chua-xac-minh`, { waitUntil: 'networkidle' });
+  const chuaXacMinh = await admin.locator('[data-testid=tk-gia-dinh]').allInnerTexts();
+  check(
+    'Lọc "chưa xác minh" không lẫn nhà đã xác minh',
+    chuaXacMinh.every((t) => !t.includes('Đã xác minh')),
+    `${chuaXacMinh.length} nhà`
+  );
+
+  /* Bấm một cái chip mà mất chuỗi đang tìm thì danh sách đổi vì lý do người dùng không
+     hề ra lệnh, và đổi im lặng vì cả hai thứ đều nằm trong URL. */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${encodeURIComponent(OWNER_EMAIL)}`, {
+    waitUntil: 'networkidle',
+  });
+  const hrefChip = await admin
+    .locator('[data-testid=tk-filter-chua-co-be]')
+    .getAttribute('href');
+  check(
+    'Chip bộ lọc mang theo chuỗi đang tìm',
+    (hrefChip ?? '').includes('loc=chua-co-be') &&
+      (hrefChip ?? '').includes(encodeURIComponent(OWNER_EMAIL)),
+    hrefChip ?? ''
+  );
+
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
   const dongBe = admin.locator('[data-testid=tk-be]').first();
   const linkGame = await dongBe.locator('a').first().getAttribute('href');
   await admin.goto(`${ADMIN}${linkGame}`, { waitUntil: 'networkidle' });

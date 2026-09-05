@@ -14,6 +14,47 @@ export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 20;
 
+/*
+ * BỘ LỌC — bốn câu hỏi mà người trực thật sự hỏi, không phải bốn lát cắt cho đủ bộ.
+ *
+ * KHÁC HẲN bộ lọc của tab Kiểm duyệt ở một điểm phải nói rõ, không thì có ngày ai đó
+ * "sửa cho nhất quán": bốn bộ lọc trạng thái bên kia là một PHÂN HOẠCH — rời nhau và
+ * cộng lại đúng bằng "Tất cả", có phép kiểm canh bằng phép cộng. Bốn cái ở đây thì
+ * KHÔNG, và cố ý không: một phụ huynh chưa xác minh email gần như chắc chắn cũng chưa
+ * có bé nào (chưa xác minh thì không tạo được tài khoản cho con), nên hai nhóm chồng
+ * lên nhau gần hết. Ép chúng rời nhau là bịa ra ranh giới không có thật, còn cộng
+ * chúng lại rồi so với tổng là so một phép tính vô nghĩa.
+ *
+ * `co-be-khoa` lọc theo GIA ĐÌNH có ít nhất một bé đang khoá, không lọc ra từng bé:
+ * đơn vị của cả trang này là gia đình, và một dòng bé hiện lên mà không có phụ huynh
+ * đứng cạnh thì thiếu đúng người phải liên lạc khi cần giải thích việc khoá.
+ */
+const FILTERS = [
+  { key: 'tat-ca', label: 'Tất cả' },
+  { key: 'chua-xac-minh', label: 'Chưa xác minh email' },
+  { key: 'co-be-khoa', label: 'Có bé đang khoá' },
+  { key: 'chua-co-be', label: 'Chưa có bé nào' },
+  { key: 'quan-tri', label: 'Có quyền quản trị' },
+] as const;
+
+type FilterKey = (typeof FILTERS)[number]['key'];
+
+function whereFor(filter: FilterKey): Prisma.ParentWhereInput {
+  switch (filter) {
+    case 'chua-xac-minh':
+      return { emailVerifiedAt: null };
+    case 'co-be-khoa':
+      return { children: { some: { isLocked: true } } };
+    case 'chua-co-be':
+      return { children: { none: {} } };
+    case 'quan-tri':
+      return { isAdmin: true };
+    case 'tat-ca':
+    default:
+      return {};
+  }
+}
+
 /**
  * Tra cứu tài khoản.
  *
@@ -35,7 +76,7 @@ const PAGE_SIZE = 20;
 export default async function AdminTaiKhoanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; trang?: string }>;
+  searchParams: Promise<{ q?: string; loc?: string; trang?: string }>;
 }) {
   /* Kiểm quyền ở TỪNG trang, không chỉ ở layout — xem chú thích trong `admin/layout.tsx`. */
   const admin = await getAdmin();
@@ -43,6 +84,10 @@ export default async function AdminTaiKhoanPage({
 
   const sp = await searchParams;
   const q = (sp.q ?? '').trim();
+  /* `loc`, cùng tên tham số với hai tab kia. Gõ tên khác ở trang thứ ba là để dành sẵn
+     một lần gõ nhầm cho chính mình về sau, mà gõ nhầm thì Next im lặng bỏ qua và trang
+     lặng lẽ về bộ lọc mặc định. */
+  const filter = (FILTERS.find((f) => f.key === sp.loc)?.key ?? 'tat-ca') as FilterKey;
   const page = Math.max(1, Number(sp.trang ?? '1') || 1);
 
   /*
@@ -58,7 +103,7 @@ export default async function AdminTaiKhoanPage({
    * không tìm ra kết quả trông hệt như "không có tài khoản này" — kết luận sai đúng
    * vào lúc đang cần trả lời một phụ huynh.
    */
-  const where: Prisma.ParentWhereInput = q
+  const timKiem: Prisma.ParentWhereInput | null = q
     ? {
         OR: [
           { email: { contains: q, mode: 'insensitive' } },
@@ -74,7 +119,18 @@ export default async function AdminTaiKhoanPage({
           },
         ],
       }
-    : {};
+    : null;
+
+  /*
+   * Ô tìm kiếm và bộ lọc phải AND với nhau, không thay thế nhau.
+   *
+   * Đây là chỗ dễ làm sai theo hướng im lặng: nếu bộ lọc ghi đè ô tìm kiếm thì gõ một
+   * email rồi bấm "Có bé đang khoá" sẽ ra CẢ những gia đình khác, và trông vẫn hợp lý
+   * — một danh sách có kết quả. Người trực sẽ đọc dòng đầu tiên tưởng là nhà mình vừa
+   * tìm, rồi bấm khoá tài khoản một đứa trẻ không liên quan.
+   */
+  const loc = whereFor(filter);
+  const where: Prisma.ParentWhereInput = timKiem ? { AND: [timKiem, loc] } : loc;
 
   const [total, parents] = await Promise.all([
     prisma.parent.count({ where }),
@@ -111,6 +167,18 @@ export default async function AdminTaiKhoanPage({
 
   const soTrang = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  /* Mọi link rời trang này đều phải mang theo CẢ HAI: bộ lọc và chuỗi tìm kiếm. Rơi
+     một cái là danh sách đổi mà người dùng không ra lệnh gì — và đổi im lặng, vì cả
+     hai đều nằm trong URL chứ không có gì trên màn hình kêu lên. */
+  const linkTo = (f: FilterKey, chuoi: string, p = 1) => {
+    const params = new URLSearchParams();
+    if (f !== 'tat-ca') params.set('loc', f);
+    if (chuoi) params.set('q', chuoi);
+    if (p > 1) params.set('trang', String(p));
+    const s = params.toString();
+    return `/admin/tai-khoan${s ? `?${s}` : ''}`;
+  };
+
   return (
     <>
       <PageTitle
@@ -124,7 +192,11 @@ export default async function AdminTaiKhoanPage({
         người khác, cần bấm nút back, và cần tải lại trang sau khi khoá một tài khoản
         mà vẫn đang ở đúng chỗ vừa tìm.
       */}
-      <form method="get" className="mb-5 flex flex-wrap items-center gap-2" data-testid="tk-form">
+      <form method="get" className="mb-4 flex flex-wrap items-center gap-2" data-testid="tk-form">
+        {/* Bộ lọc đang chọn phải đi theo lần tìm kiếm mới. Không có dòng này thì gõ
+            một email rồi bấm Tìm là bộ lọc lặng lẽ nhảy về "Tất cả", và danh sách đổi
+            vì một lý do người dùng không hề ra lệnh. */}
+        {filter !== 'tat-ca' && <input type="hidden" name="loc" value={filter} />}
         <label htmlFor="q" className="sr-only">
           Email phụ huynh hoặc tên đăng nhập của bé
         </label>
@@ -140,19 +212,47 @@ export default async function AdminTaiKhoanPage({
           Tìm
         </Button>
         {q && (
-          <Link href="/admin/tai-khoan" className="min-h-touch inline-flex items-center px-2">
+          <Link href={linkTo(filter, '')} className="min-h-touch inline-flex items-center px-2">
             Xoá tìm kiếm
           </Link>
         )}
       </form>
 
+      <nav className="mb-5 flex flex-wrap gap-2" data-testid="tk-filters">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={linkTo(f.key, q)}
+            data-testid={`tk-filter-${f.key}`}
+            aria-current={f.key === filter ? 'page' : undefined}
+            className={[
+              'min-h-touch inline-flex items-center rounded-full border px-4 font-semibold no-underline',
+              f.key === filter
+                ? 'border-transparent bg-accent text-chrome'
+                : 'border-border bg-surface text-ink hover:bg-bg',
+            ].join(' ')}
+          >
+            {f.label}
+          </Link>
+        ))}
+      </nav>
+
       <p className="mb-5 text-ink-soft" data-testid="tk-tong">
-        {q ? `${total} gia đình khớp "${q}"` : `${total} phụ huynh`} · trang {page}/{soTrang}
+        {q ? `${total} gia đình khớp "${q}"` : `${total} phụ huynh`}
+        {filter !== 'tat-ca' && ` · lọc: ${FILTERS.find((f) => f.key === filter)?.label}`} · trang{' '}
+        {page}/{soTrang}
       </p>
 
       {parents.length === 0 ? (
         <EmptyState>
           Không có tài khoản nào khớp. Thử một phần của email, hoặc tên đăng nhập của bé.
+          {filter !== 'tat-ca' && (
+            <>
+              {' '}
+              Đang lọc <strong>{FILTERS.find((f) => f.key === filter)?.label}</strong> —{' '}
+              <Link href={linkTo('tat-ca', q)}>bỏ lọc</Link> thì có thể ra.
+            </>
+          )}
         </EmptyState>
       ) : (
         <ul className="list-none space-y-4 p-0">
@@ -225,16 +325,8 @@ export default async function AdminTaiKhoanPage({
 
       {soTrang > 1 && (
         <nav className="mt-6 flex flex-wrap items-center gap-3" data-testid="tk-trang">
-          {page > 1 && (
-            <Link href={`/admin/tai-khoan?q=${encodeURIComponent(q)}&trang=${page - 1}`}>
-              ← Trang trước
-            </Link>
-          )}
-          {page < soTrang && (
-            <Link href={`/admin/tai-khoan?q=${encodeURIComponent(q)}&trang=${page + 1}`}>
-              Trang sau →
-            </Link>
-          )}
+          {page > 1 && <Link href={linkTo(filter, q, page - 1)}>← Trang trước</Link>}
+          {page < soTrang && <Link href={linkTo(filter, q, page + 1)}>Trang sau →</Link>}
         </nav>
       )}
 
