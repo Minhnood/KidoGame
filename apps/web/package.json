@@ -15,6 +15,7 @@
     "db:repackage": "tsx prisma/repackage.ts",
     "db:prune-removed": "tsx prisma/prune-removed.ts",
     "db:xoa-gia-dinh": "tsx prisma/xoa-gia-dinh.ts",
+    "db:nhac-viec-co-han": "tsx prisma/nhac-viec-co-han.ts",
     "storage:prune": "tsx prisma/prune-storage.ts",
     "db:make-admin": "tsx prisma/make-admin.ts",
     "typecheck": "tsc --noEmit",

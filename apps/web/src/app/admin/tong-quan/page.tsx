@@ -5,15 +5,13 @@ import { appOrigin } from '@/lib/mail';
 import { getAdmin } from '@/lib/session';
 import { actionLabel, hanXoaHan, NGAY_GIU_GAME_DA_GO, ngayVi } from '@/lib/moderation';
 import { slaDueAt, TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
+import { coViecGap, docViecCoHan, SAP_XOA_NGAY } from '@/lib/viec-co-han';
 import { MAX_UNRESOLVED_GROUPS } from '@/lib/error-log';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
 
 export const dynamic = 'force-dynamic';
-
-/** Số ngày trước hạn xoá hẳn thì coi là "cửa sổ cứu sắp đóng". */
-const SAP_XOA_NGAY = 2;
 
 /**
  * "12 phút trước" thay cho "13:41:07 5/9/2026".
@@ -179,21 +177,17 @@ export default async function AdminTongQuanPage() {
   const truoc7ngay = new Date(bayGio.getTime() - 7 * 86400_000);
 
   /*
-   * Mốc so cho hạn xoá hẳn, tính NGƯỢC từ `removedAt` chứ không xuôi từ hôm nay:
-   * game quá hạn là game có `removedAt` cũ hơn N ngày. Cùng phép so mà
-   * `prisma/prune-removed.ts` dùng, nên hai chỗ không thể lệch nhau.
+   * Việc CÓ HẠN đọc từ `lib/viec-co-han.ts`, không tính tại chỗ.
+   *
+   * Thư nhắc hằng đêm đọc đúng hàm này. Hai chỗ tự tính "cái nào sắp muộn" là hai câu
+   * trả lời khác nhau cho cùng một câu hỏi, và lệch ở đây nghĩa là bảng này nói không
+   * có việc gấp trong khi lá thư nói có ba.
    */
-  const mocQuaHan = new Date(bayGio.getTime() - NGAY_GIU_GAME_DA_GO * 86400_000);
-  const mocSapXoa = new Date(
-    bayGio.getTime() - (NGAY_GIU_GAME_DA_GO - SAP_XOA_NGAY) * 86400_000
-  );
+  const viec = await docViecCoHan(bayGio);
 
   const [
-    goDangMo,
     canXem,
     heThongTuSiet,
-    sapXoa,
-    quaHanXoa,
     chuaBamDongHo,
     nhomLoiChuaXuLy,
     loiMoi24h,
@@ -204,22 +198,10 @@ export default async function AdminTongQuanPage() {
     phuHuynhChuaXacMinh,
     baoCaoMoi24h,
   ] = await Promise.all([
-    /* Lấy cả `createdAt` chứ không chỉ đếm: hạn SLA tính theo ngày làm việc nên phải
-       tính từng dòng, không có phép so nào trong SQL làm được việc đó. Hàng đợi này
-       cố ý không phân trang và luôn nhỏ — nếu nó lớn thì bản thân điều đó đã là sự cố. */
-    prisma.takedownRequest.findMany({
-      where: { status: 'OPEN' },
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    }),
     prisma.game.count({
       where: { OR: [{ reportCount: { gt: 0 } }, { status: { not: 'PUBLISHED' } }] },
     }),
     prisma.game.count({ where: { status: { in: ['LIMITED', 'HIDDEN'] } } }),
-    prisma.game.count({
-      where: { status: 'REMOVED', removedAt: { not: null, lte: mocSapXoa, gt: mocQuaHan } },
-    }),
-    prisma.game.count({ where: { status: 'REMOVED', removedAt: { lte: mocQuaHan } } }),
     /* Game đã gỡ mà `removedAt` còn null: gỡ từ TRƯỚC khi có cột này. Job dọn không
        xoá chúng, nó bấm đồng hồ ở lượt chạy kế tiếp — nên đây không phải việc của
        người trực, chỉ là một con số để không ai hoảng khi thấy nó ở bộ lọc "Đã gỡ". */
@@ -234,13 +216,16 @@ export default async function AdminTongQuanPage() {
     prisma.report.count({ where: { createdAt: { gte: truoc24h } } }),
   ]);
 
-  const goQuaHan = goDangMo.filter((r) => slaDueAt(r.createdAt) < bayGio).length;
+  const goQuaHan = viec.goQuaHan.length;
+  const sapXoa = viec.gameSapXoa.length;
+  const quaHanXoa = viec.gameQuaHanXoa.length;
+  const soGoDangMo = viec.goQuaHan.length + viec.goSapToiHan.length + viec.goConHan.length;
   /* "Gấp" = đúng ba ô có vạch đỏ ở nhóm đầu. Cố ý KHÔNG gồm "cần xem" hay "báo cáo
      mới": hai cái đó gần như luôn khác 0 ở một trang đang sống, nên gộp vào là dòng
      yên tĩnh dưới đây không bao giờ hiện, mà một câu không bao giờ hiện thì bằng
      không có. */
-  const khongCoViecGap = goQuaHan === 0 && sapXoa + quaHanXoa === 0 && nhomLoiChuaXuLy === 0;
-  const cuNhat = goDangMo[0]?.createdAt ?? null;
+  const khongCoViecGap = !coViecGap(viec) && nhomLoiChuaXuLy === 0;
+  const cuNhat = viec.cuNhat;
 
   /*
    * Vết kiểm duyệt gần nhất. Truy vấn RIÊNG, không nhét vào `Promise.all` ở trên:
@@ -334,7 +319,7 @@ export default async function AdminTongQuanPage() {
           so={goQuaHan}
           nhan="Yêu cầu gỡ quá hạn"
           phu={
-            goDangMo.length === 0
+            soGoDangMo === 0
               ? 'Hàng đợi bản quyền đang rỗng'
               : cuNhat
                 ? `Cũ nhất nhận ngày ${ngayVi(cuNhat)}, hạn ${ngayVi(slaDueAt(cuNhat))}`
@@ -345,7 +330,7 @@ export default async function AdminTongQuanPage() {
         />
         <O
           testId="o-go-dang-mo"
-          so={goDangMo.length}
+          so={soGoDangMo}
           nhan="Yêu cầu gỡ đang mở"
           phu={`Hạn trả lời ${TAKEDOWN_SLA_WORKING_DAYS} ngày làm việc mỗi yêu cầu`}
           href="/admin"

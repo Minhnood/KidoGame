@@ -61,6 +61,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 28, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
@@ -72,9 +73,10 @@ một hàng — nó sẽ đỏ ở phép kiểm "gửi trùng không tạo thêm
 mode violation`, một triệu chứng không chỉ về đâu cả. Dọn bằng:
 `delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';`
 
-**`e2e-xoa-gia-dinh.mjs` cũng phải chạy SAU `e2e-takedown.mjs`**, cùng lý do: nó dựng một
-yêu cầu gỡ bản quyền để kiểm rằng hồ sơ ấy sống sót qua việc xoá cả gia đình. Bài này tự
-dọn hàng đó ở cuối, kể cả nhà thứ ba nó dựng chỉ để làm mục tiêu cho một phép kiểm.
+**`e2e-xoa-gia-dinh.mjs` và `e2e-nhac-viec.mjs` cũng phải chạy SAU `e2e-takedown.mjs`**,
+cùng lý do: cả hai dựng yêu cầu gỡ bản quyền trong hàng đợi. Bài đầu kiểm rằng hồ sơ ấy
+sống sót qua việc xoá cả gia đình; bài sau dựng ba yêu cầu rồi kéo `createdAt` về quá khứ
+để có đủ cả ba nhóm hạn. Cả hai tự dọn ở cuối.
 
 **`e2e-admin-origin.mjs` cần `ADMIN_ORIGIN` được đặt cho CẢ server dev**, không chỉ cho
 bộ kiểm. Không đặt thì middleware giữ hành vi cũ — `/admin` nằm trên app origin — và bộ
@@ -927,8 +929,9 @@ devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoả
 
 ### Dọn định kỳ — game đã gỡ thì một tuần sau xoá hẳn
 
-Service thứ năm, `prune`. Game bị admin gỡ (`REMOVED`) nằm lại **7 ngày** rồi mới bị
-xoá thật: hàng trong DB, HTML đã đóng gói, ảnh bìa, và cả `.sb3` gốc của bé.
+Service thứ năm, `prune`. Ba bước mỗi đêm: **nhắc việc có hạn** (mục *Nhắc việc có hạn* bên dưới), rồi xoá
+hẳn game đã gỡ quá hạn, rồi dọn file. Game bị admin gỡ (`REMOVED`) nằm lại **7 ngày** rồi
+mới bị xoá thật: hàng trong DB, HTML đã đóng gói, ảnh bìa, và cả `.sb3` gốc của bé.
 
 Là một service trong stack chứ không phải cron trên host, **cùng lý do như `backup`**:
 một việc phải có người nhớ chạy thì đúng bằng không có. "Xoá sau 7 ngày" mà không ai
@@ -942,13 +945,16 @@ tồn tại**: bản sao lưu của chính ngày xoá vẫn còn chứa game, n�
 Dùng lại image của `web`, không build image thứ sáu: hai script dọn là `tsx` + Prisma
 CLI, mà image `web` cố ý giữ devDependencies.
 
-Chạy tay một lượt (mặc định của cả hai script là **chạy khô**, phải thêm `--xoa`):
+Chạy tay một lượt (mặc định của cả ba script là **xem trước**, phải thêm `--xoa` /
+`--gui`):
 
 ```bash
 cd infra
 docker compose run --rm --entrypoint bash prune -c \
   "pnpm --filter @kidogame/web db:prune-removed"      # xem trước, không xoá gì
-docker compose run --rm --entrypoint bash prune -c "bash /prune.sh once"   # xoá thật
+docker compose run --rm --entrypoint bash prune -c \
+  "pnpm --filter @kidogame/web db:nhac-viec-co-han"   # xem thư nhắc, không gửi
+docker compose run --rm --entrypoint bash prune -c "bash /prune.sh once"   # làm thật
 docker compose logs prune --tail 20                   # xem nó hẹn giờ lúc mấy giờ
 ```
 
@@ -1058,6 +1064,57 @@ không bỏ qua được; `e2e-xoa-gia-dinh` có một phép kiểm đổi lén 
 chỗ đó.
 
 Bộ kiểm: `node infra/e2e-xoa-gia-dinh.mjs` (44).
+
+### Nhắc việc có hạn — bước 1/3 của service `prune`
+
+Hạn trả lời một yêu cầu gỡ bản quyền là `TAKEDOWN_SLA_WORKING_DAYS` ngày làm việc, và nó
+được hứa **công khai** ở cả `/dieu-khoan` lẫn `/bao-cao-ban-quyen`. Trước bản này, cơ chế
+duy nhất để giữ được hạn đó là **có người tự mở tab Tổng quan mỗi ngày**: ô đếm "quá hạn"
+nằm sẵn trên bảng, nhưng không có gì đẩy tin ra ngoài. Một nghĩa vụ có hạn phụ thuộc vào
+việc ai đó nhớ mở một trang web — cùng loại lỗ hổng với "quyền xoá tài khoản chỉ thực
+hiện được bằng psql".
+
+```bash
+pnpm --filter @kidogame/web db:nhac-viec-co-han          # chỉ IN
+pnpm --filter @kidogame/web db:nhac-viec-co-han --gui    # gửi thật
+```
+
+Số liệu đọc từ **`src/lib/viec-co-han.ts`**, đúng hàm mà tab Tổng quan gọi. Trước khi
+tách, trang tự tính `goQuaHan` bằng một dòng filter riêng — hai chỗ tự tính cùng một cái
+hạn là hai câu trả lời, và cách hỏng của nó không đỏ ở đâu cả: bảng nói không có việc
+gấp, thư nói có ba, cả hai đều tự tin. `e2e-nhac-viec` có một phép kiểm so trực tiếp hai
+con số đó, và nó đã được chứng minh bắt được lỗi (cho trang đếm lệch một → đỏ).
+
+Bốn điều cố ý:
+
+1. **Không gửi gì khi không có việc.** Một lá thư "0 việc quá hạn" mỗi đêm là lá thư
+   người ta học cách lọc đi trong hai tuần, rồi lọc luôn cái đêm nó khác. Im lặng là tín
+   hiệu, không phải thiếu sót.
+2. **Nhắc trước khi muộn**, không chỉ khi đã muộn (`NHAC_TRUOC_NGAY_LAM_VIEC = 1`). Một
+   lá thư nói "đã quá hạn" là thư báo tin đã mất; hạn hứa công khai thì giá trị nằm ở
+   chỗ giữ được nó.
+3. **Từ chối gửi khi chưa khai `OPERATOR_*`** — mặc định là `chua-cau-hinh@kidogame.local`
+   và gửi vào đó trông như đã gửi xong trong log. Chốt đứng **sau** phần in, nên danh
+   sách việc đang chờ vẫn ra log: chặn cái không làm được, không chặn cái làm được.
+4. **Mặc định chỉ in**, `--gui` mới gửi. Cùng khuôn hai script dọn.
+
+Thư chỉ mang việc **có đồng hồ chạy**: yêu cầu gỡ quá hạn / sắp tới hạn, và game đã gỡ
+sắp bị xoá hẳn. "Game bị hệ thống tự siết mà chưa ai xem" cố ý **không** có trong thư dù
+cũng là việc đang chờ — nó không có hạn nào, và thêm việc thường vào là biến lá thư thành
+bản tin hằng ngày.
+
+**Bước nhắc đi TRƯỚC hai bước dọn trong `prune.sh`**, và thứ tự đó là nội dung: lá thư
+nói ra cả nhóm "đã quá hạn giữ, sẽ bị xoá trong lượt dọn ngay sau thư này". Dọn trước thì
+nhóm ấy đã bằng 0 lúc thư được soạn, và cái duy nhất còn nói được là "đêm nay không có
+gì" — đúng vào đêm vừa xoá vĩnh viễn công của một đứa trẻ.
+
+Service `prune` **chưa từng có đường gửi mail** cho tới bước này, nên `docker-compose.yml`
+được thêm cả nhóm `SMTP_*`/`RESEND_API_KEY`/`MAIL_FROM`/`OPERATOR_*`/`ADMIN_ORIGIN` — giữ
+khớp với service `web`, vì hai chỗ khai lệch nhau thì app gửi được mail còn thư nhắc thì
+không, mà cả hai đều báo là ổn. Thiếu nhóm đó ở production thì `sendMail` **ném lỗi** và
+bước nhắc đỏ trong log, đúng hướng hỏng cần; ở dev nó chỉ in ra stdout rồi coi như xong.
+
+Bộ kiểm: `node infra/e2e-nhac-viec.mjs` (28).
 
 ## Cấu trúc
 

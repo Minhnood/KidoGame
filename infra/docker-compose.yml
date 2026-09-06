@@ -242,8 +242,32 @@ services:
       # Hạn giữ game đã gỡ, tính bằng ngày. Rỗng = dùng mặc định 7 trong
       # `NGAY_GIU_GAME_DA_GO`. Đặt 0 hoặc chữ thì script TỪ CHỐI chạy, không xoá gì.
       REMOVED_KEEP_DAYS: ${REMOVED_KEEP_DAYS:-}
+      # ĐƯỜNG GỬI MAIL, và service này chưa từng có nó cho tới khi bước nhắc việc
+      # được thêm vào prune.sh.
+      #
+      # Không có nhóm biến này thì `sendMail` ở production NÉM LỖI, nên bước nhắc
+      # đỏ trong log mỗi đêm — đó là hướng hỏng đúng. Hướng sai là im lặng: ở dev
+      # (NODE_ENV khác production) `sendMail` chỉ in lá thư ra stdout rồi coi như
+      # xong, tức thư nhắc "đã gửi" vào log của container và không ai nhận.
+      #
+      # Cùng danh sách với service `web`, và phải giữ khớp: hai chỗ khai lệch nhau
+      # thì app gửi được mail còn thư nhắc thì không, mà cả hai đều báo là ổn.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
+      # Địa chỉ NHẬN thư nhắc. Chưa khai thì bước nhắc từ chối gửi và nói rõ lý do,
+      # thay vì gửi vào `chua-cau-hinh@kidogame.local`.
+      OPERATOR_NAME: ${OPERATOR_NAME:-}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      # Để link trong thư nhắc bấm được. Rỗng thì thư in đường dẫn trần, không đoán.
+      ADMIN_ORIGIN: ${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}
       # Cùng lý do như service backup: thiếu dòng này thì container chạy UTC và
-      # PRUNE_HOUR=4 nghĩa là 11 giờ trưa giờ Việt Nam.
+      # PRUNE_HOUR=4 nghĩa là 11 giờ trưa giờ Việt Nam. Ở đây còn một hệ quả nữa:
+      # hạn SLA đếm theo ngày làm việc, nên lệch múi giờ đổi cả kết quả đếm.
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     volumes:
       - ./prune.sh:/prune.sh:ro

@@ -125,6 +125,20 @@ Bốn điều phải biết trước khi bấm:
 - **Việc này không đảo lại được.** Không có bảy ngày như game bị gỡ. Đường cứu duy nhất
   là bản sao lưu.
 
+### Xem thư nhắc việc có hạn
+
+```bash
+pnpm --filter @kidogame/web db:nhac-viec-co-han          # chỉ IN, không gửi
+pnpm --filter @kidogame/web db:nhac-viec-co-han --gui    # gửi tới OPERATOR_EMAIL
+```
+
+Service `prune` chạy lệnh này với `--gui` mỗi đêm, **trước** hai bước dọn. Nó chỉ gửi
+khi có việc có hạn — yêu cầu gỡ quá hạn hoặc sắp tới hạn, game đã gỡ sắp bị xoá hẳn.
+**Đêm nào im lặng là đêm không có gì**, đó là thiết kế chứ không phải hỏng.
+
+Chưa khai `OPERATOR_NAME`/`OPERATOR_EMAIL` thì nó **từ chối gửi** và thoát khác 0 —
+vẫn in đầy đủ danh sách việc ra log trước khi từ chối.
+
 ---
 
 ## 4. Tài khoản
@@ -162,7 +176,8 @@ delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';
 delete from "Parent" where email like 'e2e-%';
 delete from "Game" where title = 'Game kiểm thử e2e'
    or title like 'Game hạn giữ %' or title like 'Game bản quyền %'
-   or title like 'Game kiểm duyệt %' or title like 'Game xoá nhà %';
+   or title like 'Game kiểm duyệt %' or title like 'Game xoá nhà %'
+   or title like 'Game nhắc việc %';
 delete from "ErrorLog" where message like 'Loi kiem thu %';
 -- `LoginAttempt` không có khoá ngoại nên hai lệnh trên KHÔNG kéo theo nó.
 delete from "LoginAttempt" where identity like '%e2e-%';
