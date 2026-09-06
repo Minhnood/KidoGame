@@ -12,6 +12,11 @@ import { DatCuoiTrang, Hoa } from './site-decor';
 const LINKS = [
   { href: '/dieu-khoan', label: 'Điều khoản sử dụng' },
   { href: '/bao-cao-ban-quyen', label: 'Yêu cầu gỡ bản quyền' },
+  /* Báo lỗi phải ở CHÂN TRANG, không chỉ ở trang lỗi. Trang lỗi chỉ hiện khi React
+     ném exception; phần lớn chỗ hỏng người dùng gặp thì không ném gì cả — "bấm gửi mà
+     không có gì xảy ra", "thư xác minh không tới" — nên nếu đường vào chỉ nằm trên
+     trang lỗi thì đúng những báo cáo giá trị nhất không có cửa nào. */
+  { href: '/bao-loi', label: 'Báo lỗi' },
 ];
 
 /**

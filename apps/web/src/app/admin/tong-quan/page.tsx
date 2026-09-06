@@ -195,6 +195,8 @@ export default async function AdminTongQuanPage() {
     heThongTuSiet,
     theoTrangThai,
     gameGanDay,
+    loiGanDay,
+    baoLoiChuaXuLy,
     chuaBamDongHo,
     nhomLoiChuaXuLy,
     loiMoi24h,
@@ -223,6 +225,15 @@ export default async function AdminTongQuanPage() {
       where: { createdAt: { gte: truoc14ngay } },
       select: { createdAt: true },
     }),
+    /* Lỗi cho biểu đồ thứ ba. Đọc `firstSeenAt` chứ KHÔNG `lastSeenAt`: câu hỏi là
+       "hôm đó có lỗi MỚI nào xuất hiện không", còn `lastSeenAt` nhảy sang hôm nay mỗi
+       lần một lỗi cũ lặp lại — dùng nó thì mọi lỗi cũ dồn hết vào cột cuối và biểu đồ
+       nói rằng hôm nay vừa sinh ra hai chục lỗi mới. */
+    prisma.errorLog.findMany({
+      where: { firstSeenAt: { gte: truoc14ngay } },
+      select: { firstSeenAt: true, count: true },
+    }),
+    prisma.bugReport.count({ where: { resolvedAt: null } }),
     /* Game đã gỡ mà `removedAt` còn null: gỡ từ TRƯỚC khi có cột này. Job dọn không
        xoá chúng, nó bấm đồng hồ ở lượt chạy kế tiếp — nên đây không phải việc của
        người trực, chỉ là một con số để không ai hoảng khi thấy nó ở bộ lọc "Đã gỡ". */
@@ -302,12 +313,34 @@ export default async function AdminTongQuanPage() {
     const k = khoaNgay(g.createdAt);
     demTheoNgay.set(k, (demTheoNgay.get(k) ?? 0) + 1);
   }
+  /*
+   * Cột lỗi đếm SỐ LẦN (`count`), không đếm số nhóm.
+   *
+   * Một nhóm là một loại lỗi; số lần là số người thật đã gặp nó. Đếm nhóm thì một lỗi
+   * nổ vào mặt hai trăm người trông y như một lỗi xảy ra đúng một lần — mà khoảng cách
+   * giữa hai điều đó là toàn bộ lý do biểu đồ này tồn tại.
+   */
+  const demLoiTheoNgay = new Map<string, number>();
+  for (const l of loiGanDay) {
+    const k = khoaNgay(l.firstSeenAt);
+    demLoiTheoNgay.set(k, (demLoiTheoNgay.get(k) ?? 0) + l.count);
+  }
+
   const ngayCot = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(bayGio.getFullYear(), bayGio.getMonth(), bayGio.getDate() - (13 - i));
     return {
       nhan: `${d.getDate()}/${d.getMonth() + 1}`,
       nhanDay: d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' }),
       so: demTheoNgay.get(khoaNgay(d)) ?? 0,
+    };
+  });
+
+  const ngayCotLoi = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(bayGio.getFullYear(), bayGio.getMonth(), bayGio.getDate() - (13 - i));
+    return {
+      nhan: `${d.getDate()}/${d.getMonth() + 1}`,
+      nhanDay: d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' }),
+      so: demLoiTheoNgay.get(khoaNgay(d)) ?? 0,
     };
   });
 
@@ -453,6 +486,18 @@ export default async function AdminTongQuanPage() {
         đẹp. Hai nhóm sau ("Nội dung chờ người xem", "Số nền") thì không có hạn nào, và
         chúng đọc dễ hơn khi đã biết hệ thống đang ở hình dạng nào.
       */}
+      {/*
+        HAI cột, và thẻ thứ ba chiếm CẢ hàng dưới. Đã thử hai cách kia và đo cả hai:
+
+        · ba cột (443px mỗi thẻ) — vành donut không còn chỗ nằm cạnh chú giải nên nó
+          xuống dòng, thẻ cao 553px, và grid kéo hai thẻ bên cạnh cao theo, để lại hai
+          khoảng trắng lớn;
+        · hai cột mà thẻ thứ ba không span — nó nằm một mình bên trái và bỏ trống hẳn
+          một ô bên phải, đọc như thiếu mất một hình.
+
+        Cách này thì hàng trên có vành nằm cạnh chú giải (thẻ ~320px), hàng dưới là
+        biểu đồ lỗi rộng cả trang với hình canh giữa. Không thẻ nào trống rỗng.
+      */}
       <section className="mb-9 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className={`p-5 ${MAT_THE}`} data-testid="tq-donut">
           <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game đang ở đâu</h2>
@@ -472,6 +517,41 @@ export default async function AdminTongQuanPage() {
             Mười bốn ngày gần nhất, kể cả ngày không có game nào.
           </p>
           <CotTheoNgay ngay={ngayCot} nhanBang="Số game đăng mỗi ngày, 14 ngày gần nhất" />
+        </div>
+
+        {/*
+          Thẻ thứ ba: LỖI. Dùng lại đúng component cột của thẻ bên trên chứ không vẽ
+          hình thứ ba — hai chuỗi đếm theo ngày thì cùng một hình, và người trực học
+          cách đọc nó một lần.
+
+          CỐ Ý KHÔNG gộp hai chuỗi vào một biểu đồ. Chúng cùng đơn vị ("mỗi ngày bao
+          nhiêu cái") nhưng khác bậc độ lớn hoàn toàn — vài game một ngày so với có thể
+          hàng trăm lượt lỗi — nên chung một trục thì chuỗi nhỏ dán bẹt xuống đáy, còn
+          hai trục là thứ không bao giờ được làm: tỉ lệ giữa hai thang là tuỳ ý, nên
+          biểu đồ tự bịa ra một mối tương quan không có trong dữ liệu.
+        */}
+        <div className={`p-5 xl:col-span-2 ${MAT_THE}`} data-testid="tq-cot-loi">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Lỗi mỗi ngày</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Số LẦN người dùng gặp lỗi, tính theo ngày lỗi xuất hiện lần đầu.{' '}
+            <Link href="/admin/loi">Mở tab Lỗi</Link>
+            {baoLoiChuaXuLy > 0 && (
+              <>
+                {' — '}
+                <strong className="text-danger">
+                  {baoLoiChuaXuLy} báo lỗi của người dùng đang chờ
+                </strong>
+              </>
+            )}
+          </p>
+          {/* Mười bốn ngày không lỗi thì nói THẲNG đó là tin tốt, không vẽ một khung
+              trắng cao ba trăm pixel: một biểu đồ rỗng và một biểu đồ chưa tải xong
+              trông giống nhau. Cùng luật đã dùng cho donut khi chưa có game nào. */}
+          {ngayCotLoi.every((d) => d.so === 0) ? (
+            <p className="text-ink-soft">Không có lỗi nào trong 14 ngày qua. Đây là tin tốt.</p>
+          ) : (
+            <CotTheoNgay ngay={ngayCotLoi} nhanBang="Số lần gặp lỗi mỗi ngày, 14 ngày gần nhất" />
+          )}
         </div>
       </section>
 

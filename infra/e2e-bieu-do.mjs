@@ -52,7 +52,38 @@ await p.goto(`${ADMIN}/admin/tong-quan`, { waitUntil: 'networkidle' });
 
 const donut = p.locator('[data-testid=tq-donut]');
 const cot = p.locator('[data-testid=tq-cot]');
-check('Tab Tổng quan có cả hai biểu đồ', (await donut.count()) === 1 && (await cot.count()) === 1);
+const cotLoi = p.locator('[data-testid=tq-cot-loi]');
+check(
+  'Tab Tổng quan có cả ba biểu đồ',
+  (await donut.count()) === 1 && (await cot.count()) === 1 && (await cotLoi.count()) === 1
+);
+
+// ---------- Thẻ lỗi: hình khi có dữ liệu, câu chữ khi không ----------
+{
+  /*
+   * TƯƠNG ĐƯƠNG HAI CHIỀU, cùng khuôn với dòng "Không có việc gấp": thẻ vẽ hình KHI VÀ
+   * CHỈ KHI 14 ngày qua có ít nhất một lượt lỗi. Một biểu đồ rỗng và một biểu đồ chưa
+   * tải xong trông giống nhau, nên trạng thái rỗng phải nói ra bằng chữ; và nếu câu chữ
+   * ấy hiện trong lúc CÓ lỗi thì người trực kết luận ngược hẳn sự thật.
+   */
+  const coHinh = (await cotLoi.locator('svg').count()) === 1;
+  const noiTinTot = /Không có lỗi nào trong 14 ngày qua/.test(await cotLoi.innerText());
+  check(
+    'Thẻ lỗi: có hình khi và chỉ khi không nói "không có lỗi nào"',
+    coHinh !== noiTinTot,
+    coHinh ? 'đang vẽ hình' : 'đang nói trạng thái rỗng'
+  );
+  /* Đếm SỐ LẦN chứ không số nhóm — một lỗi nổ vào mặt hai trăm người phải khác hẳn
+     một lỗi xảy ra đúng một lần, và khoảng cách đó là lý do biểu đồ này tồn tại. */
+  check(
+    'Thẻ lỗi nói rõ đang đếm số LẦN, không phải số nhóm',
+    /Số LẦN người dùng gặp lỗi/.test(await cotLoi.innerText())
+  );
+  check(
+    'Thẻ lỗi có đường sang tab Lỗi',
+    (await cotLoi.locator('a[href="/admin/loi"]').count()) === 1
+  );
+}
 
 // ---------- Donut ----------
 const dongCG = donut.locator('ul li');

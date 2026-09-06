@@ -63,7 +63,8 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cầ
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 28, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 24, DỌN THẬT
-node infra/e2e-bieu-do.mjs                                         # 18, không cần gì thêm
+node infra/e2e-bieu-do.mjs                                         # 21, không cần gì thêm
+node infra/e2e-bao-loi.mjs                                         # 29, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
@@ -94,6 +95,12 @@ này báo đỏ đúng. Trong `apps/web/.env` đã có sẵn `ADMIN_ORIGIN="http
 `admin.localhost` phân giải về 127.0.0.1 giống `localhost` nhưng là một **host khác**, nên
 cách ly cookie ở dev là thật chứ không phải mô phỏng: cookie phiên quản trị host-only trên
 `admin.localhost` không đi tới `localhost`, và ngược lại.
+
+**`e2e-errorlog.mjs` cần bảng `ErrorLog` KHÔNG rỗng.** Bước cuối của nó phải tạo được
+hơn 30 nhóm để có trang thứ hai, nhưng trần chống lụt là 30 báo cáo/phút — nên chạy nó
+trên một bảng vừa bị dọn sạch thì chỉ ghi được ~27 nhóm và hai phép kiểm phân trang đỏ,
+với thông điệp `27 nhóm` không chỉ về phía nguyên nhân. Chạy lại lượt thứ hai là xanh,
+vì lúc đó bảng đã có sẵn nhóm của lượt trước.
 
 **`e2e-errorlog.mjs` phải đặt CUỐI, và cách nhau ít nhất một phút giữa hai lượt.** Bước
 cuối của nó bắn hơn 40 báo cáo để kiểm trần 30 báo cáo/phút; chạy hai lượt liền nhau thì
@@ -1230,8 +1237,77 @@ Chú giải donut chịu **cùng luật với mười hai ô số**: mỗi dòng
 bằng đúng danh sách nó dẫn tới. Bộ kiểm canh cả luật đó, cả phép cộng bốn múi bằng số ở
 giữa vành — và đã chứng minh cả hai bắt được lỗi (cho một trạng thái đếm 0 → hai phép đỏ).
 
-Bộ kiểm: `node infra/e2e-bieu-do.mjs` (18). Nó **không dựng dữ liệu** — chỉ đọc những gì
+Bộ kiểm: `node infra/e2e-bieu-do.mjs` (21). Nó **không dựng dữ liệu** — chỉ đọc những gì
 đang có và tự so các con số với nhau, nên không cần dọn và đúng ở mọi trạng thái DB.
+
+Thẻ thứ ba là **Lỗi mỗi ngày**, dùng lại đúng component cột của thẻ bên trên chứ không vẽ
+hình thứ ba: hai chuỗi đếm theo ngày thì cùng một hình, và người trực học cách đọc nó một
+lần. Nó đếm **số LẦN** (`ErrorLog.count`), không đếm số nhóm — một lỗi nổ vào mặt hai
+trăm người phải khác hẳn một lỗi xảy ra đúng một lần, và khoảng cách đó là lý do biểu đồ
+này tồn tại. Đọc `firstSeenAt` chứ không `lastSeenAt`: `lastSeenAt` nhảy sang hôm nay mỗi
+lần một lỗi cũ lặp lại, nên dùng nó thì mọi lỗi cũ dồn vào cột cuối và hình nói rằng hôm
+nay vừa sinh ra hai chục lỗi mới.
+
+**Hai chuỗi cố ý KHÔNG gộp vào một biểu đồ.** Cùng đơn vị ("mỗi ngày bao nhiêu cái")
+nhưng khác bậc độ lớn hoàn toàn — vài game một ngày so với có thể hàng trăm lượt lỗi —
+nên chung một trục thì chuỗi nhỏ dán bẹt xuống đáy, còn hai trục là thứ không bao giờ
+được làm: tỉ lệ giữa hai thang là tuỳ ý, nên biểu đồ tự bịa ra một tương quan không có
+trong dữ liệu.
+
+Bố cục: **hai cột, thẻ lỗi chiếm cả hàng dưới.** Đã thử và đo hai cách kia — ba cột
+(443px mỗi thẻ) thì vành donut không còn chỗ nằm cạnh chú giải nên nó xuống dòng, thẻ cao
+553px và grid kéo hai thẻ bên cạnh cao theo, để lại hai khoảng trắng lớn; hai cột mà thẻ
+thứ ba không span thì nó nằm một mình bên trái và bỏ trống hẳn một ô bên phải.
+
+## Người dùng tự báo lỗi — `/bao-loi`
+
+`app/error.tsx` từ trước đã nói với người gặp lỗi *"gửi kèm mã này giúp tìm ra nguyên nhân
+nhanh hơn nhiều"* — mà **không nói gửi ở đâu**, và không có chỗ nào để gửi. `/admin/loi`
+thì viết như thể luồng ấy tồn tại: *"Phụ huynh báo lỗi kèm mã thì tìm bằng…"*. Đường duy
+nhất là email đơn vị vận hành, còn là một địa chỉ `.local`. Cùng loại lỗ hổng với quyền
+xoá tài khoản: một câu hứa trên trang mà không có cơ chế đằng sau.
+
+**Và lỗi tự động không thay được đường này.** `ErrorLog` chỉ thấy những gì làm React ném
+exception; nó không bao giờ thấy "game của con tôi mở ra màn hình đen", "bấm gửi mà không
+có gì xảy ra", hay "thư xác minh không tới" — đúng những chỗ hỏng người dùng gặp nhiều
+nhất và máy không phát hiện được.
+
+**Bảng riêng `BugReport`, không dùng chung `ErrorLog`.** Hai thứ khác bản chất: `ErrorLog`
+gom nhóm theo `fingerprint` với cột `count` cho câu hỏi "lỗi nào xảy ra nhiều nhất"; bảng
+này là lời một người viết một lần — không gom được (hai người viết hai câu khác nhau về
+cùng một chỗ hỏng), `count` vô nghĩa, và nó có một thứ lỗi tự động không bao giờ có: một
+người đang chờ được trả lời.
+
+Đây là hộp nhận chữ do người ngoài gõ, ghi thẳng vào DB, **không cần đăng nhập** — cùng
+loại rủi ro với `error-log.ts` nên cùng bốn lớp chặn: cắt độ dài mọi trường; trần
+**5 báo cáo/IP/giờ** (theo GIỜ chứ không theo phút — người gõ tay không gửi ba mươi báo
+cáo một phút, nên một trần kiểu ấy chỉ mở cửa cho script); trần tổng **200** báo cáo chưa
+xử lý; và cắt query string khỏi đường dẫn, không lưu IP thô, không lưu user agent đầy đủ.
+
+Chạm trần tổng thì báo cáo mới bị từ chối **và người gửi được báo** — ngược hướng với lỗi
+tự động, nơi bỏ im lặng là đúng vì không có ai đứng chờ. Ở đây có một người vừa gõ xong
+một đoạn văn; để họ tưởng đã gửi được là tệ hơn nói thật rằng hộp thư đang đầy.
+
+Ô email **tuỳ chọn**, và rỗng là một câu trả lời hợp lệ: bắt điền email mới được báo lỗi
+thì người gặp lỗi ở đúng luồng đăng nhập sẽ bỏ đi. Kiểm email rất lỏng, cũng cố ý — từ
+chối một báo cáo vì địa chỉ gõ thiếu dấu chấm là đánh mất nội dung báo cáo để giữ một
+trường mà chính người gửi có thể bỏ trống.
+
+Đường vào: chân trang (mọi trang), trang lỗi (kèm `?ma=` và `?tu=` điền sẵn), và
+`/dieu-khoan`. **Chân trang là đường vào quan trọng nhất** — trang lỗi chỉ hiện khi React
+ném exception, nên nếu đường vào chỉ nằm ở đó thì đúng những báo cáo giá trị nhất không
+có cửa nào.
+
+Trong khu quản trị, phần **Người dùng báo** đứng TRÊN lỗi tự động ở tab Lỗi, và thứ tự đó
+là nội dung: đặt xuống dưới ba mươi nhóm lỗi tự động thì nó rơi khỏi màn hình đầu tiên
+đúng vào ngày có nhiều lỗi — tức đúng ngày người ta báo nhiều nhất. Phần này **không chịu
+ba bộ lọc** của trang (chúng nói về `ErrorLog`); cho chúng lọc cả hai danh sách thì "Đã
+xử lý" hiện một hàng đợi trống rỗng cạnh một danh sách lỗi cũ.
+
+Bộ kiểm: `node infra/e2e-bao-loi.mjs` (29). Nó đi hết đường — gửi ở site rồi mở khu quản
+trị tìm đúng chữ vừa gõ — và canh chốt email ở **hai tầng**: trình duyệt chặn trước
+(`type="email"`), rồi tắt `noValidate` để chứng minh server tự từ chối, vì một request
+nặn tay không đi qua trình duyệt nào cả.
 
 ## Cấu trúc
 

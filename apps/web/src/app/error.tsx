@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { Notice } from '@/components/notice';
 import { PageTitle } from '@/components/page';
@@ -41,6 +42,12 @@ export default function Error({
     reportError('boundary', error);
   }, [error]);
 
+  /* Đường dẫn để điền sẵn vào trang báo lỗi. `usePathname` chứ không `location.href`:
+     nó KHÔNG mang query string, và query string là chỗ token xác minh email nằm — một
+     link báo lỗi mang token đi là một token rò ra ngoài qua đúng cái form ta vừa mời
+     người dùng gửi. `ErrorLog.path` cắt query vì cùng lý do đó. */
+  const duongDan = usePathname();
+
   return (
     <>
       <PageTitle
@@ -64,12 +71,38 @@ export default function Error({
         </Link>
       </p>
 
-      {error.digest && (
-        <Notice tone="info">
-          Nếu báo lỗi cho chúng tôi, gửi kèm mã này giúp tìm ra nguyên nhân nhanh hơn nhiều:{' '}
-          <code className="font-bold">{error.digest}</code>
-        </Notice>
-      )}
+      {/*
+        LINK SANG CHỖ BÁO LỖI, mang theo mã và đường dẫn.
+
+        Câu "gửi kèm mã này" đã nằm ở đây từ trước, nhưng nó không nói gửi Ở ĐÂU — và
+        cho tới khi có `/bao-loi` thì thật ra không có chỗ nào để gửi. Một trang lỗi
+        bảo người dùng làm một việc không làm được là tệ hơn một trang lỗi im lặng.
+
+        Mã và đường dẫn đi theo query string chứ không bắt chép tay: người vừa gặp
+        trang lỗi đỏ sẽ không chép một chuỗi hex, nên bắt chép là cách chắc chắn nhất
+        để mã lỗi không bao giờ tới tay người sửa.
+      */}
+      <Notice tone="info">
+        {error.digest ? (
+          <>
+            Kể cho chúng tôi chỗ hỏng này ở{' '}
+            <Link href={`/bao-loi?ma=${encodeURIComponent(error.digest)}&tu=${encodeURIComponent(duongDan)}`} className="font-bold">
+              trang báo lỗi
+            </Link>{' '}
+            — mã lỗi đã điền sẵn giúp bạn. Mã đó là{' '}
+            <code className="font-bold">{error.digest}</code>, giúp tìm ra nguyên nhân nhanh hơn
+            nhiều.
+          </>
+        ) : (
+          <>
+            Kể cho chúng tôi chỗ hỏng này ở{' '}
+            <Link href={`/bao-loi?tu=${encodeURIComponent(duongDan)}`} className="font-bold">
+              trang báo lỗi
+            </Link>
+            . Lần này không có mã lỗi, nên bạn kể càng cụ thể càng dễ tìm.
+          </>
+        )}
+      </Notice>
     </>
   );
 }

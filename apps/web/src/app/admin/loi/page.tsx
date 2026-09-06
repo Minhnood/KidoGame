@@ -4,10 +4,15 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getAdmin } from '@/lib/session';
 import { MAX_UNRESOLVED_GROUPS, RETENTION_DAYS } from '@/lib/error-log';
+import { MAX_BAO_LOI_CHUA_XU_LY } from '@/lib/bao-loi';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
-import { ResolveAllErrorsButton, ResolveErrorButton } from './error-controls';
+import {
+  ResolveAllErrorsButton,
+  ResolveBugReportButton,
+  ResolveErrorButton,
+} from './error-controls';
 import { Pager } from '../pager';
 
 export const dynamic = 'force-dynamic';
@@ -88,16 +93,126 @@ export default async function AdminErrorsPage({
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const linkTo = (f: FilterKey, p: number) => `/admin/loi?loc=${f}${p > 1 ? `&trang=${p}` : ''}`;
 
+  /*
+   * BÁO LỖI DO NGƯỜI DÙNG GỬI — truy vấn riêng, danh sách riêng, KHÔNG phân trang.
+   *
+   * Không phân trang vì hàng đợi này phải nhỏ theo thiết kế: có trần
+   * `MAX_BAO_LOI_CHUA_XU_LY`, và nếu nó lớn tới mức cần phân trang thì bản thân điều
+   * đó đã là sự cố cần xử lý chứ không phải cần thêm nút sang trang. Cùng lý lẽ với
+   * hàng đợi yêu cầu gỡ bản quyền trên tab Tổng quan.
+   *
+   * Lấy 50 dòng chưa xử lý: đủ để thấy hết trong mọi trạng thái bình thường, và có
+   * trần nên không bao giờ kéo về cả bảng.
+   */
+  const [baoLoiChuaXuLy, soBaoLoiChuaXuLy] = await Promise.all([
+    prisma.bugReport.findMany({
+      where: { resolvedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    }),
+    prisma.bugReport.count({ where: { resolvedAt: null } }),
+  ]);
+
   return (
     <>
+      {/*
+        Lead phải nói về CẢ HAI phần của trang, và câu cũ thì không.
+        Nó viết "gom theo nhóm… không lưu nội dung form" — đúng với lỗi tự động, sai
+        hẳn với phần người dùng báo: phần đó KHÔNG gom nhóm (hai người viết hai câu
+        khác nhau về cùng một chỗ hỏng) và nó CÓ lưu chữ người ta gõ, kể cả email nếu
+        họ để lại. Một câu mô tả sai về nửa trang là loại sai tệ nhất ở đây, vì nó nói
+        về việc giữ dữ liệu của người dùng.
+      */}
       <PageTitle
         title="Lỗi người dùng gặp"
-        lead={`Gom theo nhóm, giữ ${RETENTION_DAYS} ngày. Không lưu IP, không lưu user agent đầy đủ, không lưu nội dung form.`}
+        lead={`Hai nguồn: người dùng tự báo, và lỗi máy tự ghi (gom theo nhóm, giữ ${RETENTION_DAYS} ngày). Cả hai đều không lưu IP thô và không lưu user agent đầy đủ.`}
       />
 
       {/* Link "về trang kiểm duyệt" từng ở đây, đã BỎ: thanh tab của khu quản trị
           làm đúng việc đó, ở mọi trang, và làm rõ hơn — nó còn cho biết trang kia
           đang có bao nhiêu việc chờ. */}
+
+      {/*
+        NGƯỜI DÙNG BÁO đứng TRÊN lỗi tự động, và thứ tự đó là nội dung.
+        Lỗi tự động là máy nói với ta; ở đây có một người thật đã ngồi gõ một đoạn văn
+        và có thể đang chờ được trả lời. Đặt xuống dưới ba mươi nhóm lỗi tự động thì nó
+        rơi khỏi màn hình đầu tiên đúng vào ngày có nhiều lỗi — tức đúng ngày người ta
+        báo nhiều nhất.
+
+        Phần này KHÔNG chịu bộ lọc của trang: ba bộ lọc bên dưới nói về `ErrorLog`. Cho
+        chúng lọc cả hai danh sách nghĩa là "Đã xử lý" hiện một hàng đợi trống rỗng và
+        một danh sách lỗi cũ, hai thứ chẳng liên quan gì nhau.
+      */}
+      <section className="mt-5" data-testid="bug-reports">
+        <div className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-border pb-2">
+          <h2 className="text-lg font-extrabold tracking-tight">Người dùng báo</h2>
+          <p className="text-sm text-ink-soft">
+            {soBaoLoiChuaXuLy === 0
+              ? 'chưa có báo lỗi nào đang chờ'
+              : `${soBaoLoiChuaXuLy} đang chờ${soBaoLoiChuaXuLy >= MAX_BAO_LOI_CHUA_XU_LY ? ' — ĐÃ ĐẦY, báo lỗi mới đang bị từ chối' : ''}`}
+          </p>
+        </div>
+
+        {baoLoiChuaXuLy.length === 0 ? (
+          <p className="text-ink-soft">
+            Không có báo lỗi nào đang chờ. Người dùng gửi ở{' '}
+            <code className="font-bold">/bao-loi</code>.
+          </p>
+        ) : (
+          <ul className="list-none space-y-3 p-0">
+            {baoLoiChuaXuLy.map((b) => (
+              <li
+                key={b.id}
+                className={`border-l-4 border-l-accent p-4 ${MAT_THE}`}
+                data-testid="bug-report"
+              >
+                {/* Mô tả LÀ nội dung của dòng này, nên nó đứng đầu và giữ nguyên dấu
+                    xuống dòng người ta gõ. `break-words` vì người dùng dán được cả
+                    một URL dài không có khoảng trắng nào. */}
+                <p className="whitespace-pre-wrap break-words" data-testid="bug-mo-ta">
+                  {b.moTa}
+                </p>
+                <p className="mt-2 text-sm text-ink-soft">
+                  {b.createdAt.toLocaleString('vi-VN')}
+                  {b.duongDan && (
+                    <>
+                      {' · '}
+                      <span data-testid="bug-duong-dan">{b.duongDan}</span>
+                    </>
+                  )}
+                  {b.browser && ` · ${b.browser}`}
+                </p>
+                {b.maLoi && (
+                  <p className="mt-1 text-sm" data-testid="bug-ma-loi">
+                    Mã lỗi: <code className="font-bold">{b.maLoi}</code>
+                  </p>
+                )}
+                {/* Email hiện thành link `mailto:` — người trực trả lời ngay từ đây.
+                    Không có email thì nói THẲNG là không trả lời được, chứ không để
+                    trống: một dòng trống đọc như "chưa đọc kỹ" chứ không như "người
+                    gửi đã chọn không để lại địa chỉ". */}
+                <p className="mt-1 text-sm" data-testid="bug-email">
+                  {b.emailLienHe ? (
+                    <a href={`mailto:${b.emailLienHe}`} className="font-semibold">
+                      {b.emailLienHe}
+                    </a>
+                  ) : (
+                    <span className="text-ink-soft">Không để lại email — không trả lời được.</span>
+                  )}
+                </p>
+                <p className="mt-3">
+                  <ResolveBugReportButton id={b.id} resolved={false} />
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="mb-3 mt-9 flex flex-wrap items-baseline gap-x-3 border-b border-border pb-2">
+        <h2 className="text-lg font-extrabold tracking-tight">Lỗi tự động ghi lại</h2>
+        <p className="text-sm text-ink-soft">máy tự phát hiện, gom theo nhóm</p>
+      </div>
 
       {unresolved >= MAX_UNRESOLVED_GROUPS && (
         <Notice tone="error">

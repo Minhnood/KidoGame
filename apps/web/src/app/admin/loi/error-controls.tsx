@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { Button } from '@/components/button';
 import {
+  adminDatBaoLoiDaXuLyAction,
   adminResolveAllErrorsAction,
   adminSetErrorResolvedAction,
   type FormState,
@@ -48,6 +49,37 @@ export function ResolveAllErrorsButton({ count }: { count: number }) {
     <form action={formAction} className="mt-4 flex flex-wrap items-center gap-2">
       <Button type="submit" variant="primary" disabled={pending} data-testid="error-resolve-all">
         {pending ? 'Đang lưu…' : `Đánh dấu cả ${count} nhóm là đã xử lý`}
+      </Button>
+      {state && 'error' in state && (
+        <span className="text-sm text-danger" role="alert">
+          {state.error}
+        </span>
+      )}
+    </form>
+  );
+}
+
+/**
+ * Đánh dấu một báo lỗi CỦA NGƯỜI DÙNG đã xử lý. Một nhịp, cùng lý do với nút trên.
+ *
+ * Nhãn khác nút của lỗi tự động, cố ý: ở đó "đã xử lý" nghĩa là đã sửa hoặc đã bỏ
+ * qua, còn ở đây có một người đang chờ, nên câu đúng là "đã trả lời". Một hàng đợi mà
+ * hai loại việc dùng chung một từ thì người trực không phân biệt được mình vừa làm gì.
+ */
+export function ResolveBugReportButton({ id, resolved }: { id: string; resolved: boolean }) {
+  const [state, formAction, pending] = useActionState(adminDatBaoLoiDaXuLyAction, null);
+
+  return (
+    <form action={formAction} className="inline-flex flex-wrap items-center gap-2">
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="daXuLy" value={String(!resolved)} />
+      <Button
+        type="submit"
+        variant="ghost"
+        disabled={pending}
+        data-testid={resolved ? 'bug-reopen' : 'bug-resolve'}
+      >
+        {pending ? 'Đang lưu…' : resolved ? 'Mở lại' : 'Đã trả lời'}
       </Button>
       {state && 'error' in state && (
         <span className="text-sm text-danger" role="alert">

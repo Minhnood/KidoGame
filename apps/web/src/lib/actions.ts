@@ -32,6 +32,7 @@ import {
 } from './moderation';
 import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
 import { resolveAllErrors, setErrorResolved } from './error-log';
+import { BaoLoiError, datBaoLoiDaXuLy, guiBaoLoi } from './bao-loi';
 import { xoaGiaDinh } from './xoa-gia-dinh';
 import { rateKey, tooMany } from './rate-limit';
 import { xoaHopThuDev } from './mail';
@@ -615,6 +616,54 @@ export async function adminXoaGiaDinhAction(_prev: FormState, form: FormData): P
     await xoaGiaDinh(adminId, email, String(form.get('note') ?? '').trim());
   });
   revalidatePath('/admin/tai-khoan');
+  revalidatePath('/admin/tong-quan');
+  return state;
+}
+
+/**
+ * Người dùng gửi một báo lỗi. KHÔNG đòi đăng nhập, cố ý.
+ *
+ * Cùng lý lẽ với `reportGameAction`: người gặp lỗi thường đang gặp nó ở ĐÚNG luồng
+ * đăng nhập hoặc đăng ký, nên bắt đăng nhập trước khi báo là đóng cửa với đúng nhóm
+ * báo cáo giá trị nhất. Chống lạm dụng bằng trần theo IP và trần tổng, xem
+ * `lib/bao-loi.ts`.
+ *
+ * Đọc IP và user agent Ở ĐÂY chứ không nhận từ form: hai thứ đó phải do server tự
+ * thấy, không thì chúng chỉ là hai ô chữ nữa mà người gửi tự điền.
+ */
+export async function guiBaoLoiAction(_prev: FormState, form: FormData): Promise<FormState> {
+  return run(async () => {
+    const h = await headers();
+    try {
+      await guiBaoLoi({
+        moTa: String(form.get('moTa') ?? ''),
+        maLoi: String(form.get('maLoi') ?? ''),
+        duongDan: String(form.get('duongDan') ?? ''),
+        emailLienHe: String(form.get('emailLienHe') ?? ''),
+        ip: await clientIp(),
+        userAgent: h.get('user-agent'),
+      });
+    } catch (e) {
+      /* `BaoLoiError` mang câu chữ viết cho người gửi đọc, nên nó phải hiện nguyên
+         văn trên form. `run` chỉ chuyển `AuthError` như vậy, nên bọc lại — không thì
+         "hộp báo lỗi đang đầy" rơi xuống câu chung "Có lỗi xảy ra, thử lại sau nhé",
+         đúng lúc người dùng cần biết vì sao. */
+      if (e instanceof BaoLoiError) throw new AuthError(e.message);
+      throw e;
+    }
+  });
+}
+
+/** Admin đánh dấu một báo lỗi của người dùng đã xử lý, hoặc mở lại. */
+export async function adminDatBaoLoiDaXuLyAction(
+  _prev: FormState,
+  form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    await requireAdmin();
+    await datBaoLoiDaXuLy(String(form.get('id') ?? ''), String(form.get('daXuLy')) === 'true');
+  });
+  revalidatePath('/admin/loi');
   revalidatePath('/admin/tong-quan');
   return state;
 }

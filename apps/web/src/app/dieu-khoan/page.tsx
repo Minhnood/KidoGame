@@ -265,7 +265,12 @@ export default function TermsPage() {
       <Section id="lien-he" title="Liên hệ">
         <p>KidoGame do {op.name} vận hành.</p>
         <p data-testid="terms-operator-email">
-          Mọi việc — khiếu nại, xoá dữ liệu, báo lỗi, hỏi về điều khoản:{' '}
+          Riêng <strong>lỗi kỹ thuật</strong> thì nhanh nhất là{' '}
+          <Link href="/bao-loi" className="font-semibold underline">
+            trang báo lỗi
+          </Link>{' '}
+          — nó vào thẳng hàng đợi của người trực, không phải hòm thư. Còn mọi việc khác —
+          khiếu nại, xoá dữ liệu, hỏi về điều khoản:{' '}
           <a href={`mailto:${op.email}`} className="font-semibold underline">
             {op.email}
           </a>

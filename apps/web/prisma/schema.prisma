@@ -452,3 +452,52 @@ model ErrorLog {
   @@index([resolvedAt, lastSeenAt])
   @@index([lastSeenAt])
 }
+
+/// Người dùng tự viết ra để báo một chỗ hỏng.
+///
+/// VÌ SAO KHÔNG DÙNG CHUNG `ErrorLog`. Hai thứ khác bản chất, và trộn chúng làm hỏng
+/// cả hai. `ErrorLog` là lỗi do MÁY sinh: gom nhóm theo `fingerprint`, cột `count`
+/// tăng mỗi lần lỗi lặp lại, và câu hỏi của người trực là "lỗi nào xảy ra nhiều
+/// nhất". Bảng này là lời một NGƯỜI viết một lần: không gom được (hai người viết hai
+/// câu khác nhau về cùng một chỗ hỏng), `count` vô nghĩa, và nó có một thứ mà lỗi tự
+/// động không bao giờ có — một người đang chờ được trả lời.
+///
+/// Trang `/error.tsx` từ trước đã nói với người dùng "gửi kèm mã này giúp tìm ra
+/// nguyên nhân nhanh hơn", và `/admin/loi` viết như thể luồng ấy tồn tại — nhưng
+/// không có đường nào để gửi ngoài email của đơn vị vận hành. Bảng này là đường đó.
+model BugReport {
+  id String @id @default(cuid())
+
+  /// Người dùng tự gõ. Cắt ngắn ở tầng ứng dụng, xem `lib/bao-loi.ts`.
+  moTa String
+
+  /// Mã lỗi họ dán từ trang lỗi (chính là `digest` của Next). Rỗng khi họ báo một
+  /// chỗ hỏng không kèm mã — phần lớn báo cáo sẽ như vậy, vì người ta báo "game
+  /// không chạy" nhiều hơn là gặp một trang lỗi đỏ.
+  maLoi String @default("")
+
+  /// Trang họ đang ở, ĐÃ CẮT query string và hash — cùng lý do với `ErrorLog.path`:
+  /// query string mang token trong link xác minh email, và một bảng giữ token là
+  /// bảng phải bảo vệ như bảng mật khẩu.
+  duongDan String @default("")
+
+  /// Email để trả lời. TUỲ CHỌN, và rỗng là một câu trả lời hợp lệ: bắt điền email
+  /// mới được báo lỗi thì người gặp lỗi ở đúng luồng đăng nhập sẽ bỏ đi.
+  emailLienHe String @default("")
+
+  /// Tên trình duyệt rút gọn Ở PHÍA SERVER, ví dụ `Chrome 130`. Cùng cách và cùng lý
+  /// do với `ErrorLog.browser`: đủ để thấy "chỉ Safari mới hỏng", mà không giữ được
+  /// chuỗi dài dùng để lần ra một người.
+  browser String @default("")
+
+  /// Băm của IP, để chặn spam. Không lưu IP thô.
+  ipHash String @default("")
+
+  createdAt DateTime @default(now())
+
+  /// Null nghĩa là chưa ai xem. Đánh dấu đã xử lý KHÔNG xoá dòng — người trực cần
+  /// đọc lại được mình đã trả lời gì cho ai.
+  resolvedAt DateTime?
+
+  @@index([resolvedAt, createdAt])
+}

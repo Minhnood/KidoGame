@@ -53,7 +53,7 @@ Phiên site sống **30 ngày**, phiên quản trị **24 giờ**.
 | `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không · 12 ô số + 2 biểu đồ |
 | `/admin` | Kiểm duyệt | Có gì trong hàng đợi nội dung |
 | `/admin/tai-khoan` | Tài khoản | Gia đình này là ai · khoá/mở khoá tài khoản bé · xoá cả gia đình |
-| `/admin/loi` | Lỗi | Lỗi xảy ra ở máy người dùng thật |
+| `/admin/loi` | Lỗi | Người dùng tự báo · lỗi máy tự ghi |
 
 ### Tham số lọc — `loc`, KHÔNG phải `filter`
 
@@ -125,13 +125,32 @@ Bốn điều phải biết trước khi bấm:
 - **Việc này không đảo lại được.** Không có bảy ngày như game bị gỡ. Đường cứu duy nhất
   là bản sao lưu.
 
-### Hai biểu đồ trên tab Tổng quan
+### Người dùng báo lỗi — `/bao-loi`
+
+Người dùng gặp chỗ hỏng thì tự gửi được ở **`/bao-loi`** (không cần đăng nhập). Đường
+vào: chân trang mọi trang, trang lỗi (kèm mã lỗi điền sẵn), và `/dieu-khoan`.
+
+Báo cáo vào **`/admin/loi`, phần "Người dùng báo"** đứng trên danh sách lỗi tự động. Ba
+bộ lọc của trang KHÔNG lọc phần này — chúng nói về lỗi tự động. Nút **Đã trả lời** đưa
+dòng ra khỏi hàng đợi mà không xoá nó.
+
+Trần: **5 báo cáo mỗi IP mỗi giờ**, và tối đa **200** báo cáo chưa xử lý. Chạm trần tổng
+thì người gửi được báo là hộp đang đầy, chứ không bị bỏ im lặng.
+
+Email của người gửi là **tuỳ chọn**. Không có email thì tab Lỗi nói thẳng "không trả lời
+được" chứ không để trống.
+
+Dọn dữ liệu kiểm thử: `delete from "BugReport" where "emailLienHe" like '%@vidu.test';`
+
+### Ba biểu đồ trên tab Tổng quan
 
 - **Donut "Game đang ở đâu"** — bốn trạng thái, cộng lại bằng tổng game. **Mỗi dòng chú
   giải là một link** tới hàng đợi đã lọc, và con số trên dòng bằng đúng số game trong
   danh sách đó.
 - **Cột "Game mới mỗi ngày"** — 14 ngày gần nhất, kể cả ngày không có game nào. Bấm
   *Xem số theo ngày* ra bảng số, không cần trỏ chuột.
+- **Cột "Lỗi mỗi ngày"** — số LẦN người dùng gặp lỗi (không phải số nhóm), tính theo ngày
+  lỗi xuất hiện lần đầu. Thẻ này cũng nói số báo lỗi của người dùng đang chờ.
 
 Trỏ chuột vào một múi hay một khoảng ngày thì hiện số (đó là `<title>` của SVG, không
 phải JS). Cả hai hình vẽ bằng SVG viết tay, **không thư viện chart nào**.

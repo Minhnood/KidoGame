@@ -172,7 +172,7 @@ export function DonutTrangThai({
         bảng màu tối (tách biệt mù màu 6.7, trong dải phải có mã hoá thứ hai) hợp lệ
         đúng nhờ khối này. Xoá nó là làm bảng màu tối không còn hợp lệ.
       */}
-      <ul className="m-0 min-w-52 flex-1 list-none space-y-1.5 p-0">
+      <ul className="m-0 min-w-44 flex-1 list-none space-y-1.5 p-0">
         {muc.map((m) => (
           <li key={m.nhan}>
             <Link
