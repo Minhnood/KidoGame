@@ -204,8 +204,8 @@ const coChu = await cot.locator('svg text').first().evaluate((el) => {
   return r.height;
 });
 check(
-  'Ở 390px chữ trong biểu đồ cột vẫn cao ít nhất 9px',
-  coChu >= 9,
+  'Ở 390px chữ trong biểu đồ cột vẫn cao ít nhất 11px',
+  coChu >= 11,
   `${coChu.toFixed(1)}px, svg rộng ${Math.round(hopSvg.width)}px`
 );
 check(

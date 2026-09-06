@@ -440,6 +440,41 @@ export default async function AdminTongQuanPage() {
         />
       </Nhom>
 
+      {/*
+        HAI BIỂU ĐỒ, và chúng trả lời câu khác hẳn lưới ô số bên trên.
+        Ô số trả lời "còn bao nhiêu việc"; hai hình này trả lời "hệ thống đang ở hình
+        dạng nào" — phần lớn game nằm ở trạng thái nào, và nhịp đăng game mấy tuần qua
+        có gì lạ không. Cả hai là câu hỏi về TỈ LỆ và về NHỊP, hai thứ mà một con số
+        đơn lẻ không trả lời được, nên chúng là hình chứ không phải thêm hai ô nữa.
+
+        Đặt ngay SAU nhóm "Việc có hạn" và TRƯỚC hai nhóm ô số còn lại. Ranh giới đó
+        không phải tuỳ ý: nhóm đầu là bốn ô có đồng hồ chạy — bỏ lỡ là muộn hạn đã hứa
+        hoặc mất vĩnh viễn — nên nó phải nằm trên màn hình đầu tiên, trước cả một hình
+        đẹp. Hai nhóm sau ("Nội dung chờ người xem", "Số nền") thì không có hạn nào, và
+        chúng đọc dễ hơn khi đã biết hệ thống đang ở hình dạng nào.
+      */}
+      <section className="mb-9 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className={`p-5 ${MAT_THE}`} data-testid="tq-donut">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game đang ở đâu</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Bốn trạng thái, cộng lại bằng tổng số game. Bấm một dòng để mở hàng đợi đã lọc.
+          </p>
+          {tongGame === 0 ? (
+            <p className="text-ink-soft">Chưa có game nào.</p>
+          ) : (
+            <DonutTrangThai muc={mucDonut} tong={tongGame} nhanTong="game" />
+          )}
+        </div>
+
+        <div className={`p-5 ${MAT_THE}`} data-testid="tq-cot">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game mới mỗi ngày</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Mười bốn ngày gần nhất, kể cả ngày không có game nào.
+          </p>
+          <CotTheoNgay ngay={ngayCot} nhanBang="Số game đăng mỗi ngày, 14 ngày gần nhất" />
+        </div>
+      </section>
+
       <Nhom title="Nội dung chờ người xem" phu="chưa có hạn, nhưng có trẻ con ở đầu bên kia">
         <O
           testId="o-can-xem"
@@ -505,39 +540,6 @@ export default async function AdminTongQuanPage() {
           muc="nen"
         />
       </Nhom>
-
-      {/*
-        HAI BIỂU ĐỒ, và chúng trả lời câu khác hẳn lưới ô số bên trên.
-        Ô số trả lời "còn bao nhiêu việc"; hai hình này trả lời "hệ thống đang ở hình
-        dạng nào" — phần lớn game nằm ở trạng thái nào, và nhịp đăng game mấy tuần qua
-        có gì lạ không. Cả hai là câu hỏi về TỈ LỆ và về NHỊP, hai thứ mà một con số
-        đơn lẻ không trả lời được, nên chúng là hình chứ không phải thêm hai ô nữa.
-
-        Đặt SAU lưới ô số, cố ý: việc gấp phải nằm trên màn hình đầu tiên. Một biểu đồ
-        đẹp đẩy "3 yêu cầu quá hạn" xuống dưới màn gập là đổi đúng thứ trang này sinh
-        ra để làm.
-      */}
-      <section className="mb-9 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className={`p-5 ${MAT_THE}`} data-testid="tq-donut">
-          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game đang ở đâu</h2>
-          <p className="mb-4 text-sm text-ink-soft">
-            Bốn trạng thái, cộng lại bằng tổng số game. Bấm một dòng để mở hàng đợi đã lọc.
-          </p>
-          {tongGame === 0 ? (
-            <p className="text-ink-soft">Chưa có game nào.</p>
-          ) : (
-            <DonutTrangThai muc={mucDonut} tong={tongGame} nhanTong="game" />
-          )}
-        </div>
-
-        <div className={`p-5 ${MAT_THE}`} data-testid="tq-cot">
-          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game mới mỗi ngày</h2>
-          <p className="mb-4 text-sm text-ink-soft">
-            Mười bốn ngày gần nhất, kể cả ngày không có game nào.
-          </p>
-          <CotTheoNgay ngay={ngayCot} nhanBang="Số game đăng mỗi ngày, 14 ngày gần nhất" />
-        </div>
-      </section>
 
       {/*
         VIỆC ĐÃ LÀM, không phải việc phải làm — và đó là lý do nó đứng riêng ở cuối.

@@ -86,11 +86,16 @@ export function DonutTrangThai({
   tong: number;
   nhanTong: string;
 }) {
-  const KHE_DO = 2.4; // khe giữa hai múi, tính bằng ĐỘ — xấp xỉ 2px ở bán kính này
-  const CX = 92;
-  const CY = 92;
-  const R_NGOAI = 84;
-  const R_TRONG = 62; // vành dày 22px: đủ thấy, không thành khối màu
+  const KHE_DO = 2.2; // khe giữa hai múi, tính bằng ĐỘ — xấp xỉ 2px ở bán kính này
+  const CX = 110;
+  const CY = 110;
+  const R_NGOAI = 102;
+  const R_TRONG = 76; // vành dày 26px: đủ thấy, không thành khối màu
+
+  /* Khe tính bằng ĐỘ nên bán kính lớn hơn thì cùng số độ ra khe RỘNG hơn trên màn
+     hình. Vành to lên từ 84 sang 102 nên khe hạ từ 2.4 xuống 2.2 độ để bề rộng thật
+     của nó vẫn quanh 2px — khe là chỗ tách hai múi, không phải một nét trang trí, nên
+     nó phải giữ nguyên bề rộng khi hình đổi cỡ. */
 
   const coSo = muc.filter((m) => m.so > 0);
 
@@ -119,8 +124,8 @@ export function DonutTrangThai({
   return (
     <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
       <svg
-        viewBox="0 0 184 184"
-        className="h-44 w-44 shrink-0"
+        viewBox="0 0 220 220"
+        className="h-56 w-56 shrink-0 sm:h-64 sm:w-64"
         role="img"
         aria-label={`${nhanTong}: ${muc.map((m) => `${m.nhan} ${m.so}`).join(', ')}`}
       >
@@ -149,14 +154,14 @@ export function DonutTrangThai({
         */}
         <text
           x={CX}
-          y={CY - 2}
+          y={CY - 4}
           textAnchor="middle"
-          fontSize={30}
+          fontSize={38}
           className="fill-ink font-extrabold"
         >
           {tong}
         </text>
-        <text x={CX} y={CY + 18} textAnchor="middle" fontSize={13} className="fill-ink-soft">
+        <text x={CX} y={CY + 22} textAnchor="middle" fontSize={15} className="fill-ink-soft">
           {nhanTong}
         </text>
       </svg>
@@ -216,29 +221,32 @@ export function CotTheoNgay({ ngay, nhanBang }: { ngay: CotNgay[]; nhanBang: str
    * màn hình là biểu đồ chỉ đúng một nửa.
    *
    * Nên: `W` đặt gần bề rộng NHỎ NHẤT mà nó phải sống (thẻ ~330px), và bọc ngoài
-   * `max-w-[520px]` để tỉ lệ chỉ chạy trong khoảng 0.87–1.37 thay vì 0.62–1.7 — chữ
-   * hiển thị ra 9.6–15px ở cả hai đầu. Cỡ chữ khai bằng `fontSize` theo user-space
-   * chứ không bằng class `rem`: đơn vị của viewBox mới là đơn vị mà mọi thứ khác
-   * trong hình đang dùng.
+   * `max-w-[560px]` để tỉ lệ chỉ chạy trong khoảng 0.70–1.27. Trần ấy có lý do đo
+   * được: để `max-w` ở 700px thì ở thẻ rộng nhãn trục ra ~20px — TO HƠN cả tiêu đề
+   * thẻ, tức thứ bậc đọc bị đảo, cái phụ hét lớn hơn cái chính. Cỡ chữ khai bằng
+   * `fontSize` theo user-space chứ không bằng class `rem`: đơn vị của viewBox mới là
+   * đơn vị mà mọi thứ khác trong hình đang dùng — và nó phải TĂNG THEO khi `W` tăng,
+   * không thì hình to lên mà trục lại nhỏ đi. Ngưỡng phải giữ: chữ hiển thị ≥9px ở
+   * 390px, có phép kiểm ghim con số đó.
    *
    * `mx-auto` chứ không dàn trái: ở thẻ rộng hơn 520px thì phần dư chia đều hai bên,
    * còn dàn trái thì hình dính mép trái và để trống một dải bên phải — đọc như thiếu
    * mất một đoạn dữ liệu.
    */
-  const W = 380;
-  const H = 132;
-  const DAY_TRUC = 20; // chỗ cho nhãn ngày, nằm TRONG viewBox chứ không tràn ra ngoài
+  const W = 440;
+  const H = 190;
+  const DAY_TRUC = 26; // chỗ cho nhãn ngày, nằm TRONG viewBox chứ không tràn ra ngoài
   const CAO_PLOT = H - DAY_TRUC;
   const max = Math.max(1, ...ngay.map((d) => d.so));
   const khoang = W / ngay.length;
-  const rongCot = Math.min(24, khoang - 6); // khe 6px giữa hai cột, và trần 24px
+  const rongCot = Math.min(24, khoang - 7); // khe 7px giữa hai cột, và trần 24px
   const iMax = ngay.reduce((tot, d, i) => (d.so > ngay[tot].so ? i : tot), 0);
 
   return (
     <div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="mx-auto h-auto w-full max-w-[520px]"
+        className="mx-auto h-auto w-full max-w-[560px]"
         role="img"
         aria-label={`${nhanBang}. Cao nhất ${ngay[iMax]?.so ?? 0} ngày ${ngay[iMax]?.nhanDay ?? ''}.`}
       >
@@ -253,7 +261,7 @@ export function CotTheoNgay({ ngay, nhanBang }: { ngay: CotNgay[]; nhanBang: str
           strokeWidth="1"
         />
         {ngay.map((d, i) => {
-          const cao = max === 0 ? 0 : (d.so / max) * (CAO_PLOT - 16);
+          const cao = max === 0 ? 0 : (d.so / max) * (CAO_PLOT - 22);
           const x = i * khoang + (khoang - rongCot) / 2;
           const y = CAO_PLOT - cao;
           const nhanSo = i === iMax || i === ngay.length - 1;
@@ -305,9 +313,9 @@ export function CotTheoNgay({ ngay, nhanBang }: { ngay: CotNgay[]; nhanBang: str
               {nhanSo && d.so > 0 && (
                 <text
                   x={x + rongCot / 2}
-                  y={y - 5}
+                  y={y - 7}
                   textAnchor="middle"
-                  fontSize={11}
+                  fontSize={14}
                   className="fill-ink font-bold tabular-nums"
                 >
                   {d.so}
@@ -318,9 +326,9 @@ export function CotTheoNgay({ ngay, nhanBang }: { ngay: CotNgay[]; nhanBang: str
               {(i === 0 || i === ngay.length - 1 || i === Math.floor(ngay.length / 2)) && (
                 <text
                   x={x + rongCot / 2}
-                  y={H - 6}
+                  y={H - 8}
                   textAnchor="middle"
-                  fontSize={11}
+                  fontSize={14}
                   className="fill-ink-soft tabular-nums"
                 >
                   {d.nhan}

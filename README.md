@@ -1209,10 +1209,13 @@ Bốn cái bẫy đã trả giá để biết, cả bốn đều im lặng khi h
 1. **Cung 360 độ vẽ ra không gì cả.** Điểm đầu trùng điểm cuối nên `A` không biết đi
    đường nào và vành biến mất hoàn toàn — đúng vào trạng thái *thường gặp nhất* (một
    trang mới thì mọi game đều đang hiện). Một trạng thái chiếm 100% thì vẽ `<circle>`.
-2. **`viewBox` scale cả CHỮ.** Bản đầu dùng `viewBox` rộng 560 rồi `w-full`: ở thẻ 350px
-   trên điện thoại, tỉ lệ tụt về 0.62 và nhãn ngày hiển thị ra **~8px** — đo bằng ảnh
-   chụp thật. Sửa bằng viewBox hẹp (380) + `max-w-[520px]` + `mx-auto`, nên tỉ lệ chỉ
-   chạy trong 0.87–1.37 và chữ ra 9.6–15px ở cả hai đầu. Có phép kiểm ghim lại con số.
+2. **`viewBox` scale cả CHỮ**, và nó cắn ở CẢ HAI đầu. Bản đầu dùng `viewBox` rộng 560
+   rồi `w-full`: ở thẻ 350px trên điện thoại, tỉ lệ tụt về 0.62 và nhãn ngày hiển thị ra
+   **~8px** — đo bằng ảnh chụp thật. Rồi khi làm hình to lên, đầu kia cắn: `max-w` để ở
+   700px thì nhãn trục ra **~20px**, *to hơn cả tiêu đề thẻ*, tức thứ bậc đọc bị đảo —
+   cái phụ hét lớn hơn cái chính. Chốt lại ở viewBox 440 + `max-w-[560px]` + `mx-auto`:
+   tỉ lệ chỉ chạy 0.70–1.27, chữ ra 13px ở 390px và ~18px ở thẻ rộng. Phép kiểm ghim
+   ngưỡng dưới (≥11px ở 390px); ngưỡng trên thì canh bằng mắt trên ảnh chụp.
 3. **Vạch "ngày bằng 0" làm đường đáy trông ĐỨT KHÚC.** Bản đầu vẽ cho ngày trống một
    vạch mỏng màu viền sát đáy; ảnh chụp cho thấy trục dày ở chỗ có ngày trống và mảnh ở
    giữa, đọc thành nét đứt — mà nét đứt thì đọc như "ngưỡng" hoặc "dự báo". Bỏ vạch,
