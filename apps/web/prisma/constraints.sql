@@ -30,10 +30,25 @@ ALTER TABLE "Parent"
 -- khoản trẻ. Cùng khuôn với session_exactly_one_owner ở trên. Không có ràng buộc
 -- này thì bảng dễ sinh ra vết "mồ côi" (không gắn vào đâu, không ai tìm ra) hoặc
 -- vết gắn cả hai chỗ, mà lịch sử kiểm duyệt sai còn tệ hơn không có lịch sử.
+--
+-- MỘT NGOẠI LỆ, và nó phải là ngoại lệ ĐƯỢC ĐẶT TÊN chứ không phải một cái nới lỏng
+-- chung: `ADMIN_DELETE_FAMILY` — xoá tài khoản cả gia đình — bắt buộc phải để CẢ HAI
+-- cột null. Không phải vì thao tác ấy không có đối tượng, mà vì đối tượng của nó vừa
+-- bị xoá trong cùng transaction: hai khoá ngoại kia đều `onDelete: Cascade`, nên một
+-- dòng vết trỏ vào bé hay game của nhà đó sẽ tự bốc hơi ngay lúc được ghi ra, và
+-- việc phá huỷ lớn nhất hệ thống làm được sẽ không để lại dấu nào.
+--
+-- Viết bằng CASE để chặt cả hai chiều: action ấy thì BUỘC null cả hai (không cho ai
+-- gắn vào một bé rồi mất vết), mọi action khác vẫn đúng luật cũ.
 ALTER TABLE "ModerationLog" DROP CONSTRAINT IF EXISTS moderationlog_exactly_one_target;
 ALTER TABLE "ModerationLog"
   ADD CONSTRAINT moderationlog_exactly_one_target
-  CHECK (("gameId" IS NOT NULL) <> ("childId" IS NOT NULL));
+  CHECK (
+    CASE WHEN "action" = 'ADMIN_DELETE_FAMILY'
+         THEN "gameId" IS NULL AND "childId" IS NULL
+         ELSE ("gameId" IS NOT NULL) <> ("childId" IS NOT NULL)
+    END
+  );
 
 -- Một yêu cầu gỡ bản quyền đã xử lý thì PHẢI có mốc thời gian xử lý, và một yêu cầu
 -- còn mở thì KHÔNG được có. Hai cột này là thứ duy nhất chứng minh đã trả lời đúng

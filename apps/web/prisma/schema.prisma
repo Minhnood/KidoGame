@@ -351,6 +351,12 @@ model TakedownRequest {
 ///
 /// Ràng buộc đúng-một nằm trong `prisma/constraints.sql`, Prisma không diễn đạt
 /// được. Chạy `pnpm db:constraints` sau mỗi `prisma db push`.
+/// Sổ ghi những gì đã làm với game và tài khoản của một đứa trẻ.
+///
+/// Đúng MỘT trong hai cột gameId/childId được set — trừ `ADMIN_DELETE_FAMILY`, nơi
+/// cả hai buộc phải null vì đối tượng của thao tác đó vừa bị xoá trong cùng
+/// transaction. Ràng buộc ở `prisma/constraints.sql`, Prisma không diễn đạt được —
+/// nên đọc riêng file này sẽ KHÔNG thấy nó, và nó chỉ nổ lúc ghi thật.
 model ModerationLog {
   id String @id @default(cuid())
 
