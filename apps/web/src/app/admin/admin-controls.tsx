@@ -7,6 +7,7 @@ import {
   adminRemoveGameAction,
   adminRestoreGameAction,
   adminSetChildLockedAction,
+  adminXoaGiaDinhAction,
   type FormState,
 } from '@/lib/actions';
 
@@ -99,6 +100,110 @@ export function DismissReportsButton({ gameId }: { gameId: string }) {
       variant="ghost"
       testId="admin-dismiss"
     />
+  );
+}
+
+/**
+ * Xoá cả gia đình. Nút DUY NHẤT trong khu quản trị không dùng `ConfirmAction`.
+ *
+ * Hai nhịp là đủ cho mọi thao tác khác vì tất cả đều đảo lại được: gỡ hẳn còn bảy
+ * ngày và một nút "Cho hiện lại" nằm ngay đó, khoá tài khoản thì mở lại được. Cái
+ * này thì không — hàng DB đi trong một transaction, và nút này lại nằm trong một
+ * DANH SÁCH, nơi người trực bấm nhanh qua nhiều dòng giống hệt nhau. Nhịp thứ hai
+ * rơi đúng chỗ ngón tay đang sẵn đà.
+ *
+ * Nên chốt không phải là bấm thêm lần nữa mà là GÕ LẠI EMAIL: nó bắt mắt rời cái nút
+ * và đọc lại chính dòng đang thao tác. Cùng chuỗi ấy được kiểm lại lần thứ hai trong
+ * server action, vì một nút chỉ chặn được người bấm nút.
+ */
+export function DeleteFamilyButton({
+  email,
+  soBe,
+  soGame,
+}: {
+  email: string;
+  soBe: number;
+  soGame: number;
+}) {
+  const [state, formAction, pending] = useActionState(adminXoaGiaDinhAction, null);
+  const [armed, setArmed] = useState(false);
+  const [goLai, setGoLai] = useState('');
+
+  if (!armed) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => setArmed(true)}
+        data-testid="admin-xoa-gia-dinh"
+      >
+        Xoá tài khoản gia đình
+      </Button>
+    );
+  }
+
+  const khop = goLai.trim().toLowerCase() === email.toLowerCase();
+
+  /* `max-w-xl` ở form: ô nhập một địa chỉ email không cần cả bề rộng thẻ. Đo ở 1300px
+     thì không giới hạn cho ra một ô 1150px, và một ô dài gấp năm lần chuỗi phải gõ vào
+     nó thì đọc như một ô tìm kiếm — thứ gõ vào rồi xem kết quả, đúng ngược với việc nó
+     đang làm. Ở 390px thì `max-w` không có tác dụng nào, đã đo. */
+  return (
+    <form
+      action={formAction}
+      className="mt-3 max-w-xl space-y-2 rounded-field border border-danger bg-bg p-3.5"
+      data-testid="admin-xoa-gia-dinh-form"
+    >
+      <input type="hidden" name="email" value={email} />
+      {/* Nói bằng SỐ chứ không nói "toàn bộ dữ liệu": người trực cần đối chiếu con số
+          này với lá thư yêu cầu trước khi gõ email, và "toàn bộ" thì không đối chiếu
+          được với cái gì. */}
+      <p className="text-sm font-semibold text-danger">
+        {soBe + soGame === 0
+          ? 'Xoá vĩnh viễn tài khoản này. Chưa có bé hay game nào. Không đảo lại được.'
+          : `Xoá vĩnh viễn ${soBe} tài khoản của bé và ${soGame} game. Không đảo lại được.`}
+      </p>
+      <p className="text-sm text-ink-soft">
+        Hồ sơ yêu cầu gỡ bản quyền thì ở lại, không kèm tài khoản nữa. File trên đĩa do{' '}
+        <code>storage:prune</code> dọn sau.
+      </p>
+      <label className="block text-sm">
+        Gõ lại <strong>{email}</strong> để xác nhận:
+        <input
+          name="xacNhanEmail"
+          value={goLai}
+          onChange={(e) => setGoLai(e.target.value)}
+          autoComplete="off"
+          className="mt-1 block w-full min-h-touch rounded-field border border-border bg-surface px-3 text-ink"
+          data-testid="admin-xoa-gia-dinh-email"
+        />
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="submit"
+          variant="danger"
+          disabled={pending || !khop}
+          data-testid="admin-xoa-gia-dinh-confirm"
+        >
+          {pending ? 'Đang xoá…' : 'Xoá vĩnh viễn'}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setArmed(false);
+            setGoLai('');
+          }}
+        >
+          Thôi
+        </Button>
+        {state && 'error' in state && (
+          <span className="text-sm text-danger" role="alert">
+            {state.error}
+          </span>
+        )}
+      </div>
+    </form>
   );
 }
 

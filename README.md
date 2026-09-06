@@ -60,6 +60,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
@@ -70,6 +71,10 @@ node infra/e2e-admin-origin.mjs                                    # 27, không 
 một hàng — nó sẽ đỏ ở phép kiểm "gửi trùng không tạo thêm hàng thứ hai" rồi đổ ở `strict
 mode violation`, một triệu chứng không chỉ về đâu cả. Dọn bằng:
 `delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';`
+
+**`e2e-xoa-gia-dinh.mjs` cũng phải chạy SAU `e2e-takedown.mjs`**, cùng lý do: nó dựng một
+yêu cầu gỡ bản quyền để kiểm rằng hồ sơ ấy sống sót qua việc xoá cả gia đình. Bài này tự
+dọn hàng đó ở cuối, kể cả nhà thứ ba nó dựng chỉ để làm mục tiêu cho một phép kiểm.
 
 **`e2e-admin-origin.mjs` cần `ADMIN_ORIGIN` được đặt cho CẢ server dev**, không chỉ cho
 bộ kiểm. Không đặt thì middleware giữ hành vi cũ — `/admin` nằm trên app origin — và bộ
@@ -984,6 +989,75 @@ nó bấm đồng hồ: coi null là quá hạn thì lần chạy đầu tiên x
 Hồ sơ pháp lý thì **ở lại**. `TakedownRequest.gameId` là `SetNull` chứ không phải
 `Cascade`, kèm cột `gameTitle` chụp lại lúc nhận đơn — nếu không, việc dọn sẽ xoá luôn
 bằng chứng đã xử lý đúng một khiếu nại, tức càng làm đúng thì hồ sơ càng mất.
+
+### Xoá tài khoản cả gia đình — quyền `/dieu-khoan` đã hứa
+
+Trang điều khoản nói công khai rằng gửi thư là xoá được tài khoản gia đình và toàn bộ
+game của các bé. Trước bản này, **lời hứa đó không có đường thực hiện nào**: không
+action, không script, không nút. Người trực nhận thư xong chỉ còn cách gõ SQL tay vào
+database production — tức trên thực tế là một lời hứa không thực hiện.
+
+Hai đường vào, **một lõi** (`src/lib/xoa-gia-dinh.ts`), nên không đường nào xoá sót hơn
+đường kia:
+
+```bash
+pnpm --filter @kidogame/web db:xoa-gia-dinh me@vidu.com                    # chỉ ĐO
+pnpm ... db:xoa-gia-dinh me@vidu.com --xoa --admin toi@vidu.com            # xoá thật
+```
+
+và nút **Xoá tài khoản gia đình** trong tab Tài khoản của khu quản trị.
+
+**Chạy khô là mặc định**, giống `db:prune-removed`. Đây là thao tác phá huỷ nhất hệ
+thống có và là thao tác *duy nhất* không có cửa sổ sửa sai: gỡ game còn bảy ngày với một
+nút "Cho hiện lại" nằm ngay cạnh, còn cái này thì hàng DB đi trong một transaction.
+
+Lần chạy khô in cả **link tải `.sb3` gốc của từng game**, và đó là điểm chính của nó chứ
+không phải trang trí — sau khi xoá, file thành mồ côi và `storage:prune --xoa` dọn mất,
+nên đây là cửa sổ duy nhất còn gửi cho phụ huynh bản gốc công của con họ được. Một phụ
+huynh xin xoá tài khoản đang xin bỏ đi dữ liệu của mình, không nhất thiết đang xin bỏ đi
+thứ con họ tự làm ra. `/dieu-khoan` giờ cũng nói trước điều này.
+
+Bốn thứ dễ làm sai nếu xoá tay, và là lý do việc này phải là code chứ không phải một câu SQL:
+
+1. **`LoginAttempt` không có khoá ngoại.** Cột `identity` giữ `parent:<email>` và
+   `child:<username>` ở dạng **thô**, cascade không chạm tới. `delete from "Parent"` để
+   lại đúng thứ mà việc xoá nhằm bỏ đi, trong một bảng không ai nghĩ tới khi kiểm "đã
+   xoá hết chưa" — nhìn từ ngoài thì tài khoản đã biến mất.
+2. **File trên đĩa KHÔNG được xoá ở đây**, và đó là cố ý. Storage địa chỉ hoá theo nội
+   dung: hai game cùng `sb3Sha256` dùng **chung** một file. Đo trên DB dev: gia đình
+   demo có 8 game nhưng chỉ 6 hash khác nhau — hai cặp trùng. Xoá file theo hash của
+   game vừa xoá là xoá mất bản gốc của game khác, im lặng. Sau khi hàng DB đi thì file
+   thành mồ côi và `storage:prune --xoa` dọn an toàn, vì nó quét ngược từ DB.
+3. **Chụp `TakedownRequest.gameTitle` trước khi xoá**, cùng lý do và cùng thứ tự với
+   `prune-removed.ts`.
+4. **Dòng vết của việc xoá không được trỏ vào gia đình vừa xoá.** `ModerationLog` cascade
+   theo cả `gameId` lẫn `childId`, nên vết trỏ vào bé sẽ tự bốc hơi trong chính
+   transaction ghi ra nó. Vết ở đây để **cả hai** cột null — và `constraints.sql` được
+   nới đúng bằng một ngoại lệ có tên (`ADMIN_DELETE_FAMILY` thì *buộc* null cả hai), chứ
+   không nới lỏng chung. Ràng buộc ấy **chỉ nằm trong `constraints.sql`**, không có trong
+   `schema.prisma`, nên đọc schema sẽ không thấy nó — nó nổ lúc ghi thật, và đó đúng là
+   cách nó được phát hiện.
+
+Vết **không ghi email**. Đây là một yêu cầu xoá dữ liệu; giữ lại chính cái định danh vừa
+được yêu cầu xoá, trong một bảng không bao giờ dọn, là làm hỏng việc mình vừa làm. Muốn
+đối chiếu "đã xoá theo yêu cầu nào" thì ghép lá thư yêu cầu với mốc thời gian trong vết.
+
+**Tài khoản đang có quyền quản trị thì từ chối xoá**, bắt gỡ `isAdmin` trước.
+`ModerationLog.actorId` là chuỗi thường chứ không phải khoá ngoại, nên xoá một admin
+không cascade gì — nó chỉ làm mọi vết người đó từng ghi trên game của **nhà khác** mất
+chỗ tra ngược ra email và hiện thành cuid trần. Tức xoá một tài khoản lại làm hỏng lịch
+sử của những gia đình không liên quan. Chốt nằm trong lõi chứ không ở giao diện, vì
+script chạy được mà không đi qua giao diện; nút thì đơn giản không hiện cho admin, để
+người trực không gõ xong cả email rồi mới biết là không được.
+
+Nút đòi **gõ lại email**, và chuỗi ấy được so **lần thứ hai trong server action**. Hai
+nhịp là đủ cho mọi nút khác vì tất cả đều đảo lại được; nút này lại nằm trong một *danh
+sách*, nơi người trực bấm nhanh qua nhiều dòng giống hệt nhau — nhịp thứ hai rơi đúng
+chỗ ngón tay đang sẵn đà. Một nút chỉ chặn được người bấm nút, nên chốt thật phải ở phía
+không bỏ qua được; `e2e-xoa-gia-dinh` có một phép kiểm đổi lén input hidden để canh đúng
+chỗ đó.
+
+Bộ kiểm: `node infra/e2e-xoa-gia-dinh.mjs` (44).
 
 ## Cấu trúc
 

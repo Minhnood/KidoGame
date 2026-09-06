@@ -96,6 +96,9 @@ export const ACTION_LABEL: Record<string, string> = {
   TAKEDOWN_HIDE: 'Tạm ẩn vì có yêu cầu gỡ bản quyền',
   TAKEDOWN_ACCEPT: 'Admin chấp nhận yêu cầu gỡ bản quyền',
   TAKEDOWN_REJECT: 'Admin bác bỏ yêu cầu gỡ bản quyền',
+  /* Dòng vết DUY NHẤT không kèm được game hay bé: cả hai đã bị xoá cùng lúc với nó
+     được ghi ra. Nhãn phải tự đứng một mình mà vẫn đọc được — xem `xoa-gia-dinh.ts`. */
+  ADMIN_DELETE_FAMILY: 'Admin xoá tài khoản cả gia đình',
 };
 
 export function actionLabel(action: string): string {

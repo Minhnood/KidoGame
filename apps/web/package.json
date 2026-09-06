@@ -14,6 +14,7 @@
     "db:backfill-search": "tsx prisma/backfill-search.ts",
     "db:repackage": "tsx prisma/repackage.ts",
     "db:prune-removed": "tsx prisma/prune-removed.ts",
+    "db:xoa-gia-dinh": "tsx prisma/xoa-gia-dinh.ts",
     "storage:prune": "tsx prisma/prune-storage.ts",
     "db:make-admin": "tsx prisma/make-admin.ts",
     "typecheck": "tsc --noEmit",

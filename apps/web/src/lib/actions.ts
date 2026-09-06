@@ -31,6 +31,7 @@ import {
 } from './moderation';
 import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
 import { resolveAllErrors, setErrorResolved } from './error-log';
+import { xoaGiaDinh } from './xoa-gia-dinh';
 import { rateKey, tooMany } from './rate-limit';
 import { xoaHopThuDev } from './mail';
 import {
@@ -555,6 +556,33 @@ export async function adminSetChildLockedAction(
     );
   });
   revalidatePath('/admin');
+  return state;
+}
+
+/**
+ * Xoá hẳn tài khoản của cả một gia đình, theo yêu cầu của phụ huynh.
+ *
+ * ĐÒI GÕ LẠI EMAIL, và việc so chuỗi ấy nằm Ở ĐÂY chứ không chỉ ở giao diện. Nút bên
+ * kia có chặn thì cũng chỉ chặn được người bấm nút; một server action là một điểm
+ * vào riêng, gọi thẳng được mà không đi qua màn hình nào. Với thao tác phá huỷ nhất
+ * hệ thống có, cái chốt phải nằm ở phía không bỏ qua được.
+ *
+ * `revalidatePath` cả `/admin/tong-quan`: bảng số đếm ở đó vừa mất mấy game của nhà
+ * này, và một bảng "hôm nay có việc gì gấp" mà còn đếm game đã biến mất thì người
+ * trực sẽ đi tìm chúng.
+ */
+export async function adminXoaGiaDinhAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const state = await run(async () => {
+    const adminId = await requireAdmin();
+    const email = String(form.get('email') ?? '').trim();
+    const goLai = String(form.get('xacNhanEmail') ?? '').trim();
+    if (!email || goLai.toLowerCase() !== email.toLowerCase()) {
+      throw new AuthError('Email gõ lại không khớp. Không xoá gì cả.');
+    }
+    await xoaGiaDinh(adminId, email, String(form.get('note') ?? '').trim());
+  });
+  revalidatePath('/admin/tai-khoan');
+  revalidatePath('/admin/tong-quan');
   return state;
 }
 

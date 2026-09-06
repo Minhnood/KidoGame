@@ -52,7 +52,7 @@ Phiên site sống **30 ngày**, phiên quản trị **24 giờ**.
 |---|---|---|
 | `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không |
 | `/admin` | Kiểm duyệt | Có gì trong hàng đợi nội dung |
-| `/admin/tai-khoan` | Tài khoản | Gia đình này là ai · khoá/mở khoá tài khoản bé |
+| `/admin/tai-khoan` | Tài khoản | Gia đình này là ai · khoá/mở khoá tài khoản bé · xoá cả gia đình |
 | `/admin/loi` | Lỗi | Lỗi xảy ra ở máy người dùng thật |
 
 ### Tham số lọc — `loc`, KHÔNG phải `filter`
@@ -95,6 +95,36 @@ duyệt, vốn là một phân hoạch.
 Cả ba danh sách dùng chung một thanh phân trang có **số trang bấm được**; `&trang=<n>`,
 và số trang luôn mang theo bộ lọc lẫn chuỗi đang tìm.
 
+### Xoá tài khoản một gia đình
+
+Phụ huynh gửi thư xin xoá tài khoản (quyền này `/dieu-khoan` hứa công khai). Hai đường,
+cùng một lõi:
+
+```bash
+# 1. XEM TRƯỚC — mặc định không xoá gì. In ra mấy bé, mấy game, và LINK TẢI .sb3 gốc.
+pnpm --filter @kidogame/web db:xoa-gia-dinh phuhuynh@vidu.com
+
+# 2. Xoá thật. `--admin` là email của người chịu trách nhiệm, để ghi vào vết kiểm duyệt.
+pnpm --filter @kidogame/web db:xoa-gia-dinh phuhuynh@vidu.com \
+  --xoa --admin demo@kidogame.local --ghi-chu "Yêu cầu qua mail 6/9"
+
+# 3. Dọn file mồ côi trên đĩa — KHÔNG tự động, phải chạy riêng.
+pnpm --filter @kidogame/web storage:prune --xoa
+```
+
+Hoặc nút **Xoá tài khoản gia đình** trong tab Tài khoản, đòi gõ lại email để xác nhận.
+
+Bốn điều phải biết trước khi bấm:
+
+- **Gửi link tải `.sb3` cho phụ huynh trước khi xoá.** Lần chạy khô in sẵn. Xoá rồi thì
+  file thành mồ côi và `storage:prune --xoa` dọn mất — sau đó không lấy lại được.
+- **Hồ sơ yêu cầu gỡ bản quyền ở lại** (chụp tên game, bỏ liên kết). Cả những yêu cầu do
+  chính email đó gửi đi cũng ở lại; chạy khô có đếm ra, xử lý riêng nếu cần.
+- **Tài khoản có `isAdmin` thì bị từ chối.** Gỡ quyền trước — không thì mọi vết kiểm
+  duyệt người đó từng ghi trên game nhà khác mất chỗ tra ra tên.
+- **Việc này không đảo lại được.** Không có bảy ngày như game bị gỡ. Đường cứu duy nhất
+  là bản sao lưu.
+
 ---
 
 ## 4. Tài khoản
@@ -132,13 +162,20 @@ delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';
 delete from "Parent" where email like 'e2e-%';
 delete from "Game" where title = 'Game kiểm thử e2e'
    or title like 'Game hạn giữ %' or title like 'Game bản quyền %'
-   or title like 'Game kiểm duyệt %';
+   or title like 'Game kiểm duyệt %' or title like 'Game xoá nhà %';
 delete from "ErrorLog" where message like 'Loi kiem thu %';
+-- `LoginAttempt` không có khoá ngoại nên hai lệnh trên KHÔNG kéo theo nó.
+delete from "LoginAttempt" where identity like '%e2e-%';
 commit;
 ```
 
 **ĐỪNG** `delete from "TakedownRequest";` không kèm điều kiện — trong đó có yêu cầu
 gỡ thật.
+
+**ĐỪNG** `delete from "ModerationLog" where action = 'ADMIN_DELETE_FAMILY';` — đó là hồ
+sơ duy nhất chứng minh một lần xoá tài khoản đã được thực hiện, và nó không mang email
+nên không có cách nào dựng lại. `e2e-xoa-gia-dinh` chỉ xoá đúng những dòng chính nó tạo,
+lọc theo mốc thời gian.
 
 ---
 

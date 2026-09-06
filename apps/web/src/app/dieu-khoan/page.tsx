@@ -197,8 +197,20 @@ export default function TermsPage() {
           và nếu nó biến mất cùng game thì càng làm đúng, hồ sơ càng trống.
         </p>
         <p>
-          Muốn xoá tài khoản của gia đình bạn và toàn bộ game của các bé, email cho chúng tôi ở
-          địa chỉ bên dưới.
+          <strong>Muốn xoá tài khoản của gia đình bạn</strong> và toàn bộ game của các bé, email
+          cho chúng tôi ở địa chỉ bên dưới. Chúng tôi xoá tài khoản phụ huynh, tài khoản của các
+          bé, mọi game đã đăng, và cả dấu vết đăng nhập — rồi gửi bạn một thư xác nhận.
+        </p>
+        {/*
+          Nói trước rằng file gốc sẽ mất, và nói ở ĐÂY chứ không đợi thư xác nhận.
+          Việc xoá không đảo lại được, nên lúc duy nhất câu này còn giúp được gì là
+          lúc người ta chưa gửi yêu cầu. Một phụ huynh xin xoá tài khoản đang xin bỏ
+          đi dữ liệu của mình, không nhất thiết đang xin bỏ đi thứ con họ tự làm ra.
+        */}
+        <p>
+          Việc này <strong>không đảo lại được</strong>, và file <code>.sb3</code> gốc của các bé
+          cũng đi theo. Nếu bé muốn giữ lại công của mình, tải các file đó về máy trước khi bạn
+          gửi yêu cầu — hoặc nói trong thư, chúng tôi sẽ gửi bạn link tải trước khi xoá.
         </p>
       </Section>
 

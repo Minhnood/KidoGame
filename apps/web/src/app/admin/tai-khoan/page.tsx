@@ -8,7 +8,7 @@ import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
 import { Button } from '@/components/button';
 import { TextInput } from '@/components/field';
-import { ChildLockButton } from '../admin-controls';
+import { ChildLockButton, DeleteFamilyButton } from '../admin-controls';
 import { Pager } from '../pager';
 
 export const dynamic = 'force-dynamic';
@@ -319,6 +319,31 @@ export default async function AdminTaiKhoanPage({
                   ))}
                 </ul>
               )}
+
+              {/*
+                Quyền xoá tài khoản mà `/dieu-khoan` đã hứa công khai. Trước khi có nút
+                này, lời hứa ấy chỉ thực hiện được bằng SQL gõ tay vào production.
+
+                KHÔNG hiện nút cho tài khoản admin, thay bằng một câu nói vì sao. Lõi
+                `xoaGiaDinh` vẫn từ chối, nhưng để nút hiện rồi mới báo đỏ thì người
+                trực đã gõ xong cả email trước khi biết là không được — và ở đây, gõ
+                xong email nghĩa là họ vừa quyết định xoá một gia đình.
+              */}
+              <div className="mt-4 border-t border-border pt-3">
+                {parent.isAdmin ? (
+                  <p className="text-sm text-ink-soft">
+                    Không xoá được tài khoản đang có quyền quản trị: mọi vết kiểm duyệt
+                    người này từng ghi trên game nhà khác sẽ mất chỗ tra ra tên. Gỡ quyền
+                    admin trước.
+                  </p>
+                ) : (
+                  <DeleteFamilyButton
+                    email={parent.email}
+                    soBe={parent.children.length}
+                    soGame={parent.children.reduce((t, c) => t + c._count.games, 0)}
+                  />
+                )}
+              </div>
             </li>
           ))}
         </ul>
