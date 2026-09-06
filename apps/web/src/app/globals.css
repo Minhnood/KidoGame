@@ -181,6 +181,32 @@
      3.10:1 với nền hộp và 3.31:1 với nền trang, đạt cả hai ngữ cảnh. */
   --color-danger-border: #cf6a6a;
 
+  /* --- Màu của BIỂU ĐỒ trên tab Tổng quan ---
+   *
+   * Vì sao là một nhóm riêng chứ không mượn `accent`/`danger`: đây là màu mã hoá DỮ
+   * LIỆU, không phải màu giao diện. Bốn cái đầu là một thang TRẠNG THÁI (đang hiện →
+   * đã gỡ hẳn) và mỗi màu chỉ mang đúng một nghĩa; cái thứ năm là màu của một chuỗi
+   * số, và nó CỐ Ý không nằm trong bốn màu kia — dùng màu trạng thái cho một chuỗi
+   * không mang nghĩa trạng thái là làm mất nghĩa của cả bốn.
+   *
+   * ĐÃ ĐO, không chọn bằng mắt. Bốn màu trạng thái nằm kề nhau trên vòng donut nên
+   * phải phân biệt được cả dưới mù màu đỏ-lục: kiểm bằng `validate_palette.js` ở chế
+   * độ `--pairs all` (vòng tròn đóng nên cặp đầu-cuối cũng kề nhau), trên đúng nền
+   * `surface` của hai giao diện. Bản SÁNG qua hết: dải sáng OKLCH, sàn chroma, tách
+   * biệt CVD ΔE 8.7 (ngưỡng 8), sàn mắt thường 15.5 (ngưỡng 15), tương phản ≥3:1.
+   * Bản TỐI (dưới, `--toi-bd-*`) đạt ΔE 6.7 — trong dải 6–8, chỉ hợp lệ VÌ biểu đồ
+   * còn mã hoá thứ hai: chú giải có nhãn chữ, số ghi thẳng, và khe 2px giữa các múi.
+   * Bỏ chú giải đi là bảng màu tối không còn hợp lệ.
+   *
+   * Đừng đổi bốn màu này cho "đẹp hơn" mà không chạy lại validator ở CẢ hai giao
+   * diện — `contrast-check` chỉ canh tương phản, không canh tách biệt mù màu.
+   */
+  --color-bd-hien: #0f9b6f;
+  --color-bd-siet: #e57200;
+  --color-bd-an: #7b62d6;
+  --color-bd-go: #c62f2f;
+  --color-bd-cot: #3457c5;
+
   /* --- Bo góc: to hơn mặc định cho thân thiện với trẻ --- */
   --radius-card: 16px;
   --radius-field: 12px;
@@ -296,6 +322,16 @@
   --toi-danger: #ff8080;
   --toi-danger-bg: #3a1e1e;
   --toi-danger-border: #b55555;
+
+  /* Màu biểu đồ, bản TỐI. KHÔNG phải bản sáng đảo ngược mà là bốn bước chọn riêng
+     cho nền `--toi-surface`: dải sáng của giao diện tối hẹp hơn (OKLCH L 0.48–0.67),
+     nên mọi màu sáng hơn thế đều bị validator loại. Xem chú thích ở nhóm
+     `--color-bd-*` để biết bộ này đo ra bao nhiêu và vì sao ΔE 6.7 vẫn hợp lệ. */
+  --toi-bd-hien: #0f9d8a;
+  --toi-bd-siet: #cf7a10;
+  --toi-bd-an: #8a72e4;
+  --toi-bd-go: #c9455e;
+  --toi-bd-cot: #7d95ee;
 }
 
 /* Máy đang ở chế độ tối, và người dùng chưa tự chọn giao diện sáng. */
@@ -342,6 +378,11 @@
     --color-danger: var(--toi-danger);
     --color-danger-bg: var(--toi-danger-bg);
     --color-danger-border: var(--toi-danger-border);
+    --color-bd-hien: var(--toi-bd-hien);
+    --color-bd-siet: var(--toi-bd-siet);
+    --color-bd-an: var(--toi-bd-an);
+    --color-bd-go: var(--toi-bd-go);
+    --color-bd-cot: var(--toi-bd-cot);
   }
 }
 
@@ -388,6 +429,11 @@
   --color-danger: var(--toi-danger);
   --color-danger-bg: var(--toi-danger-bg);
   --color-danger-border: var(--toi-danger-border);
+  --color-bd-hien: var(--toi-bd-hien);
+  --color-bd-siet: var(--toi-bd-siet);
+  --color-bd-an: var(--toi-bd-an);
+  --color-bd-go: var(--toi-bd-go);
+  --color-bd-cot: var(--toi-bd-cot);
 }
 
 /* Người dùng tự chọn giao diện sáng. `color-scheme` cần nói rõ để ô nhập, thanh

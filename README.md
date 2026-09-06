@@ -63,6 +63,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cầ
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 28, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 24, DỌN THẬT
+node infra/e2e-bieu-do.mjs                                         # 18, không cần gì thêm
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
@@ -1169,6 +1170,65 @@ Hộp xác nhận trên nút nói **gọn hơn** `/dieu-khoan` và cố ý khôn
 
 Bộ kiểm: `node infra/e2e-an-vs-xoa.mjs` (24). Nó canh cả ba sự thật ở trên, kể cả sự thật
 số ba — chạy prune thật rồi khẳng định HTML trả 404 trong khi `.sb3` dùng chung vẫn trả 200.
+
+## Hai biểu đồ trên tab Tổng quan
+
+**SVG viết tay, không thư viện.** CSP không có `script-src 'unsafe-inline'` và không cho
+host ngoài, nên một thư viện chart phải vào qua bundle — vài trăm KB JS cho một trang nội
+bộ mà cả hai hình là ba mươi dòng hình học. Cả hai component là **server component**:
+chúng không gửi một byte JS nào xuống trình duyệt. Tooltip là `<title>` của SVG (trình
+duyệt hiện khi trỏ chuột, trình đọc màn hình đọc) — không cần script.
+
+| Hình | Trả lời | Vì sao hình này |
+|---|---|---|
+| **Donut** — trạng thái game | phần lớn game đang ở đâu | bốn trạng thái là một **phân hoạch** thật: mỗi game nằm đúng một ô và bốn số cộng lại bằng tổng. Part-to-whole ≤ 6 múi là chỗ donut đúng |
+| **Cột** — game mới mỗi ngày | nhịp đăng game 14 ngày qua | một chuỗi đếm theo bin thời gian; **một** series nên không có chú giải, tiêu đề đã nói đang đếm gì |
+
+**Màu đã ĐO, không chọn bằng mắt.** Bốn màu trạng thái nằm kề nhau trên vòng donut, và
+vòng tròn đóng nên cặp đầu–cuối cũng kề — nên chúng được kiểm bằng
+`validate_palette.js` (skill dataviz) ở chế độ `--pairs all`, trên đúng `surface` của
+từng giao diện:
+
+| | tách biệt CVD | sàn mắt thường | tương phản |
+|---|---|---|---|
+| Bản sáng | ΔE **8.7** (ngưỡng 8) | 15.5 (sàn 15) | tất cả ≥ 3:1 |
+| Bản tối | ΔE **6.7** (dải 6–8) | 15.5 | tất cả ≥ 3:1 |
+
+Bản tối nằm trong dải 6–8, **chỉ hợp lệ vì có mã hoá thứ hai**: chú giải mang nhãn chữ,
+số và phần trăm, cộng khe 2px giữa các múi. Xoá chú giải đi là bảng màu tối không còn hợp
+lệ — đó là lý do nó là một bảng số chứ không phải bốn ô màu để đối chiếu bằng mắt.
+
+Màu của cột **cố ý không nằm trong bốn màu trạng thái**: "game mới mỗi ngày" không mang
+nghĩa trạng thái, và dùng màu trạng thái cho một chuỗi không phải trạng thái là làm mất
+nghĩa của cả bốn. `contrast-check` thêm 5 cặp (10 phép, ngưỡng **3:1** — đây là màu của
+một *hình*, không phải màu chữ) nhưng nó **không** đo được tách biệt mù màu; đổi màu thì
+phải chạy cả hai công cụ.
+
+Bốn cái bẫy đã trả giá để biết, cả bốn đều im lặng khi hỏng:
+
+1. **Cung 360 độ vẽ ra không gì cả.** Điểm đầu trùng điểm cuối nên `A` không biết đi
+   đường nào và vành biến mất hoàn toàn — đúng vào trạng thái *thường gặp nhất* (một
+   trang mới thì mọi game đều đang hiện). Một trạng thái chiếm 100% thì vẽ `<circle>`.
+2. **`viewBox` scale cả CHỮ.** Bản đầu dùng `viewBox` rộng 560 rồi `w-full`: ở thẻ 350px
+   trên điện thoại, tỉ lệ tụt về 0.62 và nhãn ngày hiển thị ra **~8px** — đo bằng ảnh
+   chụp thật. Sửa bằng viewBox hẹp (380) + `max-w-[520px]` + `mx-auto`, nên tỉ lệ chỉ
+   chạy trong 0.87–1.37 và chữ ra 9.6–15px ở cả hai đầu. Có phép kiểm ghim lại con số.
+3. **Vạch "ngày bằng 0" làm đường đáy trông ĐỨT KHÚC.** Bản đầu vẽ cho ngày trống một
+   vạch mỏng màu viền sát đáy; ảnh chụp cho thấy trục dày ở chỗ có ngày trống và mảnh ở
+   giữa, đọc thành nét đứt — mà nét đứt thì đọc như "ngưỡng" hoặc "dự báo". Bỏ vạch,
+   thay bằng một `<rect>` **trong suốt** phủ cả khoảng: vừa cho ngày 0 có tooltip, vừa
+   làm đích trỏ chuột rộng bằng cả khoảng thay vì bằng bề ngang cột.
+4. **Đếm theo ngày phải gom ở JS, không `date_trunc`.** Gom theo ngày phụ thuộc múi giờ
+   người xem (container khai `TZ`), còn Postgres gom theo múi giờ của phiên — lệch nhau
+   thì mọi game đăng sau 17:00 rơi sang ngày hôm sau, im lặng. Và mảng ngày dựng từ
+   *lịch* chứ không từ dữ liệu: 14 ngày mất ba ngày ở giữa đọc như 11 ngày liên tục.
+
+Chú giải donut chịu **cùng luật với mười hai ô số**: mỗi dòng là một link và con số phải
+bằng đúng danh sách nó dẫn tới. Bộ kiểm canh cả luật đó, cả phép cộng bốn múi bằng số ở
+giữa vành — và đã chứng minh cả hai bắt được lỗi (cho một trạng thái đếm 0 → hai phép đỏ).
+
+Bộ kiểm: `node infra/e2e-bieu-do.mjs` (18). Nó **không dựng dữ liệu** — chỉ đọc những gì
+đang có và tự so các con số với nhau, nên không cần dọn và đúng ở mọi trạng thái DB.
 
 ## Cấu trúc
 

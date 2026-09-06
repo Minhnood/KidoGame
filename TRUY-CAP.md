@@ -50,7 +50,7 @@ Phiên site sống **30 ngày**, phiên quản trị **24 giờ**.
 
 | Đường dẫn | Tab | Trả lời câu hỏi |
 |---|---|---|
-| `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không |
+| `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không · 12 ô số + 2 biểu đồ |
 | `/admin` | Kiểm duyệt | Có gì trong hàng đợi nội dung |
 | `/admin/tai-khoan` | Tài khoản | Gia đình này là ai · khoá/mở khoá tài khoản bé · xoá cả gia đình |
 | `/admin/loi` | Lỗi | Lỗi xảy ra ở máy người dùng thật |
@@ -124,6 +124,22 @@ Bốn điều phải biết trước khi bấm:
   duyệt người đó từng ghi trên game nhà khác mất chỗ tra ra tên.
 - **Việc này không đảo lại được.** Không có bảy ngày như game bị gỡ. Đường cứu duy nhất
   là bản sao lưu.
+
+### Hai biểu đồ trên tab Tổng quan
+
+- **Donut "Game đang ở đâu"** — bốn trạng thái, cộng lại bằng tổng game. **Mỗi dòng chú
+  giải là một link** tới hàng đợi đã lọc, và con số trên dòng bằng đúng số game trong
+  danh sách đó.
+- **Cột "Game mới mỗi ngày"** — 14 ngày gần nhất, kể cả ngày không có game nào. Bấm
+  *Xem số theo ngày* ra bảng số, không cần trỏ chuột.
+
+Trỏ chuột vào một múi hay một khoảng ngày thì hiện số (đó là `<title>` của SVG, không
+phải JS). Cả hai hình vẽ bằng SVG viết tay, **không thư viện chart nào**.
+
+Đổi màu biểu đồ thì phải chạy **hai** công cụ, không phải một: `contrast-check` chỉ đo
+tương phản, còn việc bốn màu có phân biệt được dưới mù màu hay không thì đo bằng
+`validate_palette.js` của skill dataviz với `--pairs all`. Số đo ghi ngay trong chú thích
+nhóm `--color-bd-*` ở `globals.css`.
 
 ### Ẩn game và xoá hẳn game — không giống nhau
 

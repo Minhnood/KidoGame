@@ -10,6 +10,7 @@ import { MAX_UNRESOLVED_GROUPS } from '@/lib/error-log';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
+import { CotTheoNgay, DonutTrangThai } from '../bieu-do';
 
 export const dynamic = 'force-dynamic';
 
@@ -175,6 +176,10 @@ export default async function AdminTongQuanPage() {
   const bayGio = new Date();
   const truoc24h = new Date(bayGio.getTime() - 86400_000);
   const truoc7ngay = new Date(bayGio.getTime() - 7 * 86400_000);
+  /* Mốc của biểu đồ cột: 00:00 của ngày cách đây 13 ngày, để cột đầu tiên là một ngày
+     TRỌN chứ không phải một ngày bị cắt ở giữa — cột thấp hơn thực tế thì người đọc
+     kết luận sai về xu hướng, và không có gì trên hình nói rằng nó bị cắt. */
+  const truoc14ngay = new Date(bayGio.getFullYear(), bayGio.getMonth(), bayGio.getDate() - 13);
 
   /*
    * Việc CÓ HẠN đọc từ `lib/viec-co-han.ts`, không tính tại chỗ.
@@ -188,6 +193,8 @@ export default async function AdminTongQuanPage() {
   const [
     canXem,
     heThongTuSiet,
+    theoTrangThai,
+    gameGanDay,
     chuaBamDongHo,
     nhomLoiChuaXuLy,
     loiMoi24h,
@@ -202,6 +209,20 @@ export default async function AdminTongQuanPage() {
       where: { OR: [{ reportCount: { gt: 0 } }, { status: { not: 'PUBLISHED' } }] },
     }),
     prisma.game.count({ where: { status: { in: ['LIMITED', 'HIDDEN'] } } }),
+    /* Bốn số cho biểu đồ tròn. `groupBy` một lượt thay vì bốn phép `count`: bốn
+       trạng thái là một PHÂN HOẠCH, nên hỏi bằng bốn truy vấn rời là mở đường cho
+       bốn con số đọc ở bốn thời điểm khác nhau — cộng lại không bằng tổng, và biểu
+       đồ phần-trên-tổng nói sai tỉ lệ mà không có gì báo. */
+    prisma.game.groupBy({ by: ['status'], _count: { _all: true } }),
+    /* Game 14 ngày qua, lấy về `createdAt` rồi đếm theo ngày ở JS.
+       KHÔNG dùng `date_trunc` trong SQL thô: gom theo ngày phải theo múi giờ của
+       người xem (container khai `TZ=Asia/Ho_Chi_Minh`), và Postgres gom theo múi giờ
+       của phiên — hai cái lệch nhau thì mọi game đăng sau 17:00 rơi sang ngày hôm
+       sau, im lặng. Số hàng ở đây là số game 14 ngày, tức nhỏ theo định nghĩa. */
+    prisma.game.findMany({
+      where: { createdAt: { gte: truoc14ngay } },
+      select: { createdAt: true },
+    }),
     /* Game đã gỡ mà `removedAt` còn null: gỡ từ TRƯỚC khi có cột này. Job dọn không
        xoá chúng, nó bấm đồng hồ ở lượt chạy kế tiếp — nên đây không phải việc của
        người trực, chỉ là một con số để không ai hoảng khi thấy nó ở bộ lọc "Đã gỡ". */
@@ -226,6 +247,69 @@ export default async function AdminTongQuanPage() {
      không có. */
   const khongCoViecGap = !coViecGap(viec) && nhomLoiChuaXuLy === 0;
   const cuNhat = viec.cuNhat;
+
+  /* --- Dữ liệu hai biểu đồ ------------------------------------------------- */
+
+  const soTheoTrangThai = (st: string) =>
+    theoTrangThai.find((t) => t.status === st)?._count._all ?? 0;
+  const tongGame = theoTrangThai.reduce((t, x) => t + x._count._all, 0);
+
+  /* Thứ tự bốn múi là thứ tự MỨC SIẾT tăng dần, không phải thứ tự số lớn đến nhỏ:
+     người đọc lần theo vành để thấy "càng đi càng nặng", và sắp theo số thì cùng một
+     trạng thái nhảy chỗ mỗi lần dữ liệu đổi — màu phải đi theo trạng thái, không đi
+     theo hạng. */
+  const mucDonut = [
+    {
+      nhan: 'Đang hiện',
+      so: soTheoTrangThai('PUBLISHED'),
+      mau: 'fill-bd-hien',
+      mauO: 'bg-bd-hien',
+      href: '/admin?loc=dang-hien',
+    },
+    {
+      nhan: 'Ẩn khỏi danh sách',
+      so: soTheoTrangThai('LIMITED'),
+      mau: 'fill-bd-siet',
+      mauO: 'bg-bd-siet',
+      href: '/admin?loc=an-mem',
+    },
+    {
+      nhan: 'Đã ẩn hẳn',
+      so: soTheoTrangThai('HIDDEN'),
+      mau: 'fill-bd-an',
+      mauO: 'bg-bd-an',
+      href: '/admin?loc=da-an',
+    },
+    {
+      nhan: 'Đã gỡ',
+      so: soTheoTrangThai('REMOVED'),
+      mau: 'fill-bd-go',
+      mauO: 'bg-bd-go',
+      href: '/admin?loc=da-go',
+    },
+  ];
+
+  /*
+   * Mười bốn ngày, dựng từ MẢNG NGÀY chứ không từ dữ liệu.
+   *
+   * Gom theo `createdAt` rồi vẽ những khoá gom được thì ngày không có game nào sẽ
+   * không có cột — và một chuỗi 14 ngày mất ba ngày ở giữa đọc như một chuỗi 11 ngày
+   * liên tục, tức hình nói sai về nhịp đăng game. Ngày trống phải có mặt và bằng 0.
+   */
+  const khoaNgay = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const demTheoNgay = new Map<string, number>();
+  for (const g of gameGanDay) {
+    const k = khoaNgay(g.createdAt);
+    demTheoNgay.set(k, (demTheoNgay.get(k) ?? 0) + 1);
+  }
+  const ngayCot = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(bayGio.getFullYear(), bayGio.getMonth(), bayGio.getDate() - (13 - i));
+    return {
+      nhan: `${d.getDate()}/${d.getMonth() + 1}`,
+      nhanDay: d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' }),
+      so: demTheoNgay.get(khoaNgay(d)) ?? 0,
+    };
+  });
 
   /*
    * Vết kiểm duyệt gần nhất. Truy vấn RIÊNG, không nhét vào `Promise.all` ở trên:
@@ -421,6 +505,39 @@ export default async function AdminTongQuanPage() {
           muc="nen"
         />
       </Nhom>
+
+      {/*
+        HAI BIỂU ĐỒ, và chúng trả lời câu khác hẳn lưới ô số bên trên.
+        Ô số trả lời "còn bao nhiêu việc"; hai hình này trả lời "hệ thống đang ở hình
+        dạng nào" — phần lớn game nằm ở trạng thái nào, và nhịp đăng game mấy tuần qua
+        có gì lạ không. Cả hai là câu hỏi về TỈ LỆ và về NHỊP, hai thứ mà một con số
+        đơn lẻ không trả lời được, nên chúng là hình chứ không phải thêm hai ô nữa.
+
+        Đặt SAU lưới ô số, cố ý: việc gấp phải nằm trên màn hình đầu tiên. Một biểu đồ
+        đẹp đẩy "3 yêu cầu quá hạn" xuống dưới màn gập là đổi đúng thứ trang này sinh
+        ra để làm.
+      */}
+      <section className="mb-9 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className={`p-5 ${MAT_THE}`} data-testid="tq-donut">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game đang ở đâu</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Bốn trạng thái, cộng lại bằng tổng số game. Bấm một dòng để mở hàng đợi đã lọc.
+          </p>
+          {tongGame === 0 ? (
+            <p className="text-ink-soft">Chưa có game nào.</p>
+          ) : (
+            <DonutTrangThai muc={mucDonut} tong={tongGame} nhanTong="game" />
+          )}
+        </div>
+
+        <div className={`p-5 ${MAT_THE}`} data-testid="tq-cot">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game mới mỗi ngày</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Mười bốn ngày gần nhất, kể cả ngày không có game nào.
+          </p>
+          <CotTheoNgay ngay={ngayCot} nhanBang="Số game đăng mỗi ngày, 14 ngày gần nhất" />
+        </div>
+      </section>
 
       {/*
         VIỆC ĐÃ LÀM, không phải việc phải làm — và đó là lý do nó đứng riêng ở cuối.
