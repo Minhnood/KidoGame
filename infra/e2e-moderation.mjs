@@ -560,6 +560,176 @@ const verifiedCtxs = [];
   check('Cho hiện lại đã xoá số đếm báo cáo (game rời khỏi mục Cần xem)', stillListed === 0);
 }
 
+// ---------- Bảng tổng quan ----------
+{
+  /*
+   * Phép kiểm ở đây đo tính NHẤT QUÁN, không đo con số tuyệt đối.
+   *
+   * DB dev mang dữ liệu của những lượt chạy trước và của chính fen, nên một ngưỡng
+   * kiểu "phải bằng 4" sẽ đỏ oan ở máy khác và ở lượt chạy sau. Thứ luôn đúng, và
+   * cũng là thứ duy nhất đáng canh: ô số trên bảng tổng quan phải khớp CHÍNH DANH
+   * SÁCH mà nó dẫn tới. Lệch một cái là người trực đọc "5 game cần xem" rồi bấm vào
+   * thấy 3 — và từ lúc đó họ không tin bảng nữa, tức cả trang thành vô dụng.
+   */
+  await admin.goto(`${ADMIN}/admin/tong-quan`, { waitUntil: 'networkidle' });
+  check(
+    'Có tab Tổng quan và nó là tab đang mở',
+    (await admin.locator('[data-testid=admin-tab-tong-quan]').getAttribute('aria-current')) ===
+      'page'
+  );
+
+  const soCanXem = Number(
+    await admin.locator('[data-testid=o-can-xem]').getAttribute('data-so')
+  );
+  const soBaoCao = Number(
+    await admin.locator('[data-testid=o-bao-cao-24h]').getAttribute('data-so')
+  );
+
+  await admin.goto(`${ADMIN}/admin?loc=can-xem`, { waitUntil: 'networkidle' });
+  const demThat = await admin.locator('[data-testid=admin-game]').count();
+  check(
+    'Ô "Game cần xem" khớp đúng số dòng trong danh sách nó dẫn tới',
+    soCanXem === demThat,
+    `ô ${soCanXem} · danh sách ${demThat}`
+  );
+
+  /* Bài này vừa tạo sáu báo cáo đã xác minh, nên con số 24 giờ không thể là 0. */
+  check('Ô "Báo cáo mới 24 giờ" đếm được báo cáo bài kiểm vừa tạo', soBaoCao > 0, `${soBaoCao}`);
+
+  /*
+   * Dòng "Không có việc gấp" phải hiện KHI VÀ CHỈ KHI ba ô đỏ đều bằng 0.
+   *
+   * Kiểm hai chiều bằng một phép tương đương, không kiểm "có hiện không": DB dev mang
+   * dữ liệu của lượt chạy trước nên hôm nay có thể có việc gấp mà mai thì không, và
+   * một phép kiểm chỉ đúng một chiều sẽ đỏ oan tuỳ ngày. Hướng hỏng thật nằm ở chỗ
+   * khác: dòng yên tĩnh hiện ra TRONG KHI vẫn còn việc quá hạn, tức bảng nói dối đúng
+   * cái nó sinh ra để nói.
+   */
+  await admin.goto(`${ADMIN}/admin/tong-quan`, { waitUntil: 'networkidle' });
+  const doSo = async (id) =>
+    Number(await admin.locator(`[data-testid=${id}]`).getAttribute('data-so'));
+  const tongGap = (await doSo('o-go-qua-han')) + (await doSo('o-sap-xoa')) + (await doSo('o-loi-chua-xu-ly'));
+  const coDongYen = (await admin.locator('[data-testid=tq-yen]').count()) === 1;
+  check(
+    'Dòng "không có việc gấp" hiện đúng khi và chỉ khi hết việc gấp',
+    (tongGap === 0) === coDongYen,
+    `gấp ${tongGap} · dòng yên ${coDongYen}`
+  );
+
+  const hoatDong = await admin.locator('[data-testid=tq-hoat-dong]').innerText();
+  check(
+    'Hoạt động gần đây ghi lại thao tác admin vừa làm, kèm email admin',
+    /cho hiện lại/i.test(hoatDong) && hoatDong.includes(ADMIN_EMAIL)
+  );
+  /*
+   * `actorId` không phải khoá ngoại nên phải tra ngược ra email bằng một truy vấn
+   * riêng. Quên bước đó thì trang vẫn chạy, vẫn đủ số dòng, chỉ là mỗi dòng ghi một
+   * cuid — hỏng đúng theo kiểu không ai báo. Bắt bằng hình dạng cuid (`c` + 24 ký
+   * tự), thứ không bao giờ được xuất hiện trong chữ người đọc.
+   */
+  check(
+    'Hoạt động gần đây in tên người, không in cuid thô',
+    !/\bc[a-z0-9]{24}\b/.test(hoatDong),
+    hoatDong.match(/\bc[a-z0-9]{24}\b/)?.[0] ?? ''
+  );
+}
+
+// ---------- Tra cứu tài khoản ----------
+{
+  /*
+   * Lỗ hổng chức năng mà trang này vá: trước nó, nút khoá tài khoản bé CHỈ có trên
+   * dòng game trong hàng đợi. Bé chưa đăng game nào thì không có đường nào khoá, dù
+   * lý do khoá thường đến từ chỗ khác — phụ huynh viết thư báo con bị mượn tài khoản.
+   * Nên phép kiểm cuối ở đây bấm nút khoá TỪ TRANG TÀI KHOẢN, không phải từ hàng đợi.
+   */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${encodeURIComponent(OWNER_EMAIL)}`, {
+    waitUntil: 'networkidle',
+  });
+  const theoEmail = await admin.locator('[data-testid=tk-gia-dinh]').count();
+  check('Tìm theo email phụ huynh ra đúng một gia đình', theoEmail === 1, `${theoEmail}`);
+
+  /* Hai cửa vào phải dẫn tới CÙNG một gia đình: người trực cầm email khi phụ huynh
+     viết thư, cầm tên đăng nhập khi đi từ trang game. Nếu hai đường ra hai loại kết
+     quả khác nhau thì không so được với nhau. */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  const theoTenBe = await admin.locator('[data-testid=tk-gia-dinh]').innerText();
+  check(
+    'Tìm theo tên đăng nhập của bé cũng ra đúng gia đình đó',
+    theoTenBe.includes(OWNER_EMAIL),
+    theoTenBe.split('\n')[0]
+  );
+
+  /*
+   * BỘ LỌC PHẢI AND VỚI Ô TÌM KIẾM, KHÔNG THAY THẾ NÓ — và đây là hướng hỏng im lặng
+   * nhất của cả trang: nếu bộ lọc ghi đè chuỗi tìm kiếm thì danh sách VẪN có kết quả,
+   * chỉ là của những gia đình khác. Người trực đọc dòng đầu tưởng là nhà mình vừa tìm
+   * rồi bấm khoá tài khoản một đứa trẻ không liên quan.
+   *
+   * Phụ huynh của bài này ĐÃ xác minh email, nên "khớp email đó" và "chưa xác minh"
+   * không thể cùng đúng: đúng một cặp điều kiện để phân biệt AND với OR.
+   */
+  await admin.goto(
+    `${ADMIN}/admin/tai-khoan?q=${encodeURIComponent(OWNER_EMAIL)}&loc=chua-xac-minh`,
+    { waitUntil: 'networkidle' }
+  );
+  check(
+    'Bộ lọc AND với ô tìm kiếm, không thay thế nó',
+    (await admin.locator('[data-testid=tk-gia-dinh]').count()) === 0
+  );
+
+  await admin.goto(`${ADMIN}/admin/tai-khoan?loc=chua-xac-minh`, { waitUntil: 'networkidle' });
+  const chuaXacMinh = await admin.locator('[data-testid=tk-gia-dinh]').allInnerTexts();
+  check(
+    'Lọc "chưa xác minh" không lẫn nhà đã xác minh',
+    chuaXacMinh.every((t) => !t.includes('Đã xác minh')),
+    `${chuaXacMinh.length} nhà`
+  );
+
+  /* Bấm một cái chip mà mất chuỗi đang tìm thì danh sách đổi vì lý do người dùng không
+     hề ra lệnh, và đổi im lặng vì cả hai thứ đều nằm trong URL. */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${encodeURIComponent(OWNER_EMAIL)}`, {
+    waitUntil: 'networkidle',
+  });
+  const hrefChip = await admin
+    .locator('[data-testid=tk-filter-chua-co-be]')
+    .getAttribute('href');
+  check(
+    'Chip bộ lọc mang theo chuỗi đang tìm',
+    (hrefChip ?? '').includes('loc=chua-co-be') &&
+      (hrefChip ?? '').includes(encodeURIComponent(OWNER_EMAIL)),
+    hrefChip ?? ''
+  );
+
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  const dongBe = admin.locator('[data-testid=tk-be]').first();
+  const linkGame = await dongBe.locator('a').first().getAttribute('href');
+  await admin.goto(`${ADMIN}${linkGame}`, { waitUntil: 'networkidle' });
+  const demGame = await admin.locator('[data-testid=admin-game]').count();
+  const chuTrang = await admin.locator('[data-testid=admin-game]').first().innerText();
+  check('Số game của bé dẫn sang hàng đợi đã lọc theo đúng bé đó', demGame > 0 && chuTrang.includes(CHILD_USER), `${demGame} game`);
+  check(
+    'Hàng đợi nói rõ đang lọc theo bé nào',
+    (await admin.locator('[data-testid=admin-loc-be]').innerText()).includes(CHILD_USER)
+  );
+
+  /*
+   * Bé này đang bị khoá từ bước trước, nên nút ở đây là "Mở khoá" — và mở khoá được
+   * từ trang tài khoản chính là điều cần chứng minh. Cũng trả tài khoản về trạng thái
+   * bình thường, để lượt chạy sau không thừa hưởng một tài khoản đang khoá.
+   */
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  check(
+    'Trang tài khoản hiện đúng trạng thái đang khoá',
+    (await admin.locator('[data-testid=tk-be-khoa]').count()) === 1
+  );
+  await confirmClick(admin.locator('[data-testid=tk-be]').first(), 'admin-child-lock');
+  await admin.goto(`${ADMIN}/admin/tai-khoan?q=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  check(
+    'Mở khoá được tài khoản bé ngay từ trang tài khoản',
+    (await admin.locator('[data-testid=tk-be-khoa]').count()) === 0
+  );
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

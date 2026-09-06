@@ -53,16 +53,23 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                     # 51 kiểm tra
+SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 63 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 61
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 46
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 76
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
-GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 12, chạy riêng
-node infra/e2e-errorlog.mjs                                        # 27, không cần .sb3
-node infra/e2e-admin-origin.mjs                                    # 20, không cần .sb3
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
+GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
+node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
+node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 ```
+
+**`e2e-prune-removed.mjs` phải chạy SAU `e2e-takedown.mjs`.** Lượt nào đổ giữa đường thì
+để lại một hàng trong hàng đợi yêu cầu gỡ, mà `e2e-takedown` khẳng định hàng đợi có ĐÚNG
+một hàng — nó sẽ đỏ ở phép kiểm "gửi trùng không tạo thêm hàng thứ hai" rồi đổ ở `strict
+mode violation`, một triệu chứng không chỉ về đâu cả. Dọn bằng:
+`delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';`
 
 **`e2e-admin-origin.mjs` cần `ADMIN_ORIGIN` được đặt cho CẢ server dev**, không chỉ cho
 bộ kiểm. Không đặt thì middleware giữ hành vi cũ — `/admin` nằm trên app origin — và bộ
@@ -656,7 +663,7 @@ xác minh được thì không tạo được tài khoản cho con, tức đứa
 hỏng cả cửa vào.
 
 Cái khó là nó hỏng **im lặng**. `docker compose up` vẫn xanh, trang chủ vẫn chạy,
-bốn service vẫn healthy. Lỗi chỉ lộ ra khi một phụ huynh thật bấm nút và không
+năm service vẫn healthy. Lỗi chỉ lộ ra khi một phụ huynh thật bấm nút và không
 nhận được thư — lúc đó họ đã bỏ đi rồi. Nên có script riêng để hỏi thẳng:
 
 ```bash
@@ -912,6 +919,71 @@ Image cố ý **không** dùng multi-stage, **không** dùng `output: 'standalon
 **không** `prune --prod`. Lý do từng cái nằm trong comment đầu `infra/Dockerfile`
 — tóm gọn: node_modules của pnpm là một rừng symlink, và `prisma`/`tsx` là
 devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoảng 1.5GB.
+
+### Dọn định kỳ — game đã gỡ thì một tuần sau xoá hẳn
+
+Service thứ năm, `prune`. Game bị admin gỡ (`REMOVED`) nằm lại **7 ngày** rồi mới bị
+xoá thật: hàng trong DB, HTML đã đóng gói, ảnh bìa, và cả `.sb3` gốc của bé.
+
+Là một service trong stack chứ không phải cron trên host, **cùng lý do như `backup`**:
+một việc phải có người nhớ chạy thì đúng bằng không có. "Xoá sau 7 ngày" mà không ai
+chạy lệnh thì đó không phải một hạn, đó là một câu trong tài liệu.
+
+**`PRUNE_HOUR=4` phải SAU `BACKUP_HOUR=3`, và thứ tự đó là điều kiện để cửa sổ sửa sai
+tồn tại**: bản sao lưu của chính ngày xoá vẫn còn chứa game, nên gỡ nhầm vẫn phục hồi
+được. Đảo lại thì bản gần nhất đã không còn game, và "xoá sau 7 ngày" lặng lẽ thành
+"mất hẳn sau 7 ngày".
+
+Dùng lại image của `web`, không build image thứ sáu: hai script dọn là `tsx` + Prisma
+CLI, mà image `web` cố ý giữ devDependencies.
+
+Chạy tay một lượt (mặc định của cả hai script là **chạy khô**, phải thêm `--xoa`):
+
+```bash
+cd infra
+docker compose run --rm --entrypoint bash prune -c \
+  "pnpm --filter @kidogame/web db:prune-removed"      # xem trước, không xoá gì
+docker compose run --rm --entrypoint bash prune -c "bash /prune.sh once"   # xoá thật
+docker compose logs prune --tail 20                   # xem nó hẹn giờ lúc mấy giờ
+```
+
+**Đã dựng thử thật trên stack Docker**, không chỉ đọc code: service lên, hẹn đúng
+`4:00` giờ Việt Nam, và một lượt `once` chạy đủ hai bước đúng thứ tự — xoá hàng DB
+trước, rồi mới dọn file thành rác (9 file rác, 12.3 MB). Bước 1 đọc ra `Hạn giữ game
+đã gỡ: 7 ngày`, tức chốt `||` cho `REMOVED_KEEP_DAYS` chịu được đúng thứ compose gửi
+vào: **chuỗi rỗng, không phải undefined** — `?? 7` không đỡ được chuỗi rỗng, và
+`Number('')` ra 0, mà 0 là giá trị script từ chối chạy. Không có chốt đó thì ở **đúng
+cấu hình mặc định** service vẫn khởi động bình thường rồi mỗi ngày in "hạn giữ không
+hợp lệ" và không xoá gì cả.
+
+**Phụ huynh được báo ngay lúc gỡ, kèm link tải file gốc.** Không có lá thư đó thì bảy
+ngày là một cửa sổ chỉ tồn tại cho người tình cờ biết mình đang đứng trong nó: game gỡ
+im lặng, `.sb3` của bé xoá im lặng. Thư đi từ `adminRemoveGame`, ngoài transaction và
+nuốt lỗi — việc gỡ đã ghi xong, mail trượt là chậm chứ không phải sai, còn ném lỗi ở đó
+thì admin thấy đỏ cho một việc đã làm xong và sẽ bấm lại.
+
+Link trỏ thẳng player origin theo hash, đúng cái URL mà nút "Tải file .sb3 gốc" ở trang
+game vẫn dùng và `/dieu-khoan` đã nói công khai — thư **không mở thêm quyền gì**, nó chỉ
+nói địa chỉ cho người sở hữu trước khi địa chỉ đó biến mất.
+
+Đường gỡ thứ hai — chấp nhận một khiếu nại bản quyền — cũng báo hạn, nhưng **cố ý không
+kèm link**: game vừa bị kết luận là có nội dung của người khác, nên tự tay gửi đi một
+link tải chính nội dung đó là quyết định của bên vận hành chứ không phải của code. Phụ
+huynh trả lời thư để lấy lại. File vẫn nằm ở URL cũ, đây không phải chặn đường ai.
+
+Ngày in trong thư là ngày `removedAt + N`, còn job dọn chạy lúc 4:00 và so theo mốc
+`now - N ngày` — nên game gỡ lúc 15:10 ngày 5/9 thật ra bị xoá rạng sáng 13/9 chứ không
+phải 12/9 như thư ghi. Lệch về phía **thừa thời gian cho phụ huynh**, đúng hướng cần
+lệch nếu phải lệch.
+
+Cột `Game.removedAt` bấm giờ cho hạn này, và nó **về `null` khi cho hiện lại** — không
+thì game được cho hiện lại vẫn mang hạn cũ và bị xoá lúc đang chạy bình thường. Game
+đã gỡ từ TRƯỚC khi có cột này thì `removedAt` là null, và script **không xoá** chúng,
+nó bấm đồng hồ: coi null là quá hạn thì lần chạy đầu tiên xoá sạch toàn bộ lịch sử gỡ.
+
+Hồ sơ pháp lý thì **ở lại**. `TakedownRequest.gameId` là `SetNull` chứ không phải
+`Cascade`, kèm cột `gameTitle` chụp lại lúc nhận đơn — nếu không, việc dọn sẽ xoá luôn
+bằng chứng đã xử lý đúng một khiếu nại, tức càng làm đúng thì hồ sơ càng mất.
 
 ## Cấu trúc
 
@@ -1240,6 +1312,48 @@ Trang `/admin` có bộ lọc (`?loc=can-xem|tat-ca|dang-hien|da-an|da-go`), ph�
 game mỗi trang (`?trang=N`), thumbnail, lý do báo cáo, lịch sử `ModerationLog`, và nút
 khoá thẳng tài khoản bé.
 
+### Bốn tab của khu quản trị
+
+| Tab | Trả lời câu hỏi |
+|---|---|
+| `/admin/tong-quan` | Hôm nay có việc gì gấp không |
+| `/admin` (Kiểm duyệt) | Có gì trong hàng đợi nội dung |
+| `/admin/tai-khoan` | Gia đình này là ai, và khoá/mở khoá tài khoản bé |
+| `/admin/loi` | Lỗi ở máy người dùng thật |
+
+**Tổng quan có mặt vì hai hàng đợi trả lời "có gì trong đống", không trả lời "cái nào
+sắp muộn".** Ba thứ trên đó không đọc ra được từ hàng đợi dù ngồi đọc hết:
+
+- **Yêu cầu gỡ bản quyền quá hạn.** Hàng đợi xếp cũ nhất lên đầu, nhưng *cũ nhất* và
+  *quá hạn* là hai chuyện: hạn tính theo NGÀY LÀM VIỆC, nên một yêu cầu gửi chiều thứ
+  sáu và một yêu cầu gửi sáng thứ hai không cùng một đồng hồ. Đây là hạn duy nhất đã
+  hứa công khai với người ngoài.
+- **Game đã gỡ sắp bị xoá hẳn.** Sau hạn đó nút "Cho hiện lại" không còn gì để hiện
+  lại — việc duy nhất trong cả khu quản trị mà bỏ lỡ là mất vĩnh viễn — và nó nằm
+  trong bộ lọc "Đã gỡ", tức tab ít người mở nhất.
+- **Game bị hệ thống tự siết mà chưa ai xem.** Bộ lọc "Cần xem" gộp chúng chung với
+  game mới chỉ dính báo cáo, trong khi nhóm này đang *bị phạt* rồi.
+
+Hai luật của bảng số, cả hai đều có phép kiểm:
+
+1. **Mỗi ô là một link, và con số phải bằng đúng danh sách nó dẫn tới.** Một con số
+   không bấm được là một câu đố: người đọc vẫn phải tự đi tìm, và nếu họ chọn nhầm bộ
+   lọc thì số không khớp danh sách mà không ai biết bên nào sai.
+2. **Chỉ việc CÓ HẠN hoặc KHÔNG ĐẢO ĐƯỢC mới tô đỏ.** Tô mọi số khác 0 thì màu đỏ hết
+   nghĩa, và hai thứ thật sự không chờ được sẽ nằm lẫn giữa những con số chỉ đang bận.
+
+**Tài khoản vá một lỗ hổng chức năng thật**: trước nó, nút khoá tài khoản bé CHỈ có
+trên dòng game trong hàng đợi — nên một bé chưa đăng game nào thì không có đường nào
+khoá, dù lý do khoá thường là phụ huynh viết thư báo con bị người lạ mượn tài khoản.
+Đường còn lại là vào thẳng database. Tìm được theo email phụ huynh HOẶC tên đăng nhập
+của bé, và cả hai đường đều trả về **một gia đình** — trả về hai loại kết quả khác nhau
+tuỳ chuỗi gõ vào thì hai danh sách không so được với nhau.
+
+Số game của mỗi bé dẫn sang hàng đợi đã lọc theo bé đó, qua tham số **`be`**. Nó VUÔNG
+GÓC với `loc` chứ không phải một giá trị nữa của `loc`: bốn bộ lọc trạng thái phải rời
+nhau và cộng lại đúng bằng "Tất cả" (`e2e-moderation` canh bằng phép cộng), nên nhét
+"theo bé" vào cùng danh sách đó là phá đúng thứ đang được canh.
+
 ### Khu quản trị là một ORIGIN riêng
 
 **`admin.<domain>` là origin thứ ba, cạnh app origin và player origin.** Cookie phiên
@@ -1279,7 +1393,7 @@ sai mật khẩu với không-phải-admin trả về **cùng một** thông đi
 không có quyền quản trị" là xác nhận email tồn tại và mật khẩu vừa gõ đúng.
 
 `ADMIN_DOMAIN` để trống là **không tách**: `/admin` nằm trên app domain như trước. Bộ
-kiểm dành riêng: [`infra/e2e-admin-origin.mjs`](infra/e2e-admin-origin.mjs), 20 phép
+kiểm dành riêng: [`infra/e2e-admin-origin.mjs`](infra/e2e-admin-origin.mjs), 27 phép
 kiểm. Cần nó vì cơ chế này hỏng im lặng — admin vẫn vào được, vẫn ẩn được game, chỉ
 lớp phòng thủ là mất, và không phép kiểm nào khác trong repo nhìn thấy điều đó.
 

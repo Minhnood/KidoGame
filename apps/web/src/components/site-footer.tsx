@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Hoa } from './site-decor';
+import { DatCuoiTrang, Hoa } from './site-decor';
 
 /**
  * Chân trang: chỉ có link, KHÔNG có tên/email đơn vị vận hành.
@@ -116,8 +116,16 @@ function VienDat() {
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto pb-6" data-testid="site-footer">
-      <div className="mx-auto w-full max-w-5xl px-5 text-sm text-ink-soft">
+    /*
+     * `pb-6` nằm ở khung chữ bên trong, KHÔNG ở thẻ <footer>.
+     *
+     * Dải đất cuối trang là phần tử cuối cùng của trang, nên padding đặt ở <footer>
+     * sẽ thành 24px nền kem NẰM DƯỚI mặt đất — một khe hở giữa mặt đất và đáy trang,
+     * đúng thứ mà cả dải đất tồn tại để lấp. Chuyển vào trong thì khoảng cách giữa
+     * chữ và mặt đất vẫn còn, ở cả hai khổ màn hình.
+     */
+    <footer className="mt-auto" data-testid="site-footer">
+      <div className="mx-auto w-full max-w-5xl px-5 pb-6 text-sm text-ink-soft">
         <VienDat />
         {/* Một dòng nói web này là gì. Người lớn lần đầu vào bằng link con gửi
             thường cuộn thẳng xuống đáy để tìm xem đây là chỗ nào. */}
@@ -138,6 +146,10 @@ export function SiteFooter() {
           ))}
         </div>
       </div>
+      {/* Ngoài khung 1024px và không có `px-5`: mặt đất phải chạy suốt hai mép màn
+          hình. Nằm trong khung thì hai đầu đất cụt ngang, cách mép 20px — một dải
+          đất lửng lơ giữa trang chứ không phải mặt đất. */}
+      <DatCuoiTrang />
     </footer>
   );
 }

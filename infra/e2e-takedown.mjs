@@ -21,7 +21,7 @@
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
+import { batBuocMailLog, choMailToi, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
@@ -377,6 +377,21 @@ const admin = await adminCtx.newPage();
   check('Lịch sử ghi lần tạm ẩn vì yêu cầu gỡ', /tạm ẩn vì có yêu cầu gỡ/i.test(logText));
   check('Lịch sử ghi lần admin chấp nhận yêu cầu gỡ', /chấp nhận yêu cầu gỡ/i.test(logText));
   check('Vết chấp nhận ghi rõ admin nào làm', logText.includes(ADMIN_EMAIL));
+
+  /*
+   * Đường thứ hai dẫn tới REMOVED, và nó xoá file gốc của bé y hệt đường kia — nên
+   * phụ huynh ở đây cũng phải đọc được mình còn bao nhiêu ngày.
+   *
+   * CỐ Ý KHÔNG đòi có link tải trong lá thư này, khác với thư của `adminRemoveGame`:
+   * game vừa bị kết luận là có nội dung của người khác, nên việc có tự tay gửi đi một
+   * link tải hay không là quyết định của bên vận hành, không phải của một phép kiểm.
+   * Nếu sau này đổi ý và thêm link, phép kiểm này vẫn xanh — nó canh cái hạn, thứ mà
+   * cả hai đường đều phải nói ra.
+   */
+  check(
+    'Chấp nhận gỡ thì thư gửi phụ huynh có nói hạn xoá file gốc',
+    await choMailToi(MAIL_LOG, PARENT_EMAIL, /còn được giữ tới ngày \d{1,2}\/\d{1,2}\/\d{4}/)
+  );
 }
 
 // ---------- Nhánh 2: khiếu nại không đủ căn cứ -> game hiện lại ----------

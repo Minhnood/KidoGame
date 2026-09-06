@@ -3,7 +3,13 @@ import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getAdmin } from '@/lib/session';
-import { REPORT_AUTO_HIDE_THRESHOLD, REPORT_HARD_HIDE_THRESHOLD } from '@/lib/moderation';
+import {
+  actionLabel,
+  NGAY_GIU_GAME_DA_GO,
+  REPORT_AUTO_HIDE_THRESHOLD,
+  REPORT_HARD_HIDE_THRESHOLD,
+  hanXoaHan,
+} from '@/lib/moderation';
 import { reasonLabel } from '@/lib/report-reasons';
 import { objectUrl } from '@/lib/storage';
 import { EmptyState, PageTitle } from '@/components/page';
@@ -17,6 +23,7 @@ import {
   RestoreGameButton,
 } from './admin-controls';
 import { TakedownControls } from './takedown-controls';
+import { Pager } from './pager';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,22 +34,6 @@ const STATUS_LABEL: Record<string, string> = {
   LIMITED: 'ẩn mềm — chỉ vào được bằng link',
   HIDDEN: 'đang ẩn',
   REMOVED: 'đã gỡ hẳn',
-};
-
-/** Nhãn cho `ModerationLog.action`. Mã lạ thì hiện nguyên mã chứ không vỡ trang. */
-const ACTION_LABEL: Record<string, string> = {
-  AUTO_LIMIT: 'Hệ thống tự ẩn khỏi danh sách (đủ ngưỡng báo cáo)',
-  AUTO_HIDE: 'Hệ thống tự ẩn (đủ ngưỡng báo cáo)',
-  PARENT_HIDE: 'Phụ huynh ẩn game',
-  PARENT_UNHIDE: 'Phụ huynh cho hiện lại',
-  ADMIN_REMOVE: 'Admin gỡ hẳn',
-  ADMIN_RESTORE: 'Admin cho hiện lại',
-  ADMIN_DISMISS_REPORTS: 'Admin bỏ qua báo cáo',
-  ADMIN_LOCK_CHILD: 'Admin khoá tài khoản của bé',
-  ADMIN_UNLOCK_CHILD: 'Admin mở khoá tài khoản của bé',
-  TAKEDOWN_HIDE: 'Tạm ẩn vì có yêu cầu gỡ bản quyền',
-  TAKEDOWN_ACCEPT: 'Admin chấp nhận yêu cầu gỡ bản quyền',
-  TAKEDOWN_REJECT: 'Admin bác bỏ yêu cầu gỡ bản quyền',
 };
 
 /**
@@ -87,7 +78,7 @@ function whereFor(filter: FilterKey): Prisma.GameWhereInput {
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ loc?: string; trang?: string }>;
+  searchParams: Promise<{ loc?: string; trang?: string; be?: string }>;
 }) {
   const admin = await getAdmin();
   /*
@@ -106,7 +97,30 @@ export default async function AdminPage({
   const sp = await searchParams;
   const filter = (FILTERS.find((f) => f.key === sp.loc)?.key ?? 'can-xem') as FilterKey;
   const page = Math.max(1, Number(sp.trang ?? '1') || 1);
-  const where = whereFor(filter);
+
+  /*
+   * `be` — lọc thêm theo MỘT đứa trẻ, dùng khi đi từ trang Tài khoản sang.
+   *
+   * VUÔNG GÓC với `loc`, không phải một giá trị nữa của nó: bốn bộ lọc trạng thái
+   * phải rời nhau và cộng lại đúng bằng "Tất cả" (e2e-moderation canh bất biến này
+   * bằng phép cộng), nên nhét "theo bé" vào cùng danh sách đó là phá đúng thứ đang
+   * được canh. Ở đây nó AND vào sau, tức "game của bé này, trong nhóm đang xem".
+   *
+   * Không kiểm id có tồn tại: id sai chỉ ra danh sách rỗng, và một trang rỗng kèm
+   * dòng chữ "đang lọc theo bé" đã tự nói ra chuyện gì xảy ra.
+   */
+  const be = (sp.be ?? '').trim();
+  const loc = whereFor(filter);
+  const where: Prisma.GameWhereInput = be ? { AND: [loc, { childId: be }] } : loc;
+
+  /* Tên bé để hiện trên dòng "đang lọc" — không có tên thì người trực chỉ thấy một
+     cuid trong URL và không biết mình đang xem con của nhà nào. */
+  const beDangLoc = be
+    ? await prisma.child.findUnique({
+        where: { id: be },
+        select: { displayName: true, username: true },
+      })
+    : null;
 
   const [total, games, takedowns] = await Promise.all([
     prisma.game.count({ where }),
@@ -213,14 +227,21 @@ export default async function AdminPage({
   /** Dùng chung cho vết của game và vết của tài khoản — hai danh sách, một cách hiển thị. */
   const logList = (logs: LogRow[], label: string, testId: string) =>
     logs.length > 0 ? (
-      <details className="mt-2 text-sm" data-testid={testId}>
+      /*
+        `clear-left` vì trên khổ điện thoại ảnh bìa là một float trái. `<summary>` là
+        inline-flex, tức một BFC, nên nó KHÔNG chảy quanh float — nó bị ép hẹp lại nằm
+        cạnh ảnh. Chỉ xảy ra với thẻ ít chữ nhất (ba dòng, ~84px, so với ảnh ~80px) nên
+        đây là mép sát chứ không phải chuyện xa xôi. Ở khổ rộng không có float nào nên
+        luật này không làm gì cả.
+      */
+      <details className="mt-2 clear-left text-sm" data-testid={testId}>
         <summary className="min-h-touch inline-flex cursor-pointer items-center font-semibold text-ink-soft">
           {label} ({logs.length})
         </summary>
         <ul className="mt-1 list-none space-y-1 p-0 text-ink-soft">
           {logs.map((log) => (
             <li key={log.id}>
-              — {ACTION_LABEL[log.action] ?? log.action} · {actorName(log.actorId)} ·{' '}
+              — {actionLabel(log.action)} · {actorName(log.actorId)} ·{' '}
               <time dateTime={log.createdAt.toISOString()}>
                 {log.createdAt.toLocaleString('vi-VN')}
               </time>
@@ -232,7 +253,11 @@ export default async function AdminPage({
     ) : null;
 
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const linkTo = (f: FilterKey, p: number) => `/admin?loc=${f}${p > 1 ? `&trang=${p}` : ''}`;
+  /* `be` phải đi theo MỌI link đổi bộ lọc và đổi trang: rơi mất nó thì bấm sang tab
+     khác là lặng lẽ nhảy về toàn bộ game, trong khi dòng "đang lọc theo bé" vừa biến
+     mất cũng lặng lẽ như vậy. */
+  const linkTo = (f: FilterKey, p: number) =>
+    `/admin?loc=${f}${p > 1 ? `&trang=${p}` : ''}${be ? `&be=${encodeURIComponent(be)}` : ''}`;
 
   return (
     <>
@@ -270,17 +295,43 @@ export default async function AdminPage({
                   key={req.id}
                   data-testid="admin-takedown"
                   data-request-id={req.id}
-                  className="rounded-card border border-warn-border bg-warn-bg p-5"
+                  /* Cả hàng đợi này đã nằm trên nền cảnh báo, nên vạch trái ở đây chỉ
+                     phân biệt QUÁ HẠN với chưa: đỏ là hạn đã hứa công khai bị vỡ, cam
+                     là đang trong hạn. Cùng thứ tiếng với ba tab kia. */
+                  className={`rounded-card border border-warn-border bg-warn-bg p-5 border-l-4 ${
+                    overdue ? 'border-l-danger' : 'border-l-accent'
+                  }`}
                 >
+                  {/*
+                    `req.game` CÓ THỂ NULL, và đó là trạng thái bình thường chứ không
+                    phải dữ liệu hỏng: game gỡ hẳn bị xoá khỏi DB sau hạn giữ
+                    (`NGAY_GIU_GAME_DA_GO`), khoá ngoại là `SetNull`, còn hàng yêu cầu
+                    thì phải sống vì nó là hồ sơ pháp lý. Lúc đó chỉ còn `gameTitle`
+                    đã chụp sẵn, và KHÔNG được render link — link tới một game không
+                    tồn tại là gửi người kiểm duyệt vào trang 404.
+                  */}
                   <p className="text-lg font-bold">
-                    <Link href={`/game/${req.game.id}`}>{req.game.title}</Link>{' '}
-                    <span className="align-middle text-sm font-semibold text-ink-soft">
-                      ({STATUS_LABEL[req.game.status] ?? req.game.status})
-                    </span>
+                    {req.game ? (
+                      <>
+                        <Link href={`/game/${req.game.id}`}>{req.game.title}</Link>{' '}
+                        <span className="align-middle text-sm font-semibold text-ink-soft">
+                          ({STATUS_LABEL[req.game.status] ?? req.game.status})
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {req.gameTitle || '(không còn tên)'}{' '}
+                        <span className="align-middle text-sm font-semibold text-ink-soft">
+                          (đã xoá hẳn khỏi hệ thống)
+                        </span>
+                      </>
+                    )}
                   </p>
-                  <p className="text-sm text-ink-soft">
-                    Của bé {req.game.child.displayName} ({req.game.child.username})
-                  </p>
+                  {req.game && (
+                    <p className="text-sm text-ink-soft">
+                      Của bé {req.game.child.displayName} ({req.game.child.username})
+                    </p>
+                  )}
 
                   <p className="mt-2 text-sm">
                     <span className="font-semibold">Người khiếu nại:</span> {req.claimantName}{' '}
@@ -321,6 +372,19 @@ export default async function AdminPage({
         </section>
       )}
 
+      {be && (
+        <Notice tone="info" role="status">
+          <span data-testid="admin-loc-be">
+            Đang lọc theo bé{' '}
+            <strong>
+              {beDangLoc ? `${beDangLoc.displayName} (${beDangLoc.username})` : 'không tìm thấy'}
+            </strong>
+            .
+          </span>{' '}
+          <Link href={`/admin?loc=${filter}`}>Bỏ lọc, xem tất cả</Link>
+        </Notice>
+      )}
+
       <nav className="mb-5 flex flex-wrap gap-2" data-testid="admin-filters">
         {FILTERS.map((f) => (
           <Link
@@ -355,7 +419,26 @@ export default async function AdminPage({
         </EmptyState>
       ) : (
         <ul className="mb-8 mt-3 list-none space-y-4 p-0" data-testid="admin-list">
-          {games.map((game) => (
+          {games.map((game) => {
+            /*
+             * VẠCH TRẠNG THÁI, cùng thứ tiếng đã dùng ở Tổng quan và ở tab Lỗi: đỏ =
+             * có hạn hoặc mất vĩnh viễn, cam = có việc chờ người, xám = không có gì.
+             *
+             * Ở đây "đỏ" là game ĐÃ GỠ, vì chỉ nhóm đó có đồng hồ chạy: bảy ngày nữa
+             * hàng DB, bản đóng gói, ảnh bìa và `.sb3` gốc của bé đi hẳn, và nút "Cho
+             * hiện lại" trên chính thẻ này hết tác dụng. Mọi trạng thái khác đều đảo
+             * lại được, nên không cái nào đáng tranh màu đỏ với nó.
+             *
+             * Game đang hiện mà có báo cáo cũng lên cam: nó là việc chờ người xem, dù
+             * hệ thống chưa siết gì cả.
+             */
+            const vach =
+              game.status === 'REMOVED'
+                ? 'border-l-danger'
+                : game.status !== 'PUBLISHED' || game.reportCount > 0
+                  ? 'border-l-accent'
+                  : 'border-l-border';
+            return (
             <li
               key={game.id}
               /*
@@ -364,14 +447,30 @@ export default async function AdminPage({
                 trống gần một nghìn pixel bên phải mỗi thẻ, trong khi cụm nút thì nằm
                 dưới ảnh và đẩy thẻ cao lên.
               */
-              className={`p-5 ${MAT_THE} xl:flex xl:items-start xl:gap-6`}
+              className={`border-l-4 p-5 ${MAT_THE} ${vach} xl:flex xl:items-start xl:gap-6`}
               data-testid="admin-game"
               data-game-id={game.id}
             >
-              <div className="flex flex-wrap items-start gap-4 xl:min-w-0 xl:flex-1">
+              <div className="sm:flex sm:flex-wrap sm:items-start sm:gap-4 xl:min-w-0 xl:flex-1">
                 {/*
                   Ảnh nằm trên player origin nên dùng <img> thường, giống game-card:
                   next/image sẽ đòi cấu hình remotePatterns mà chẳng được lợi gì thêm.
+
+                  DƯỚI `sm` LÀ FLOAT, KHÔNG PHẢI Ô FLEX. Ảnh 160px cạnh một ô flex ở
+                  màn 390px để lại đúng 132px cho chữ: tên game xuống 7 dòng và thẻ cao
+                  608px, mà dưới ảnh thì trống một cột 120px không ai dùng. Ô flex
+                  không chảy được xuống dưới ảnh — float thì có, nên mấy dòng sau nhận
+                  cả 308px. Đo ở 390px: cột chữ 132 -> 308, thẻ dài nhất 608 -> 433,
+                  cả trang 4138 -> 3501.
+
+                  Thu ảnh còn `w-24` là bước đầu và MỘT MÌNH NÓ KHÔNG ĐỦ: nó chỉ đưa
+                  cột chữ lên 196px, thẻ thường 320 -> 300, vì cái tốn chỗ không phải
+                  ảnh mà là mọi dòng chữ đều bị bó trong phần bề ngang còn lại.
+
+                  Không xếp ảnh thành một hàng riêng phía trên: đo ra không hơn gì (ảnh
+                  chiếm trọn một dòng cao bằng đúng chỗ nó vừa nhường), mà lại mất luôn
+                  việc nhìn bìa và tên game trong cùng một tia mắt — việc chính của
+                  người trực khi lướt hàng chờ.
                 */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -380,10 +479,10 @@ export default async function AdminPage({
                   loading="lazy"
                   width={160}
                   height={120}
-                  className="block aspect-4/3 w-40 shrink-0 rounded-field bg-bg object-cover"
+                  className="float-left mr-3 mb-2 aspect-4/3 w-24 rounded-field bg-bg object-cover sm:float-none sm:m-0 sm:block sm:w-40 sm:shrink-0"
                 />
 
-                <div className="min-w-0 flex-1">
+                <div className="sm:min-w-0 sm:flex-1">
                   <p className="text-lg font-bold">
                     {/* Admin xem được cả game đã ẩn — xem ngoại lệ trong /game/[id]/page.tsx */}
                     <Link href={`/game/${game.id}`}>{game.title}</Link>{' '}
@@ -409,6 +508,44 @@ export default async function AdminPage({
                     {game.reportCount} báo cáo ({game.trustedReportCount} đã xác minh) ·{' '}
                     {game.playCount} lượt chơi
                   </p>
+
+                  {/*
+                    HẠN XOÁ HẲN, chỉ hiện với game đã gỡ.
+                    
+                    Phải nằm ngay đây, cạnh nút "Cho hiện lại", vì sau hạn này chính
+                    cái nút ấy không còn gì để hiện lại: hàng trong DB, file `.sb3`
+                    của bé, HTML và ảnh bìa đều đi hẳn. Người trực cần biết mình còn
+                    mấy ngày để đổi ý, chứ không phải phát hiện ra bằng cách bấm một
+                    cái nút không làm gì cả.
+                  */}
+                  {game.status === 'REMOVED' && (
+                    <p className="text-sm font-semibold" data-testid="admin-han-xoa">
+                      {(() => {
+                        const han = hanXoaHan(game.removedAt);
+                        if (!han) {
+                          return (
+                            <span className="text-ink-soft">
+                              Chưa có mốc thời gian gỡ — đồng hồ {NGAY_GIU_GAME_DA_GO} ngày bắt
+                              đầu ở lần dọn kế tiếp.
+                            </span>
+                          );
+                        }
+                        const conMs = han.getTime() - Date.now();
+                        const conNgay = Math.ceil(conMs / 86400_000);
+                        return conMs <= 0 ? (
+                          <span className="text-danger">
+                            Đã quá hạn giữ — sẽ bị XOÁ HẲN ở lần dọn kế tiếp, không hoàn tác được.
+                          </span>
+                        ) : (
+                          <span className="text-danger">
+                            Sẽ bị xoá hẳn{' '}
+                            <time dateTime={han.toISOString()}>{han.toLocaleDateString('vi-VN')}</time>{' '}
+                            — còn {conNgay} ngày để cho hiện lại.
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  )}
 
                   {game.reports.length > 0 && (
                     <ul className="mt-2 list-none space-y-1 p-0 text-sm" data-testid="admin-reasons">
@@ -443,7 +580,7 @@ export default async function AdminPage({
                 cụm nút của mọi thẻ thẳng lề nhau — nút "Gỡ hẳn" nhảy trái phải theo
                 độ dài tiêu đề game là kiểu bố cục làm người ta bấm nhầm.
               */}
-              <div className="mt-4 flex flex-wrap items-center gap-2 xl:mt-0 xl:w-56 xl:shrink-0 xl:flex-col xl:items-stretch">
+              <div className="mt-4 clear-left flex flex-wrap items-center gap-2 xl:mt-0 xl:w-56 xl:shrink-0 xl:flex-col xl:items-stretch">
                 {game.status !== 'PUBLISHED' && <RestoreGameButton gameId={game.id} />}
                 {/* Game vẫn đang hiện mà dính báo cáo sai: dọn báo cáo, giữ nguyên game. */}
                 {game.status === 'PUBLISHED' && game.reportCount > 0 && (
@@ -453,16 +590,20 @@ export default async function AdminPage({
                 <ChildLockButton childId={game.child.id} isLocked={game.child.isLocked} />
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
-      {lastPage > 1 && (
-        <nav className="mb-12 flex flex-wrap items-center gap-3" data-testid="admin-pager">
-          {page > 1 && <Link href={linkTo(filter, page - 1)}>← Trang trước</Link>}
-          {page < lastPage && <Link href={linkTo(filter, page + 1)}>Trang sau →</Link>}
-        </nav>
-      )}
+      {/* `Pager` tự trả null khi chỉ có một trang — không bọc thêm điều kiện ở đây,
+          hai chỗ cùng quyết định một việc thì sớm muộn lệch nhau. */}
+      <Pager
+        page={page}
+        lastPage={lastPage}
+        href={(p) => linkTo(filter, p)}
+        testId="admin-pager"
+        className="mb-12"
+      />
     </>
   );
 }

@@ -238,6 +238,7 @@ console.log('\n── Tràn ngang trên máy nhỏ ─────────�
     });
     const page = await ctx.newPage();
     const tran = [];
+    const chuLanLe = [];
 
     for (const path of duong) {
       await page.goto(APP + path, { waitUntil: 'networkidle' });
@@ -262,6 +263,67 @@ console.log('\n── Tràn ngang trên máy nhỏ ─────────�
         return { thua, thu_pham };
       });
       if (ket) tran.push(`${path} thừa ${ket.thua}px ← ${ket.thu_pham}`);
+
+      /*
+       * HAI DẢI 20px SÁT MÉP PHẢI SẠCH CHỮ, và đây không phải chuyện thẩm mỹ.
+       *
+       * Dây leo trang trí (`DayLeoVien`) vẽ đúng trong hai dải ấy, vì `px-5` của
+       * `page.tsx` là toàn bộ chỗ trên màn điện thoại mà không dòng chữ nào chạm
+       * tới. Đổi padding xuống `px-4` — một dòng, ở một file khác, và nghe như một
+       * chỉnh sửa lành — là chữ tràn vào chỗ có lá và hoa, tức chữ nằm trên hình
+       * trang trí. Không phép kiểm nào khác thấy: trang vẫn không vuốt ngang, tương
+       * phản vẫn đo trên `bg` như cũ, và chữ vẫn đọc được ở phần lớn dòng.
+       *
+       * Đo bằng RANGE của từng đoạn chữ, không bằng hộp của phần tử: hộp của một
+       * <p> rộng suốt cột nội dung nên nó luôn chạm 20px, còn dòng chữ thật thì có
+       * thể ngắn hơn nhiều. Cái đáng canh là mực, không phải cái hộp.
+       */
+      const dungChu = await page.evaluate((duongDan) => {
+        const LE = 20;
+        const W = document.documentElement.clientWidth;
+        const xau = [];
+        const di = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let n = di.nextNode(); n; n = di.nextNode()) {
+          if (!n.nodeValue.trim()) continue;
+          /* Bỏ qua chữ nằm trong chính lớp trang trí và trong link "bỏ qua nav"
+             (nó `sr-only`, bị `clip` về 1×1 ở góc trên trái). */
+          const cha = n.parentElement;
+          if (!cha || cha.closest('[data-kg-decor], .sr-only, svg')) continue;
+          /*
+           * VÀ bỏ qua chữ nằm trên một nền ĐỤC. Dây leo là lớp `z-index: -1`, nên
+           * nó chỉ hiện ra ở chỗ mọi tổ tiên của đoạn chữ đều trong suốt. Bản đầu
+           * của phép kiểm không có đoạn này và nó báo đỏ ngay ở 360px vì cái emoji
+           * 🖥️ của nút đổi giao diện chạm dải 20px — mà nút ấy nằm trong thanh nav,
+           * thứ có nền đặc phủ suốt bề ngang, nên ở đó không có lá nào để mà đè.
+           * Xét theo nền thay vì liệt kê tên thẻ: mai này ai đặt chữ lên một tấm
+           * nền đục mới thì không phải quay lại sửa danh sách.
+           */
+          let dangBiChe = false;
+          for (let e = cha; e && e !== document.documentElement; e = e.parentElement) {
+            const nen = getComputedStyle(e).backgroundColor;
+            const m = nen.match(/^rgba?\(([^)]+)\)$/);
+            const phan = m ? m[1].split(',').map((v) => parseFloat(v)) : null;
+            if (phan && (phan.length < 4 || phan[3] > 0)) {
+              dangBiChe = true;
+              break;
+            }
+          }
+          if (dangBiChe) continue;
+          const r = document.createRange();
+          r.selectNodeContents(n);
+          for (const box of r.getClientRects()) {
+            if (box.width < 1 || box.height < 1) continue;
+            if (box.left < LE - 0.5 || box.right > W - LE + 0.5) {
+              xau.push(
+                `${duongDan} "${n.nodeValue.trim().slice(0, 18)}" ` +
+                  `${Math.round(box.left)}…${Math.round(box.right)}`
+              );
+            }
+          }
+        }
+        return xau.slice(0, 3);
+      }, path);
+      chuLanLe.push(...dungChu);
     }
 
     await ctx.close();
@@ -269,6 +331,11 @@ console.log('\n── Tràn ngang trên máy nhỏ ─────────�
       `Màn ${width}px: không trang nào phải vuốt ngang`,
       tran.length === 0,
       tran.length ? tran.join(' | ') : `${duong.length} trang sạch`
+    );
+    check(
+      `Màn ${width}px: chữ không lấn vào dải 20px của dây leo`,
+      chuLanLe.length === 0,
+      chuLanLe.length ? chuLanLe.join(' | ') : `${duong.length} trang sạch`
     );
   }
 }

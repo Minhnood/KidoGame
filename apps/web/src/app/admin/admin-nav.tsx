@@ -14,9 +14,19 @@ import { usePathname } from 'next/navigation';
  * Số đếm truyền từ layout xuống, không tự query: một client component không đọc được
  * DB, và quan trọng hơn là số này phải đúng ở lần vẽ đầu tiên chứ không nhảy vào sau.
  */
+/*
+ * `dem: null` cho Tổng quan, cố ý không phải một số nào đó.
+ *
+ * Trang ấy là chỗ ĐỌC các con số, nên một cái nhãn đếm gắn lên chính tab của nó thì
+ * hoặc trùng lặp, hoặc — tệ hơn — phải chọn xem trong mười hai con số trên đó thì số
+ * nào đáng lên tab, tức là quyết định thay người trực đúng cái việc họ vào đó để tự
+ * quyết. Hai tab kia có nhãn vì mỗi tab là MỘT hàng đợi, một loại việc.
+ */
 const MUC = [
-  { href: '/admin', label: 'Kiểm duyệt', dem: 'go' as const },
-  { href: '/admin/loi', label: 'Lỗi', dem: 'loi' as const },
+  { href: '/admin/tong-quan', id: 'tong-quan', label: 'Tổng quan', dem: null },
+  { href: '/admin', id: 'go', label: 'Kiểm duyệt', dem: 'go' as const },
+  { href: '/admin/tai-khoan', id: 'tai-khoan', label: 'Tài khoản', dem: null },
+  { href: '/admin/loi', id: 'loi', label: 'Lỗi', dem: 'loi' as const },
 ];
 
 export function AdminNav({ soYeuCauGo, soNhomLoi }: { soYeuCauGo: number; soNhomLoi: number }) {
@@ -33,13 +43,13 @@ export function AdminNav({ soYeuCauGo, soNhomLoi }: { soYeuCauGo: number; soNhom
          * nói được điều gì.
          */
         const dangMo = path === m.href;
-        const dem = m.dem === 'go' ? soYeuCauGo : soNhomLoi;
+        const dem = m.dem === 'go' ? soYeuCauGo : m.dem === 'loi' ? soNhomLoi : 0;
 
         return (
           <Link
             key={m.href}
             href={m.href}
-            data-testid={`admin-tab-${m.dem}`}
+            data-testid={`admin-tab-${m.id}`}
             aria-current={dangMo ? 'page' : undefined}
             className={[
               'min-h-touch inline-flex items-center gap-2 rounded-lg px-3.5 font-semibold no-underline',
@@ -56,7 +66,7 @@ export function AdminNav({ soYeuCauGo, soNhomLoi }: { soYeuCauGo: number; soNhom
             */}
             {dem > 0 && (
               <span
-                data-testid={`admin-tab-${m.dem}-dem`}
+                data-testid={`admin-tab-${m.id}-dem`}
                 className="inline-flex min-w-6 items-center justify-center rounded-full bg-danger px-1.5 text-sm font-bold text-chrome"
               >
                 {dem}

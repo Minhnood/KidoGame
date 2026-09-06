@@ -151,6 +151,45 @@ export interface PackageOptions {
 }
 
 /**
+ * Ẩn nút toàn màn hình CỦA PACKAGER trên thiết bị cảm ứng.
+ *
+ * Trên điện thoại trang game có HAI đường phóng to, cách nhau chừng 40px: nút ⛶ ở
+ * góc phải thanh điều khiển (của packager, gọi Fullscreen API) và nút "Chơi to hơn"
+ * của app ngay dưới khung. Hai nút cạnh nhau làm cùng một việc thì đứa trẻ phải
+ * đoán, mà ⛶ lại đúng là nút SAI để đoán: Safari trên iPhone không cho phần tử
+ * thường vào toàn màn hình, nên ở đó bấm vào không có gì xảy ra và không có lỗi nào
+ * hiện ra. Xem đầu file `apps/web/src/app/game/[id]/stage-frame.tsx` — nút của app
+ * dùng `position: fixed` chính vì lý do ấy, và nó chạy trên mọi trình duyệt.
+ *
+ * `pointer: coarse` là ĐÚNG media query mà `.touch-only` của app dùng để HIỆN nút
+ * "Chơi to hơn" (globals.css). Một điều kiện cho cả hai chiều nên không có khe hở:
+ * không thiết bị nào thấy hai nút, không thiết bị nào thấy không nút nào.
+ *
+ * TRÊN MÁY CÓ CHUỘT NÚT NÀY Ở LẠI, cố ý. Ở đó nó chạy thật, và toàn màn hình thật
+ * vẫn hơn một cái div phủ kín khung nhìn: nó ẩn cả thanh địa chỉ của trình duyệt.
+ *
+ * VÌ SAO ẨN BẰNG CSS chứ không tắt `controls.fullscreen.enabled`: mỗi game chỉ đóng
+ * gói MỘT file HTML dùng cho cả hai loại thiết bị, nên tắt hẳn là mất luôn nút trên
+ * máy tính. CSS thì quyết định ở phía người chơi, đúng chỗ biết mình đang là thiết
+ * bị gì.
+ *
+ * `!important` không phải cho chắc: nút này do JS của scaffolding dựng và nó có đặt
+ * `style` trực tiếp lên phần tử.
+ */
+const CSS_AN_NUT_TOAN_MAN_HINH = `
+@media (pointer: coarse) {
+  /* Hai selector cho hai trường hợp của packager: có thanh điều khiển (cờ xanh +
+     nút dừng, đúng cấu hình ở đây) và không có thanh nào. Giữ cả hai vì đổi một
+     dòng \`controls.*.enabled\` ở trên là đổi luôn selector, và kiểu hỏng đó im
+     lặng — nút chỉ lặng lẽ hiện lại. */
+  .control-button.fullscreen-button,
+  .standalone-fullscreen-button {
+    display: none !important;
+  }
+}
+`.trim();
+
+/**
  * Đóng gói .sb3 thành một file HTML standalone, chạy hoàn toàn trong Node.
  *
  * Chạy offline: scaffolding runtime đọc từ node_modules chứ không tải từ
@@ -219,7 +258,9 @@ export async function packageToHtml(sb3: Buffer, opts: PackageOptions): Promise<
    */
   const decor = buildStageDecor();
   p.options.custom.js = [controls.js, decor.js].filter(Boolean).join('\n');
-  p.options.custom.css = [controls.css, decor.css].filter(Boolean).join('\n');
+  p.options.custom.css = [controls.css, decor.css, CSS_AN_NUT_TOAN_MAN_HINH]
+    .filter(Boolean)
+    .join('\n');
 
   let out: { data: ArrayBuffer | Uint8Array };
   try {

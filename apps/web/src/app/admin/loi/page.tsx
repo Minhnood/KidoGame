@@ -8,6 +8,7 @@ import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
 import { ResolveAllErrorsButton, ResolveErrorButton } from './error-controls';
+import { Pager } from '../pager';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,19 +144,58 @@ export default async function AdminErrorsPage({
           <Link href="/admin">Về trang kiểm duyệt</Link>
         </EmptyState>
       ) : (
-        <ul className="mb-8 mt-3 list-none space-y-4 p-0" data-testid="error-list">
-          {groups.map((g) => (
+        <ul className="mb-8 mt-3 list-none space-y-3 p-0" data-testid="error-list">
+          {groups.map((g) => {
+            /*
+             * QUAY LẠI SAU KHI ĐÁNH DẤU XỬ LÝ là trạng thái quan trọng nhất trên cả
+             * trang này, và trước đây nó chỉ là một mệnh đề nằm ở dòng thứ năm của
+             * thẻ. Nó nghĩa là bản vá KHÔNG ăn — tức việc đã bị đóng lại một lần rồi
+             * mà lỗi vẫn còn — nên nó phải đọc được trước cả khi đọc chữ.
+             */
+            const quayLai = g.resolvedAt !== null && g.lastSeenAt > g.resolvedAt;
+            const chuaXuLy = g.resolvedAt === null;
+            const vach = quayLai
+              ? 'border-l-danger'
+              : chuaXuLy
+                ? 'border-l-accent'
+                : 'border-l-border';
+            return (
             <li
               key={g.id}
-              className={`p-5 ${MAT_THE}`}
+              className={`border-l-4 p-4 ${MAT_THE} ${vach}`}
               data-testid="error-group"
               data-error-id={g.id}
             >
+              {/*
+                SỐ LẦN đứng riêng một cột bên trái, cỡ lớn.
+                Đây là con số quyết định thứ tự xử lý: một nhóm 400 lần và một nhóm 1
+                lần là hai việc khác hẳn nhau, mà bản trước chôn cả hai vào cùng một
+                dòng chữ xám thứ ba. Danh sách này dài ba mươi thẻ, nên thứ dùng để
+                xếp ưu tiên phải đọc được mà không cần đọc.
+              */}
+              <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                <p className="w-14 shrink-0 text-right">
+                  <span
+                    className={`block text-2xl font-extrabold leading-none tabular-nums ${
+                      g.count > 1 ? 'text-ink' : 'text-ink-soft'
+                    }`}
+                  >
+                    {g.count}
+                  </span>
+                  <span className="text-xs text-ink-soft">lần</span>
+                </p>
+
+                <div className="min-w-0 flex-1">
               <p className="text-lg font-bold">
                 <span data-testid="error-path">{g.path}</span>{' '}
                 <span className="align-middle text-sm font-semibold text-ink-soft">
                   ({SOURCE_LABEL[g.source] ?? g.source})
                 </span>
+                {quayLai && (
+                  <span className="ml-2 align-middle rounded-full border border-danger-border bg-bg px-2 py-0.5 text-xs font-bold text-danger">
+                    đã xảy ra lại sau khi đánh dấu xử lý
+                  </span>
+                )}
               </p>
 
               {/*
@@ -169,6 +209,8 @@ export default async function AdminErrorsPage({
                 </p>
               )}
 
+              {/* `error-count` vẫn mang đủ chữ "N lần" như cũ: bộ kiểm đọc chuỗi này,
+                  và cột số bên trái là thứ thêm vào chứ không thay thế. */}
               <p className="mt-2 text-sm text-ink-soft" data-testid="error-count">
                 {g.count} lần · lần đầu{' '}
                 <time dateTime={g.firstSeenAt.toISOString()}>
@@ -205,9 +247,11 @@ export default async function AdminErrorsPage({
                     {g.resolvedAt.toLocaleString('vi-VN')}
                   </time>
                   {/*
-                    Lỗi quay lại SAU khi đánh dấu là thông tin quan trọng nhất trên
-                    cả dòng này: nó nghĩa là bản vá không ăn. Đánh dấu xử lý cố ý
-                    không xoá dòng chính vì để so được hai mốc thời gian này.
+                    Câu "nhưng đã xảy ra lại sau đó" GIỮ NGUYÊN ở đây dù trên tiêu đề
+                    đã có nhãn đỏ: nhãn kia nói có chuyện, còn hai mốc thời gian nằm
+                    cạnh nhau ở dòng này mới cho biết lỗi quay lại sau bao lâu — và đó
+                    là thứ phân biệt "bản vá không ăn" với "vá xong thì có người mở lại
+                    tab cũ".
                   */}
                   {g.lastSeenAt > g.resolvedAt && (
                     <span className="font-bold text-danger"> — nhưng đã xảy ra lại sau đó</span>
@@ -215,22 +259,35 @@ export default async function AdminErrorsPage({
                 </p>
               )}
 
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <ResolveErrorButton id={g.id} resolved={g.resolvedAt !== null} />
+                </div>
+
+                {/* Nút sang cột phải từ `sm` trở lên: ba mươi thẻ mà mỗi thẻ dành một
+                    hàng riêng cho một cái nút thì trang dài thêm ba mươi hàng, trong
+                    khi bên phải đang trống.
+
+                    Dưới `sm` phải là `w-full` chứ không chỉ bỏ `shrink-0`: ô chữ ở
+                    giữa là `flex-1 min-w-0`, nên nó CO LẠI để nhường chỗ cho nút thay
+                    vì đẩy nút xuống dòng — đo ở 390px thấy đường dẫn vỡ thành ba dòng
+                    để chừa chỗ cho một cái nút không ai cần thấy trước khi đọc xong. */}
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+                  <ResolveErrorButton id={g.id} resolved={g.resolvedAt !== null} />
+                </div>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
       {filter === 'chua-xu-ly' && unresolved > 0 && <ResolveAllErrorsButton count={unresolved} />}
 
-      {lastPage > 1 && (
-        <nav className="mb-12 mt-6 flex flex-wrap items-center gap-3" data-testid="error-pager">
-          {page > 1 && <Link href={linkTo(filter, page - 1)}>← Trang trước</Link>}
-          {page < lastPage && <Link href={linkTo(filter, page + 1)}>Trang sau →</Link>}
-        </nav>
-      )}
+      <Pager
+        page={page}
+        lastPage={lastPage}
+        href={(p) => linkTo(filter, p)}
+        testId="error-pager"
+        className="mb-12 mt-6"
+      />
     </>
   );
 }

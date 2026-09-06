@@ -197,7 +197,7 @@ Docker mặc định `json-file` **không giới hạn**: file log lớn mãi t�
 bị xoá. Trên VPS nhỏ đó là một cách hết đĩa rất chậm và rất im — và khi đĩa đầy thì
 **Postgres chết trước**, tức mất web chứ không phải mất log.
 
-Đặt qua YAML anchor `x-logging` cho cả bốn service: 20MB × 5 file = trần 100MB mỗi
+Đặt qua YAML anchor `x-logging` cho cả năm service: 20MB × 5 file = trần 100MB mỗi
 service. Đủ soi lại vài ngày, mà có trần.
 
 ### Đã kiểm

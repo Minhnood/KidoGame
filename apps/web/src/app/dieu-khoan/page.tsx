@@ -3,7 +3,11 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
-import { REPORT_AUTO_HIDE_THRESHOLD, REPORT_HARD_HIDE_THRESHOLD } from '@/lib/moderation';
+import {
+  NGAY_GIU_GAME_DA_GO,
+  REPORT_AUTO_HIDE_THRESHOLD,
+  REPORT_HARD_HIDE_THRESHOLD,
+} from '@/lib/moderation';
 import { UPLOADS_PER_CHILD_PER_DAY } from '@/lib/ingest';
 import { isOperatorConfigured, operator, TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
 
@@ -178,6 +182,19 @@ export default function TermsPage() {
           <strong>Khi có người báo cáo hoặc khiếu nại:</strong> chúng tôi lưu bản băm của địa chỉ
           IP để chặn spam, chứ không lưu IP thật. Riêng người gửi yêu cầu gỡ bản quyền thì có lưu
           tên và email họ tự khai, vì đó là hồ sơ của một khiếu nại và là cách để trả lời họ.
+        </p>
+        <p>
+          <strong>Khi một game bị gỡ hẳn:</strong> chúng tôi giữ lại {NGAY_GIU_GAME_DA_GO} ngày
+          rồi xoá thật — hàng dữ liệu, bản đã đóng gói, ảnh bìa, và cả file <code>.sb3</code> gốc
+          của bé. Ngay lúc gỡ, bố mẹ nhận một email nói rõ ngày đó, để công của bé không mất theo
+          một quyết định của chúng tôi. Với game bị gỡ theo quyết định kiểm duyệt, thư kèm luôn
+          link tải lại file gốc; với game bị gỡ vì khiếu nại bản quyền thì bố mẹ trả lời thư để
+          lấy lại, vì lúc ấy chính nội dung đó đang có tranh chấp.
+        </p>
+        <p>
+          Hồ sơ của một yêu cầu gỡ bản quyền thì <strong>ở lại</strong> sau khi game đã xoá — kèm
+          tên game đã chụp lại lúc nhận. Nó là bằng chứng chúng tôi đã xử lý đúng một khiếu nại,
+          và nếu nó biến mất cùng game thì càng làm đúng, hồ sơ càng trống.
         </p>
         <p>
           Muốn xoá tài khoản của gia đình bạn và toàn bộ game của các bé, email cho chúng tôi ở

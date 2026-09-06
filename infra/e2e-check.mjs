@@ -601,6 +601,98 @@ if (FIXTURE) {
   await toi.ctx.close();
 }
 
+/*
+ * --- Trang trí theo khổ màn hình: ĐÚNG MỘT bức tranh, và nền đúng một kiểu ---
+ *
+ * BA thứ đổi cùng lúc ở mốc 1280px, và cả ba phải đổi CÙNG một mốc: `SiteDecor` vẽ
+ * hai bên lề từ 1280px trở lên, `DatCuoiTrang` vẽ dải đất ở đáy trang dưới mức đó,
+ * và nền trang chuyển từ một màu đặc sang dải chuyển sắc trời-xuống-đất. Lệch một
+ * mốc là kéo cửa sổ qua đó thấy hai cú giật thay vì một; sai hẳn thì hoặc hai bức
+ * tranh cùng hiện — quả đồi bên lề chạy xuống gặp một quả đồi thứ hai nằm ngang —
+ * hoặc không bức nào, tức trả lại đúng dải trơn mà cả hai file tồn tại để tránh.
+ *
+ * Kiểu hỏng này im lặng: mọi trạng thái sai đều là một trang chạy bình thường, không
+ * lỗi, không cảnh báo. Và không phép kiểm nào khác thấy được — `a11y-check` chỉ đo
+ * trang có phải vuốt ngang hay không, mà không trạng thái sai nào vuốt ngang cả.
+ */
+{
+  const dem = (p) =>
+    p.evaluate(() => {
+      /*
+       * ĐẾM CÁI ĐANG VẼ, KHÔNG ĐẾM CÁI CÓ TRONG DOM — và đây là chỗ phép kiểm này
+       * đã sai ở bản đầu. Cả hai bức tranh luôn có mặt trong DOM ở mọi khổ màn hình,
+       * chúng chỉ tắt bằng `display: none` (`hidden xl:block` và `xl:hidden`). Đếm
+       * bằng `querySelectorAll` không thì con số ra 1 và 1 ở mọi bề rộng, tức phép
+       * kiểm luôn xanh và không canh gì cả.
+       */
+      const veRa = (e) => e.getClientRects().length > 0;
+      /*
+       * Tìm theo `data-kg-decor`, KHÔNG theo hình dạng của phần tử.
+       *
+       * Bản trước nhận ra tranh bên lề bằng "div aria-hidden có position: fixed" —
+       * đúng cho tới lúc có bức trang trí thứ ba (dây leo hai mép) cũng là một div
+       * aria-hidden fixed. Lúc đó phép kiểm đếm được 1 ở chỗ đáng lẽ 0 và báo đỏ vì
+       * một thay đổi hoàn toàn lành. Bám vào một cái nhãn đặt sẵn thì thêm bức thứ
+       * tư cũng không đụng gì tới đây.
+       */
+      const co = (k) => {
+        const e = document.querySelector(`[data-kg-decor="${k}"]`);
+        return e ? veRa(e) : null;
+      };
+      return {
+        dat: co('dat'),
+        le: co('le'),
+        vien: co('vien'),
+        /* Điểm tab: tranh trang trí không được thêm cái nào, ở khổ nào cũng vậy. */
+        tab: document.querySelectorAll(
+          'footer a, footer button, footer [tabindex]:not([tabindex="-1"])'
+        ).length,
+        /*
+         * Nền: có dải chuyển sắc hay không, VÀ màu đặc lót dưới còn không.
+         *
+         * Đo cả `backgroundColor` chứ không chỉ `backgroundImage`, vì viết
+         * `background:` gộp thay cho `background-image:` là một cách hỏng thật đã
+         * xảy ra: dải vẫn hiện đúng, mắt không thấy gì khác, nhưng màu đặc bị reset
+         * về trong suốt — và đó chính là chỗ mấy phép kiểm giao diện ở trên đọc để
+         * biết đang sáng hay tối.
+         */
+        dai: getComputedStyle(document.documentElement).backgroundImage.includes('gradient'),
+        nenDac: getComputedStyle(document.documentElement).backgroundColor,
+      };
+    });
+
+  for (const [ten, w, hep] of [
+    ['điện thoại 390px', 390, true],
+    ['ngay dưới mốc, 1279px', 1279, true],
+    ['đúng mốc, 1280px', 1280, false],
+  ]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 900 } });
+    const p = await ctx.newPage();
+    await p.goto(APP, { waitUntil: 'networkidle' });
+    const d = await dem(p);
+    /* BA bức tranh, và chúng loại trừ nhau theo đúng một mốc: khổ hẹp thì có dải đất
+       cuối trang và dây leo hai mép, khổ rộng thì có tranh hai bên lề. */
+    check(
+      `Ba bức trang trí bật đúng bộ — ${ten}`,
+      d.dat === hep && d.vien === hep && d.le === !hep,
+      `đất ${d.dat}, viền ${d.vien}, lề ${d.le} (khổ ${hep ? 'hẹp' : 'rộng'})`
+    );
+    check(`Chân trang ${ten}: tranh không thêm điểm tab`, d.tab === 2, `${d.tab} điểm tab`);
+    /* Dải nền bật đúng ở khổ nào có dải đất, tắt đúng ở khổ nào có tranh bên lề. */
+    check(
+      `Dải nền chuyển sắc — ${ten}`,
+      d.dai === hep,
+      `${d.dai ? 'có' : 'không'} (cần ${hep ? 'có' : 'không'})`
+    );
+    check(
+      `Nền đặc lót dưới còn nguyên — ${ten}`,
+      /^rgb\(\d/.test(d.nenDac),
+      d.nenDac
+    );
+    await ctx.close();
+  }
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

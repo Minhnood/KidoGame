@@ -617,6 +617,7 @@ export function SiteDecor() {
       // ngoài chứ không lặp ở từng svg: sáu hình cùng nằm trên một lề thì phải lan
       // ra ngoài cùng một khoảng, không thì cái nọ lệch khỏi cái kia.
       style={{ '--kg-lan': LAN } as React.CSSProperties}
+      data-kg-decor="le"
       className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden xl:block"
     >
       {/*
@@ -835,6 +836,420 @@ export function SiteDecor() {
       <CanhVien ben="phai" top="38%" delay={-4.5} co={0.7} ru />
       <CanhVien ben="phai" top="50%" delay={-7.5} co={0.95} />
       <CanhVien ben="phai" top="64%" delay={-2.2} co={0.8} ru />
+    </div>
+  );
+}
+
+/**
+ * Một BỤI nhỏ: mấy cụm cỏ và vài bông hoa, không có cây.
+ *
+ * Tách ra vì cả ba chỗ đứng trong dải đất cuối trang đều cần đúng một thứ này ở ba
+ * cỡ khác nhau, và vì bụi cỏ là thứ duy nhất nhét được vào khe giữa hai cái cây.
+ */
+function BuiCoHoa({
+  co,
+  hoa,
+}: {
+  co: Array<[number, number, number]>;
+  hoa: Array<[number, number, string, number]>;
+}) {
+  return (
+    <>
+      {co.map(([cx, cy, r], i) => (
+        <circle key={i} cx={cx} cy={cy} r={r} fill="var(--color-decor-co)" />
+      ))}
+      {hoa.map(([x, y, mau, s], i) => (
+        <Hoa key={i} x={x} y={y} mau={mau} s={s} />
+      ))}
+    </>
+  );
+}
+
+
+/**
+ * Một cây ở XA: nhỏ, hạ tương phản, đứng trên quả đồi phía sau.
+ *
+ * `opacity` chứ không phải một bảng màu nhạt riêng. Hai lý do: một bảng thứ hai là
+ * hai chỗ phải sửa mỗi lần đổi màu lá, và `opacity` trộn cây với đúng cái nền nó
+ * đang đứng trên — nền trang ở giao diện sáng, nền tối ở giao diện tối — nên hiệu
+ * ứng "xa thì mờ" đúng ở cả hai mà không phải khai màu nào.
+ */
+function CayXa({ s, delay, lat = false }: { s: number; delay: number; lat?: boolean }) {
+  return (
+    <g opacity="0.62">
+      <Cay x={0} y={0} s={s} delay={delay} lat={lat} />
+    </g>
+  );
+}
+
+/**
+ * Dải đất cuối trang — tranh trang trí cho MÀN HÌNH HẸP, nơi `SiteDecor` không vẽ.
+ *
+ * VÌ SAO PHẢI LÀ MỘT HÌNH KHÁC, không phải `SiteDecor` bỏ `hidden`: ràng buộc số 4
+ * ở đầu file vẫn đúng nguyên — dưới 1280px KHÔNG có lề nào để vẽ, nội dung chiếm
+ * suốt bề ngang. Bỏ `hidden` là cây đứng đè lên chữ. Trên điện thoại chỗ thừa không
+ * nằm hai bên nữa, nó nằm ở ĐÁY: trang hết, và trước bản này nó hết bằng một khoảng
+ * kem trơn — đúng "dải trắng trơn" mà cả file này tồn tại để tránh, chỉ là trên đúng
+ * cái khổ màn hình mà phần lớn trẻ em sẽ dùng.
+ *
+ * ĐỨNG TRONG DÒNG, KHÔNG `fixed`. Đây là chỗ đã cân và chọn:
+ *
+ *   Bản `fixed` ở đáy khung nhìn thì lúc nào cũng thấy — nghe đúng ý "ở nền" hơn.
+ *   Nhưng trang trên điện thoại là một cột dọc cuộn dài, nên dải đó nằm sau BẤT KỲ
+ *   đoạn chữ nào đang trôi qua đáy màn hình: chữ `ink` trên sườn đồi `decor-doi`.
+ *   Web này đo từng cặp màu để không có chữ nào nằm trên nền sai, và một quả đồi chạy
+ *   sau chữ là đúng loại lỗi đó, chỉ khác là nó di động nên không cặp nào đo được.
+ *   Đứng trong dòng thì nó không bao giờ ở sau chữ: nó LÀ đoạn kết của trang.
+ *
+ * HAI TẦNG ĐẤT, và đấy là toàn bộ khác biệt so với bản đầu.
+ *
+ * Bản đầu có một quả đồi cao 40px với ba cái cây đứng trên: đo ra thì đúng, nhìn thì
+ * là một vạch xanh có cây dán lên. Cảnh có chiều sâu cần ít nhất hai mặt phẳng cách
+ * nhau — nên nay là đồi XA (mờ 55%, cây nhỏ mờ 62%) và mặt đất GẦN, cách nhau 28px
+ * chiều cao. Cùng một luật đã ghi ở `SiteDecor`: cây nhỏ thì gốc cao hơn trên sườn,
+ * vì nhỏ và ở xa đi cùng nhau.
+ *
+ * Lớp dày lên từ 144px thành 200px cũng vì thế: không phải để đất to hơn mà để có
+ * TRỜI. Trước đó khoảng trống trên ngọn cây chỉ 24px, không đủ chỗ cho một đám mây,
+ * nên dải đọc ra là mặt đất bị cắt rời chứ không phải một khung cảnh.
+ *
+ * TRỜI ĐỔI THEO GIAO DIỆN, dùng lại `.kg-ngay` / `.kg-dem` của `globals.css`: ngày
+ * có hai đám mây và hai con chim, đêm có trăng khuyết và ba ngôi sao. Đúng cặp class
+ * mà tranh hai bên lề dùng, nên không có luật mới nào để nhớ.
+ *
+ * MẶT ĐẤT GIÃN NGANG, CÂY CỎ THÌ KHÔNG — cùng kỹ thuật hai lớp như `VienDat` ở chân
+ * trang, và cùng lý do: `preserveAspectRatio="none"` trên một đường đồi thoải thì
+ * giãn bao nhiêu cũng không ai thấy, còn bông hoa bị bóp ngang thành hình bầu dục
+ * là nhìn ra ngay. Mây và trăng cũng vậy: chúng là svg cỡ cố định, đặt theo phần trăm.
+ *
+ * ĐỒI Ở ĐÂY PHẢI THOẢI HƠN ĐỒI BÊN LỀ, và đây là chỗ tính chứ không phải chọn cho
+ * đẹp. Khung 1000 đơn vị ngang giãn ra đúng bề rộng khung nhìn, còn chiều dọc thì
+ * 1 đơn vị = 1px (viewBox cao 200, lớp cao 200px). Nên độ nhấp nhô của đường đồi là
+ * số pixel THẬT, còn bụi cây thì rộng cố định — trên màn 390px một bụi 146px phủ tới
+ * 37% bề ngang, tức nó vắt qua cả một khúc đồi. Đo trên đường ban đầu (biên độ 20
+ * đơn vị): hai đầu bụi lệch nhau 15px, gốc cây một bên lún vào đất một bên lơ lửng.
+ * Đường gần hiện tại nhấp nhô trong khoảng y 150–155, nên lệch tối đa 4px và bị chính
+ * cái mép đất che đi. Đường xa được phép nhấp nhô gấp đôi (y 117–127) vì thứ đứng
+ * trên nó chỉ rộng 40px, tức chỉ vắt qua một khúc đồi ngắn.
+ *
+ * Mọi bụi trên cùng một tầng vì thế dùng CÙNG một `bottom`, và đó là hệ quả trực tiếp
+ * của việc trên: đất phẳng thì không cần tính lại độ cao cho từng chỗ đứng. Hai con
+ * số 32px và 64px không chọn cho tròn — chúng là mặt đất (48px và 76px tính từ đáy
+ * lớp) trừ đi phần gốc lún vào sườn và phần khung svg chừa dưới đường đất.
+ *
+ * THỨ TỰ VẼ vẫn là luật của `SiteDecor`: xa trước gần sau, nhỏ trước to sau. Trên màn
+ * 320px bụi giữa và bụi trái chồng lên nhau 23px — vẽ bụi giữa sau là bông hoa nổi lên
+ * trên tán cây, đọc ra ngay là hình sai.
+ */
+export function DatCuoiTrang() {
+  return (
+    <div
+      aria-hidden="true"
+      data-kg-decor="dat"
+      /* `overflow-hidden`: ràng buộc số 3 ở đầu file. Một cái cây thò ra ngoài mép
+         là cả trang phải vuốt ngang, và có một bộ kiểm tràn ngang đang canh đúng
+         chuyện đó. */
+      className="pointer-events-none relative h-50 w-full overflow-hidden xl:hidden"
+    >
+      {/*
+        TRỜI — vẽ trước tất cả, vì nó ở xa nhất.
+
+        Mây và trăng là svg RIÊNG cỡ cố định chứ không nằm trong svg đồi: svg đồi
+        giãn ngang (`preserveAspectRatio="none"`), mà một đám mây bị bóp ngang thì
+        đọc ra ngay là hình méo — cùng lý do đã ghi cho bông hoa.
+      */}
+      <svg
+        viewBox="0 0 120 60"
+        className="absolute bottom-33 left-[8%] h-15 w-30"
+        fill="none"
+        focusable="false"
+      >
+        <g className="kg-ngay kg-may-troi">
+          <May x={34} y={20} s={0.85} />
+          {/* Hai con chim, nét chữ "m" — dùng lại đúng cách vẽ của tranh bên lề. */}
+          <g
+            stroke="var(--color-decor-chim)"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            fill="none"
+            opacity="0.7"
+          >
+            <path d="M74 40c3.5-4.5 7-4.5 10 0 2.5-4.5 6-4.5 9 0" />
+            <path d="M96 54c2.5-3.5 5-3.5 7 0 2-3.5 4.5-3.5 6.5 0" />
+          </g>
+        </g>
+        <g className="kg-dem">
+          {/* Trăng khuyết: một hình tròn bị một hình tròn nền "cắn" mất một miếng —
+              cùng cách dựng như vầng trăng ở tranh bên lề. */}
+          <path d="M44 12a17 17 0 1 0 0 26 20 20 0 0 1 0-26Z" fill="var(--color-decor-troi)" />
+          <g fill="var(--color-decor-troi)" opacity="0.9">
+            <path d="M82 20l1.8 4 4 1.8-4 1.8L82 32l-1.8-4.4-4-1.8 4-1.8Z" />
+            <path d="M104 44l1.4 3.2 3.2 1.4-3.2 1.4L104 54l-1.4-3.6-3.2-1.4 3.2-1.4Z" />
+          </g>
+        </g>
+      </svg>
+      <svg
+        viewBox="0 0 90 46"
+        className="absolute bottom-38 right-[6%] h-11.5 w-22.5"
+        fill="none"
+        focusable="false"
+      >
+        <g className="kg-ngay kg-may-troi">
+          <May x={30} y={16} s={0.7} />
+          <May x={64} y={30} s={0.5} />
+        </g>
+        <g className="kg-dem" fill="var(--color-decor-troi)" opacity="0.85">
+          <path d="M30 14l2 4.6 4.6 2-4.6 2L30 27l-2-4.4-4.6-2 4.6-2Z" />
+        </g>
+      </svg>
+
+      {/*
+        HAI ĐƯỜNG ĐẤT trong cùng một svg giãn ngang. Cùng một svg vì cả hai phải
+        giãn y hệt nhau: tách ra hai thẻ là sớm muộn một cái đổi bề rộng mà cái kia
+        không, và lúc đó chân đồi xa hở ra khỏi mặt đất gần.
+
+        Đồi xa mờ 55% chứ không phải một màu nhạt khai riêng — cùng lý do như `CayXa`.
+      */}
+      <svg
+        viewBox="0 0 1000 200"
+        preserveAspectRatio="none"
+        className="absolute inset-0 size-full"
+        fill="none"
+        focusable="false"
+      >
+        <path
+          d="M-10 200V124C120 117 240 129 380 123 520 117 640 127 780 121 880 117 940 123 1010 120V200Z"
+          fill="var(--color-decor-doi)"
+          opacity="0.55"
+        />
+        <path
+          d="M-10 200V152C130 149 230 155 350 152 470 149 580 150 700 153 820 155 920 152 1010 151V200Z"
+          fill="var(--color-decor-doi)"
+        />
+      </svg>
+
+      {/* Hai cây trên đồi XA. Chúng đứng cao hơn và nhỏ hơn hẳn một bậc so với cây
+          gần: nhỏ và ở xa phải đi cùng nhau, không thì cây bé đọc ra là cây gần mà
+          lại tí xíu.
+
+          Đứng ở 43% và 66% vì đó là khoảng TRỐNG trên màn điện thoại. Bản đầu đặt cây
+          xa thứ nhất ở 24%: trên màn 390px chỗ đó là 94px, nằm gọn sau tán cây to của
+          bụi trái (8–154px, tán cao 120px), nên cái cây ấy vẽ ra mà không ai thấy —
+          một tầng chiều sâu bỏ tiền vẽ rồi cất đi. */}
+      <svg
+        viewBox="-22 -46 44 54"
+        className="absolute bottom-16 left-[43%] h-13.5 w-11 -translate-x-1/2"
+        fill="none"
+        focusable="false"
+      >
+        <CayXa s={0.18} delay={-4.5} />
+      </svg>
+      <svg
+        viewBox="-22 -46 44 54"
+        className="absolute bottom-16 left-[66%] h-13.5 w-11 -translate-x-1/2"
+        fill="none"
+        focusable="false"
+      >
+        <CayXa s={0.15} delay={-1.5} lat />
+      </svg>
+
+      {/*
+        Hai bụi xen giữa, ở 32% và 68%. Lý do là khổ máy tính bảng: đo ở 820px thì
+        bụi trái dừng ở 162px và bụi giữa mới bắt đầu ở 379px, tức 217px mặt đất trơn
+        nằm ngay giữa dải — đúng cái dải trơn thu nhỏ lại. Trên điện thoại 390px hai
+        bụi này chồng một phần vào hai bụi lớn, và chồng thì không sao: chúng vẽ TRƯỚC
+        nên tán cây phủ lên, hoa nằm sau cây là đúng chiều xa gần.
+
+        Khác nhau về số cụm cỏ và cỡ hoa — hai bụi giống nhau đặt cách đều thì đọc ra
+        là hoa văn lặp chứ không ra cỏ mọc.
+      */}
+      <svg
+        viewBox="-24 -20 50 30"
+        className="absolute bottom-8 left-[32%] h-7.5 w-12.5 -translate-x-1/2"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[[2, -2, 6]]}
+          hoa={[
+            [-14, 1, 'var(--color-decor-hoa-hong)', 0.7],
+            [16, 0, 'var(--color-decor-hoa-vang)', 0.85],
+          ]}
+        />
+      </svg>
+      <svg
+        viewBox="-24 -20 50 30"
+        className="absolute bottom-8 left-[68%] h-7.5 w-12.5 -translate-x-1/2"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[
+            [-6, -1, 5],
+            [14, -3, 7],
+          ]}
+          hoa={[[-18, 0, 'var(--color-decor-hoa-vang)', 0.75]]}
+        />
+      </svg>
+
+      {/* Bụi phải: MỘT cây. Bên trái hai — số lượng lệch nhau là chủ ý, hai bên bằng
+          nhau thì dải đất thành một hoa văn soi gương chứ không ra khung cảnh. */}
+      <svg
+        viewBox="-52 -76 114 86"
+        className="absolute bottom-8 right-[2%] h-21.5 w-28.5"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[
+            [-26, -2, 7],
+            [30, -3, 9],
+          ]}
+          hoa={[
+            [-42, 0, 'var(--color-decor-hoa-hong)', 0.85],
+            [16, 2, 'var(--color-decor-hoa-vang)', 0.7],
+            [48, 1, 'var(--color-decor-hoa-vang)', 1],
+          ]}
+        />
+        <Cay x={0} y={0} s={0.33} delay={-3.5} />
+      </svg>
+
+      {/* Bụi trái: cây to nhất của cả dải, kèm một cây con. Cây con KHÔNG lật, cây to
+          thì lật — hai cái cạnh nhau mà cùng dáng thì lộ ra là một hình dùng hai lần,
+          khác cỡ cũng không cứu được vì mắt nhận ra hình dáng trước kích thước. */}
+      <svg
+        viewBox="-46 -90 146 100"
+        className="absolute bottom-8 left-[2%] h-25 w-36.5"
+        fill="none"
+        focusable="false"
+      >
+        <BuiCoHoa
+          co={[
+            [-30, -3, 8],
+            [24, -2, 6],
+          ]}
+          hoa={[
+            [-12, 0, 'var(--color-decor-hoa-vang)', 1],
+            [44, 1, 'var(--color-decor-hoa-hong)', 0.8],
+            [92, 0, 'var(--color-decor-hoa-hong)', 0.9],
+          ]}
+        />
+        {/* Cây con vẽ TRƯỚC cây to: tán có chồng nhau thì cây to phải che cây nhỏ. */}
+        <Cay x={62} y={0} s={0.26} delay={-6} />
+        <Cay x={0} y={0} s={0.4} delay={0} lat />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Dây leo hai bên MÉP MÀN HÌNH — tranh trang trí thứ ba, chỉ cho màn hình hẹp.
+ *
+ * Ở đây có đúng 20px để vẽ, và con số đó không phải tôi chọn: nội dung dùng `px-5`
+ * (xem `page.tsx`), nên hai dải 20px sát mép là chỗ DUY NHẤT trên màn điện thoại mà
+ * không dòng chữ nào chạm tới. Thẻ game thì đục và nằm trên, nên vẽ lấn vào trong
+ * cũng chỉ bị thẻ che; nhưng tiêu đề "Game mới nhất" và mấy dòng chữ thường nằm
+ * THẲNG trên nền và bắt đầu đúng ở 20px, nên lấn một pixel là một chiếc lá nằm sau
+ * chữ cái đầu của một tiêu đề. Đó là lằn ranh, không phải một lề an toàn.
+ *
+ * VẼ ÍT HƠN, KHÔNG VẼ NHỎ HƠN — luật đã ghi ở đầu file, và lề 20px là ca cực đoan
+ * của nó. Không phải cái cây thu nhỏ (ở cỡ đó cả tán lá thành một đốm 6px), mà là
+ * một thứ KHÁC: một sợi dây leo, vốn dĩ mảnh và dài, với lá và hoa đúng cỡ đọc được.
+ *
+ * TÔ BẰNG `<pattern>` LẶP DỌC, không phải một danh sách toạ độ.
+ *
+ * Bên lề rộng thì `CanhVien` đặt tay từng cành theo phần trăm chiều cao, được, vì
+ * ở đó có 3–4 cành. Dây leo thì phải LIÊN TỤC suốt chiều cao khung nhìn, mà chiều
+ * cao ấy đổi theo máy và theo cả thanh địa chỉ của trình duyệt di động. Đặt tay thì
+ * hoặc dây đứt quãng ở máy cao, hoặc phải giãn hình — mà giãn là bông hoa bị bóp.
+ * Một ô hoa văn 20×120 lặp lại thì cao bao nhiêu cũng kín, và không hình nào méo.
+ *
+ * Ô phải NỐI ĐƯỢC VỚI CHÍNH NÓ: sợi dây vào ô ở (10,0) và ra ở (10,120), cùng một x.
+ * Lệch một đơn vị là mỗi 120px có một chỗ gấp khúc, và mắt bắt được ngay cái nhịp
+ * đều đặn ấy — đó là lúc hoa văn tự tố nó là hoa văn.
+ *
+ * HAI BÊN LỆCH PHA 46px, và đó không phải cho đẹp. Bên phải là bên trái lật ngang
+ * (`-scale-x-100`), nên nếu cùng pha thì mỗi chiếc lá bên này có một chiếc đối xứng
+ * y hệt bên kia — thành hai dấu ngoặc đơn đóng lấy nội dung, đúng cái mà ghi chú ở
+ * `CanhVien` đã cảnh báo. Lệch pha bằng cách cho hình chữ nhật tô hoa văn bắt đầu ở
+ * y = −46 chứ không phải 0; phần thừa phía dưới bị thẻ <svg> xén, đó là chủ ý.
+ *
+ * KHÔNG có viewBox trên hai thẻ <svg> này, cố ý: một đơn vị người dùng thành đúng
+ * một CSS px, nên `patternUnits="userSpaceOnUse"` với ô 20×120 là 20×120 pixel thật.
+ * Có viewBox là hình co giãn theo chiều cao khung nhìn, tức quay lại đúng cái phải
+ * tránh.
+ */
+const O_DAY_LEO = 'kg-o-day-leo';
+
+function OHoaVan() {
+  return (
+    <pattern
+      id={O_DAY_LEO}
+      patternUnits="userSpaceOnUse"
+      width="20"
+      height="120"
+      /* Lá và hoa vẽ trong ô nào thì nằm trong ô đó; thứ nhô ra khỏi ô sẽ bị chính
+         `<pattern>` xén, không phải bị thẻ svg xén — nên `overflow: visible` ở đây
+         là bắt buộc, thiếu nó là mất đầu mấy chiếc lá chìa ra ngoài ô. */
+      overflow="visible"
+    >
+      {/* Sợi dây: một đường lượn nhẹ, vào ô ở x=10 và ra ở x=10. */}
+      <path
+        d="M10 0C14 20 6 40 10 60 14 80 6 100 10 120"
+        stroke="var(--color-decor-la-dam)"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Tua cuốn: một vòng xoắn nhỏ, thứ làm dây leo ra dây leo chứ không ra sợi
+          chỉ có lá dính vào. */}
+      <path
+        d="M11 74c4 2 5 6 2 7-2 1-3-2-1-3"
+        stroke="var(--color-decor-la-dam)"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Lá so le hai phía. Góc và cỡ khác nhau từng chiếc: sáu chiếc cùng góc là
+          sáu bản sao, và ô lặp lại thì cái nhịp đó nhân lên suốt chiều cao trang. */}
+      <La x={10} y={13} g={-34} t={1} s={0.42} />
+      <La x={9} y={31} g={148} t={0} s={0.4} />
+      <La x={11} y={64} g={-24} t={2} s={0.44} />
+      <La x={9} y={92} g={156} t={1} s={0.42} />
+      <La x={10} y={108} g={-42} t={0} s={0.38} />
+      <Hoa x={13} y={52} mau="var(--color-decor-hoa-hong)" s={0.7} />
+      <Hoa x={7} y={120} mau="var(--color-decor-hoa-vang)" s={0.62} />
+    </pattern>
+  );
+}
+
+export function DayLeoVien() {
+  return (
+    <div
+      aria-hidden="true"
+      data-kg-decor="vien"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden xl:hidden"
+    >
+      <svg className="absolute inset-y-0 left-0 h-full w-5" fill="none" focusable="false">
+        <defs>
+          <OHoaVan />
+        </defs>
+        <rect x="0" y="0" width="20" height="4000" fill={`url(#${O_DAY_LEO})`} />
+      </svg>
+      {/*
+        Bên phải: cùng một ô hoa văn, lật ngang và lệch pha 46px.
+
+        Dùng lại `url(#...)` của thẻ svg bên trên — một `<pattern>` khai một lần thì
+        mọi thẻ trong tài liệu tô được, và đó là điểm chính: hai bản vẽ tay của cùng
+        một sợi dây thì sớm muộn lệch nhau, y như ghi chú ở `Canh` đã nói.
+      */}
+      <svg
+        className="absolute inset-y-0 right-0 h-full w-5 -scale-x-100"
+        fill="none"
+        focusable="false"
+      >
+        <rect x="0" y="-46" width="20" height="4000" fill={`url(#${O_DAY_LEO})`} />
+      </svg>
     </div>
   );
 }

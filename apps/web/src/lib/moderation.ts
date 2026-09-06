@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AuthError } from './auth';
 import { prisma } from './db';
 import { appOrigin, sendMail } from './mail';
+import { objectUrl } from './storage';
 import { isReportReason } from './report-reasons';
 import { revokeAllSessions } from './session';
 
@@ -25,6 +26,88 @@ export const REPORT_AUTO_HIDE_THRESHOLD = 3;
  * đổi lại chỉ đạt được ẩn mềm ở mức nửa đường.
  */
 export const REPORT_HARD_HIDE_THRESHOLD = REPORT_AUTO_HIDE_THRESHOLD * 2;
+
+/**
+ * Game đã gỡ hẳn còn được giữ bao nhiêu NGÀY trước khi xoá khỏi DB và khỏi đĩa.
+ *
+ * Bảy ngày là quyết định sản phẩm, không phải một hằng số kỹ thuật: đây là cửa sổ
+ * để sửa một quyết định sai. Sau nó thì hàng trong DB, file `.sb3` của bé, HTML đã
+ * đóng gói và ảnh bìa đều đi hẳn — nút "Cho hiện lại" trong khu quản trị không còn
+ * gì để hiện lại.
+ *
+ * BA HỆ QUẢ đã cân, đừng đổi con số này mà không đọc lại cả ba:
+ *
+ * 1. File `.sb3` GỐC của đứa trẻ cũng bị xoá. Đó là công nó tự làm, nên `adminRemoveGame`
+ *    gửi phụ huynh một lá thư kèm link tải về NGAY LÚC GỠ — con số này là số ngày họ
+ *    có để lấy file. Rút nó xuống là rút ngắn đúng cửa sổ đó, và lá thư sẽ tự nói ra
+ *    con số mới mà không ai phải sửa chữ.
+ * 2. Bảng `TakedownRequest` PHẢI sống sót, vì nó là hồ sơ pháp lý — nên khoá ngoại
+ *    của nó là `SetNull` kèm cột `gameTitle` chụp sẵn. Xem schema.
+ * 3. `BACKUP_KEEP` mặc định là 7 BẢN, và hai con số này gặp nhau: game gỡ ngày 0 bị
+ *    xoá ngày 7, bản sao lưu cuối cùng còn chứa nó là bản ngày 7 (sao lưu chạy giờ
+ *    `BACKUP_HOUR`=3, dọn chạy `PRUNE_HOUR`=4, nên bản sao lưu hôm đó vẫn còn game),
+ *    và bản ấy bị xoay vòng khoảng ngày 14. Tức cửa sổ cứu thật là ~14 ngày, nhưng
+ *    nửa sau đòi phải phục hồi từ sao lưu chứ không bấm một cái nút.
+ */
+/*
+ * `||` chứ KHÔNG phải `??`, và đây là chỗ đã sai một lần.
+ *
+ * `docker-compose.yml` khai `REMOVED_KEEP_DAYS: ${REMOVED_KEEP_DAYS:-}`, tức khi
+ * không đặt gì thì container nhận CHUỖI RỖNG, không phải undefined. `??` chỉ đỡ
+ * undefined, nên `Number('')` ra 0 — và 0 là giá trị mà script dọn TỪ CHỐI chạy.
+ * Hệ quả: service dọn khởi động bình thường rồi mỗi ngày in một dòng "hạn giữ không
+ * hợp lệ (0)" và không xoá gì, tức cả cơ chế đứng im ở đúng cấu hình MẶC ĐỊNH.
+ *
+ * `||` không làm hỏng chốt an toàn: chuỗi `'0'` vẫn là truthy nên nó đi qua và thành
+ * số 0, và script vẫn từ chối như thiết kế. Chỉ chuỗi rỗng mới rơi về mặc định.
+ */
+export const NGAY_GIU_GAME_DA_GO = Number(process.env.REMOVED_KEEP_DAYS || 7);
+
+/**
+ * Hạn xoá hẳn của một game đã gỡ, hoặc null nếu game chưa bị gỡ.
+ *
+ * Hai chữ ký chứ không phải một: chỗ đọc `game.removedAt` từ DB thì phải xử lý null
+ * (cột này null với mọi game chưa gỡ, và với cả game đã gỡ TRƯỚC khi có cột), còn
+ * chỗ vừa tự tạo mốc gỡ thì cầm chắc một Date. Không tách thì hai lá thư báo gỡ phải
+ * viết `han ? ... : ''` cho một nhánh không bao giờ chạy — và một nhánh không bao
+ * giờ chạy trong thư gửi người thật là chỗ để lọt một lá thư trống ngày.
+ */
+/**
+ * Nhãn tiếng Việt cho `ModerationLog.action`.
+ *
+ * Ở LIB chứ không ở trang, vì đã có HAI trang cùng đọc bảng vết này (`/admin` và
+ * `/admin/tong-quan`). Hai bản sao của cùng một từ điển thì sớm muộn lệch nhau, và
+ * lệch ở đây nghĩa là cùng một dòng lịch sử đọc ra hai chuyện khác nhau tuỳ người
+ * trực đang mở tab nào — điều tệ nhất có thể xảy ra với một sổ ghi việc đã làm.
+ *
+ * Mã lạ trả về nguyên mã: một action thêm sau mà quên khai ở đây vẫn hiện ra được,
+ * thô nhưng đọc được, chứ không thành một ô trống.
+ */
+export const ACTION_LABEL: Record<string, string> = {
+  AUTO_LIMIT: 'Hệ thống tự ẩn khỏi danh sách (đủ ngưỡng báo cáo)',
+  AUTO_HIDE: 'Hệ thống tự ẩn (đủ ngưỡng báo cáo)',
+  PARENT_HIDE: 'Phụ huynh ẩn game',
+  PARENT_UNHIDE: 'Phụ huynh cho hiện lại',
+  ADMIN_REMOVE: 'Admin gỡ hẳn',
+  ADMIN_RESTORE: 'Admin cho hiện lại',
+  ADMIN_DISMISS_REPORTS: 'Admin bỏ qua báo cáo',
+  ADMIN_LOCK_CHILD: 'Admin khoá tài khoản của bé',
+  ADMIN_UNLOCK_CHILD: 'Admin mở khoá tài khoản của bé',
+  TAKEDOWN_HIDE: 'Tạm ẩn vì có yêu cầu gỡ bản quyền',
+  TAKEDOWN_ACCEPT: 'Admin chấp nhận yêu cầu gỡ bản quyền',
+  TAKEDOWN_REJECT: 'Admin bác bỏ yêu cầu gỡ bản quyền',
+};
+
+export function actionLabel(action: string): string {
+  return ACTION_LABEL[action] ?? action;
+}
+
+export function hanXoaHan(removedAt: Date): Date;
+export function hanXoaHan(removedAt: Date | null): Date | null;
+export function hanXoaHan(removedAt: Date | null): Date | null {
+  if (!removedAt) return null;
+  return new Date(removedAt.getTime() + NGAY_GIU_GAME_DA_GO * 86400_000);
+}
 
 /**
  * Trạng thái mà CỘNG ĐỒNG đang áp cho game, tính thuần từ số báo cáo đáng tin.
@@ -272,13 +355,46 @@ async function notifyParentOfModeration(gameId: string, muc: 'LIMITED' | 'HIDDEN
 
 // --- Thao tác của admin ------------------------------------------------------
 
+/**
+ * Ngày tháng cho thư gửi phụ huynh, dạng ngày/tháng/năm.
+ *
+ * Giờ của MÁY CHỦ, nên container `web` phải khai `TZ=Asia/Ho_Chi_Minh` như hai
+ * service `backup` và `prune` — không thì nó chạy UTC và mọi mốc rơi sau 17:00 giờ
+ * ta bị lùi một ngày. Ở một lá thư nói "sau ngày này thì mất hẳn", lệch một ngày
+ * không phải chuyện hiển thị.
+ */
+export function ngayVi(d: Date): string {
+  return d.toLocaleDateString('vi-VN');
+}
+
 /** Gỡ hẳn game khỏi trang. Khác `HIDDEN` ở chỗ phụ huynh không tự bật lại được. */
 export async function adminRemoveGame(adminId: string, gameId: string, note: string): Promise<void> {
-  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { id: true } });
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    /*
+     * Đọc cả tên game, tên bé, mail phụ huynh và `sb3Sha256` ngay ở đây, TRƯỚC
+     * transaction: sau khi gỡ thì mấy thứ này vẫn còn, nhưng lấy một lần rồi dùng
+     * cho cả thư thì không phải mở thêm một truy vấn ở đường nóng của admin.
+     */
+    select: {
+      id: true,
+      title: true,
+      sb3Sha256: true,
+      child: { select: { displayName: true, parent: { select: { email: true } } } },
+    },
+  });
   if (!game) throw new AuthError('Không tìm thấy game này.');
 
+  /* Một mốc thời gian duy nhất cho cả hàng DB lẫn lá thư. Gọi `new Date()` hai lần
+     thì hạn in trong thư và hạn job dọn đọc ra là hai thời điểm khác nhau — lệch vài
+     mili giây thì vô hại, nhưng nó là loại lệch không ai đi kiểm. */
+  const goLuc = new Date();
+
   await prisma.$transaction(async (tx) => {
-    await tx.game.update({ where: { id: gameId }, data: { status: 'REMOVED' } });
+    await tx.game.update({
+      where: { id: gameId },
+      data: { status: 'REMOVED', removedAt: goLuc },
+    });
     await tx.report.updateMany({
       where: { gameId, status: 'OPEN' },
       data: { status: 'RESOLVED' },
@@ -287,6 +403,48 @@ export async function adminRemoveGame(adminId: string, gameId: string, note: str
       data: { gameId, actorId: adminId, action: 'ADMIN_REMOVE', note },
     });
   });
+
+  /*
+   * THƯ BÁO PHỤ HUYNH, KÈM LINK TẢI FILE GỐC.
+   *
+   * Trước khi có nó, đường này im hoàn toàn: admin gỡ game, bảy ngày sau job dọn xoá
+   * cả `.sb3` gốc của bé, và không ai được báo lấy một lần. Cái mất không phải là
+   * game trên trang — cái đó là quyết định có chủ ý — mà là bản gốc của một đứa trẻ,
+   * thứ chúng tôi nhận vào và hứa giữ. Bảy ngày là đủ để tải về, nhưng chỉ với người
+   * BIẾT là mình còn bảy ngày.
+   *
+   * Link trỏ thẳng player origin và không cần đăng nhập, đúng như nút "Tải file .sb3
+   * gốc" trên trang game và đúng như `/dieu-khoan` đã nói công khai. Nó KHÔNG mở
+   * thêm quyền gì: file vẫn nằm ở đúng URL theo hash mà nó vẫn nằm, thư chỉ nói cho
+   * người sở hữu biết địa chỉ đó trước khi nó biến mất.
+   *
+   * NGOÀI transaction và nuốt lỗi: việc gỡ đã xong và đã ghi vết. Mail trượt là
+   * chậm, còn ném lỗi ở đây thì server action báo đỏ cho admin về một việc đã làm
+   * xong — và admin sẽ bấm lại.
+   */
+  await sendMail({
+    to: game.child.parent.email,
+    subject: `Game "${game.title}" của bé ${game.child.displayName} đã bị gỡ khỏi KidoGame`,
+    text: [
+      'Chào bạn,',
+      '',
+      `Đội kiểm duyệt đã xem và gỡ game "${game.title}" của bé ${game.child.displayName}`,
+      'khỏi KidoGame. Game không còn xem được nữa, kể cả bằng link trực tiếp.',
+      '',
+      `FILE GỐC CỦA BÉ SẼ BỊ XOÁ HẲN NGÀY ${ngayVi(hanXoaHan(goLuc))}.`,
+      `Chúng tôi giữ lại ${NGAY_GIU_GAME_DA_GO} ngày để bạn kịp lấy. Sau ngày đó thì không lấy lại được.`,
+      '',
+      'Nếu bé chưa giữ bản .sb3 trên máy, tải lại tại đây trước ngày trên:',
+      `  ${objectUrl('sb3', game.sb3Sha256)}`,
+      '',
+      'File tải về mang tên là một chuỗi dài — đó là mã nội dung của chính file. Đổi tên',
+      'lại cho dễ nhớ rồi mở bằng Scratch như bình thường, nội dung không đổi.',
+      '',
+      'Nếu bạn cho rằng đây là nhầm lẫn, trả lời thư này giúp chúng tôi.',
+      '',
+      'KidoGame',
+    ].join('\n'),
+  }).catch((e) => console.error('[moderation] không gửi được thư báo gỡ game:', e));
 }
 
 /**
@@ -308,7 +466,10 @@ export async function adminRestoreGame(adminId: string, gameId: string, note: st
   await prisma.$transaction(async (tx) => {
     await tx.game.update({
       where: { id: gameId },
-      data: { status: 'PUBLISHED', reportCount: 0, trustedReportCount: 0 },
+      /* `removedAt: null` là bắt buộc, không phải dọn cho sạch: để nguyên thì game
+         vừa được cho hiện lại vẫn mang hạn xoá cũ, và job dọn sẽ xoá nó vài ngày
+         sau trong lúc nó đang chạy bình thường trên trang chủ. */
+      data: { status: 'PUBLISHED', reportCount: 0, trustedReportCount: 0, removedAt: null },
     });
     await tx.report.updateMany({
       where: { gameId, status: 'OPEN' },

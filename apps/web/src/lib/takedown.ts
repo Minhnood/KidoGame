@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AuthError } from './auth';
 import { prisma } from './db';
 import { appOrigin, sendMail } from './mail';
-import { communityStatus } from './moderation';
+import { communityStatus, hanXoaHan, ngayVi } from './moderation';
 import { operator, TAKEDOWN_SLA_WORKING_DAYS } from './operator';
 import {
   MAX_CLAIMANT_EMAIL_LENGTH,
@@ -35,7 +35,12 @@ export async function gameDangBiKhieuNai(gameIds: string[]): Promise<Set<string>
     where: { gameId: { in: gameIds }, status: 'OPEN' },
     select: { gameId: true },
   });
-  return new Set(rows.map((r) => r.gameId));
+  /* `gameId` nay nullable (xem schema: game xoá hẳn thì `SetNull`), nên phải lọc.
+     Bộ lọc `in` ở trên vốn đã không bao giờ khớp hàng null, nên đây là việc làm cho
+     kiểu đúng — nhưng làm bằng type guard chứ không bằng `as`: nếu mai này ai đổi
+     điều kiện `where` thành thứ có khớp null, `as` sẽ nhét `null` vào một
+     `Set<string>` và lỗi lộ ra ở chỗ khác hẳn. */
+  return new Set(rows.map((r) => r.gameId).filter((id): id is string => id !== null));
 }
 
 /*
@@ -210,7 +215,19 @@ export async function submitTakedownRequest(input: TakedownInput): Promise<void>
       const didHide = hidden.count === 1;
 
       await tx.takedownRequest.create({
-        data: { gameId: game.id, claimantName, claimantEmail, evidence, ipHash, didHide },
+        /* `gameTitle` chụp lại NGAY ĐÂY, không tra ngược lúc cần. Game bị gỡ hẳn sẽ
+           bị xoá sau 7 ngày và khoá ngoại là `SetNull`, nên nếu không chụp thì hàng
+           còn lại chỉ nói "có người khiếu nại một game nào đó" — mà đây lại là bảng
+           duy nhất mang nghĩa vụ pháp lý. Xem chú thích ở schema. */
+        data: {
+          gameId: game.id,
+          gameTitle: game.title,
+          claimantName,
+          claimantEmail,
+          evidence,
+          ipHash,
+          didHide,
+        },
       });
 
       if (didHide) {
@@ -319,6 +336,9 @@ export async function adminResolveTakedown(
       didHide: true,
       claimantEmail: true,
       claimantName: true,
+      /* Tên chụp sẵn. Phải select vì nó là thứ DUY NHẤT còn nói được yêu cầu này
+         nhắm vào game nào, sau khi game đã bị xoá hẳn. */
+      gameTitle: true,
       game: {
         select: {
           id: true,
@@ -332,16 +352,67 @@ export async function adminResolveTakedown(
   if (!request) throw new AuthError('Không tìm thấy yêu cầu này.');
   if (request.status !== 'OPEN') throw new AuthError('Yêu cầu này đã được xử lý rồi.');
 
+  /*
+   * GAME ĐÃ BỊ XOÁ HẲN — nhánh riêng, và nó tồn tại vì một tình huống có thật.
+   *
+   * Game bị gỡ hẳn sẽ bị xoá khỏi DB sau `NGAY_GIU_GAME_DA_GO` ngày. Một yêu cầu gỡ
+   * THỨ HAI, của người khác, có thể vẫn đang mở lúc đó — nó không tự đóng khi game
+   * bị gỡ. Nên hàng đợi có thể chứa yêu cầu trỏ tới một game không còn tồn tại.
+   *
+   * Vì sao không ném lỗi cho gọn: yêu cầu ấy sẽ nằm mãi trong hàng đợi, và tệ hơn,
+   * nó vẫn đếm vào hạn trả lời (`slaDueAt`) — tức khu quản trị mọc ra một dòng ĐỎ
+   * vĩnh viễn mà không thao tác nào xoá được. Người trực sẽ học cách bỏ qua màu đỏ,
+   * và đó là lúc hạn trả lời thật mất tác dụng.
+   *
+   * Kết quả ghi là ACCEPTED bất kể admin bấm gì: nội dung đã không còn trên KidoGame,
+   * nên về mặt hồ sơ thì yêu cầu đã được thoả mãn. Chỉ gửi thư cho người khiếu nại —
+   * không có phụ huynh nào cần nhận thư về một game đã biến mất từ trước.
+   */
+  if (!request.game) {
+    await prisma.takedownRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'ACCEPTED',
+        resolvedAt: new Date(),
+        resolvedBy: adminId,
+        resolutionNote: `Game đã bị xoá khỏi hệ thống trước khi yêu cầu này được xử lý. ${note}`.trim(),
+      },
+    });
+    await sendMail({
+      to: request.claimantEmail,
+      subject: `[KidoGame] Kết quả yêu cầu gỡ: ${request.gameTitle}`,
+      text: [
+        `Chào ${request.claimantName},`,
+        '',
+        `Game "${request.gameTitle}" không còn trên KidoGame nữa — nó đã bị gỡ và xoá hẳn`,
+        'khỏi hệ thống của chúng tôi.',
+        '',
+        'Cảm ơn bạn đã báo cho chúng tôi.',
+      ].join('\n'),
+    }).catch((e) => console.error('[takedown] không gửi được mail kết quả:', e));
+    return { restored: false };
+  }
+
+  const game = request.game;
+  /* Một mốc duy nhất cho cả hàng DB lẫn hạn in trong thư báo phụ huynh. */
+  const goLuc = new Date();
   let restored = false;
   /** Mức được hiện lại tới. Cần riêng vì "đã hiện lại" và "hiện lại tới đâu" khác nhau. */
   let restoredTo: 'PUBLISHED' | 'LIMITED' | 'HIDDEN' | null = null;
 
   await prisma.$transaction(async (tx) => {
     if (accept) {
-      await tx.game.update({ where: { id: request.game.id }, data: { status: 'REMOVED' } });
+      await tx.game.update({
+        where: { id: game.id },
+        /* `removedAt` là đồng hồ của hạn xoá hẳn 7 ngày. Đặt ở CẢ HAI đường dẫn tới
+           REMOVED — đây và `adminRemoveGame` — không thì game gỡ theo đường bản
+           quyền nằm lại mãi, và cái đó hỏng im lặng: hàng đợi vẫn sạch, chỉ có việc
+           dọn là không bao giờ tới lượt nó. */
+        data: { status: 'REMOVED', removedAt: goLuc },
+      });
       // Game đã gỡ hẳn thì mọi báo cáo đang mở về nó cũng hết việc.
       await tx.report.updateMany({
-        where: { gameId: request.game.id, status: 'OPEN' },
+        where: { gameId: game.id, status: 'OPEN' },
         data: { status: 'RESOLVED' },
       });
     } else if (request.didHide) {
@@ -353,7 +424,7 @@ export async function adminResolveTakedown(
        * là dùng kết luận của một vụ để xoá kết luận của một vụ khác.
        */
       const otherOpen = await tx.takedownRequest.count({
-        where: { gameId: request.game.id, status: 'OPEN', id: { not: request.id } },
+        where: { gameId: game.id, status: 'OPEN', id: { not: request.id } },
       });
 
       /*
@@ -364,10 +435,10 @@ export async function adminResolveTakedown(
        * cáo. `communityStatus` là nơi duy nhất biết quy tắc này.
        */
       if (otherOpen === 0) {
-        restoredTo = communityStatus(request.game.trustedReportCount);
+        restoredTo = communityStatus(game.trustedReportCount);
         if (restoredTo !== 'HIDDEN') {
           const back = await tx.game.updateMany({
-            where: { id: request.game.id, status: 'HIDDEN' },
+            where: { id: game.id, status: 'HIDDEN' },
             data: { status: restoredTo },
           });
           restored = back.count === 1;
@@ -387,7 +458,7 @@ export async function adminResolveTakedown(
 
     await tx.moderationLog.create({
       data: {
-        gameId: request.game.id,
+        gameId: game.id,
         actorId: adminId,
         action: accept ? 'TAKEDOWN_ACCEPT' : 'TAKEDOWN_REJECT',
         note: accept
@@ -397,49 +468,66 @@ export async function adminResolveTakedown(
     });
   });
 
-  const gameUrl = `${appOrigin()}/game/${request.game.id}`;
+  const gameUrl = `${appOrigin()}/game/${game.id}`;
   await Promise.allSettled([
     sendMail({
       to: request.claimantEmail,
-      subject: `[KidoGame] Kết quả yêu cầu gỡ: ${request.game.title}`,
+      subject: `[KidoGame] Kết quả yêu cầu gỡ: ${game.title}`,
       text: accept
         ? [
             `Chào ${request.claimantName},`,
             '',
-            `Chúng tôi đã xem lại yêu cầu của bạn và gỡ game "${request.game.title}" khỏi KidoGame.`,
+            `Chúng tôi đã xem lại yêu cầu của bạn và gỡ game "${game.title}" khỏi KidoGame.`,
             '',
             'Cảm ơn bạn đã báo cho chúng tôi.',
           ].join('\n')
         : [
             `Chào ${request.claimantName},`,
             '',
-            `Chúng tôi đã xem lại yêu cầu của bạn với game "${request.game.title}"`,
+            `Chúng tôi đã xem lại yêu cầu của bạn với game "${game.title}"`,
             'và chưa đủ căn cứ để gỡ.',
             '',
             note || 'Nếu bạn có thêm bằng chứng về bản gốc, trả lời thư này giúp chúng tôi.',
           ].join('\n'),
     }),
     sendMail({
-      to: request.game.child.parent.email,
+      to: game.child.parent.email,
       subject: accept
-        ? `Game "${request.game.title}" của bé đã bị gỡ`
-        : `Game "${request.game.title}" của bé đã được xem lại`,
+        ? `Game "${game.title}" của bé đã bị gỡ`
+        : `Game "${game.title}" của bé đã được xem lại`,
       text: accept
         ? [
             'Chào bạn,',
             '',
-            `Sau khi xem lại, chúng tôi xác nhận game "${request.game.title}" của bé`,
-            `${request.game.child.displayName} có sử dụng nội dung của người khác, nên đã gỡ khỏi KidoGame.`,
+            `Sau khi xem lại, chúng tôi xác nhận game "${game.title}" của bé`,
+            `${game.child.displayName} có sử dụng nội dung của người khác, nên đã gỡ khỏi KidoGame.`,
             '',
             'Đây là chuyện rất hay gặp và không có nghĩa là bé làm gì sai về đạo đức —',
             'nhưng game đăng lên KidoGame cần là do chính bé làm ra.',
+            '',
+            /*
+             * NÓI RA HẠN XOÁ, NHƯNG KHÔNG KÈM LINK TẢI — khác cố ý với lá thư của
+             * `adminRemoveGame`, và đây là chỗ đáng đọc kỹ trước khi "cho đồng bộ".
+             *
+             * Giống nhau ở chỗ: hai đường đều dẫn tới REMOVED, và bảy ngày sau job
+             * dọn xoá file gốc như nhau — nên phụ huynh ở đường này cũng phải biết
+             * mình còn bao nhiêu ngày, im lặng thì file mất mà không ai được báo.
+             *
+             * Khác nhau ở chỗ: game này vừa bị kết luận là có nội dung của người
+             * khác. Chủ động gửi đi một link tải chính nội dung đó, sau khi đã nhận
+             * thông báo và đã công nhận nó đúng, là việc mà bên vận hành phải tự
+             * quyết chứ không phải để cho code quyết. File vẫn nằm ở URL theo hash
+             * như cũ, nên đây không phải là chặn đường ai — chỉ là không tự tay đưa.
+             */
+            `Bản gốc của bé còn được giữ tới ngày ${ngayVi(hanXoaHan(goLuc))}, sau đó xoá hẳn.`,
+            'Nếu bé chưa giữ bản .sb3 trên máy và muốn lấy lại, trả lời thư này trước ngày đó.',
             '',
             `Điều khoản: ${appOrigin()}/dieu-khoan`,
           ].join('\n')
         : [
             'Chào bạn,',
             '',
-            `Chúng tôi đã xem lại game "${request.game.title}" của bé ${request.game.child.displayName}`,
+            `Chúng tôi đã xem lại game "${game.title}" của bé ${game.child.displayName}`,
             'và thấy yêu cầu gỡ chưa đủ căn cứ.',
             '',
             restored && restoredTo === 'PUBLISHED'

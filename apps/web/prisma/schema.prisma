@@ -211,6 +211,19 @@ model Game {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Lúc game chuyển sang `REMOVED`. Null với mọi trạng thái khác.
+  ///
+  /// Cần một cột RIÊNG chứ không suy ra từ đâu khác, vì nó là đồng hồ của hạn xoá
+  /// hẳn (7 ngày, xem `NGAY_GIU_GAME_DA_GO`). Hai nguồn có sẵn đều sai:
+  /// `updatedAt` đổi theo mọi lần ghi — kể cả `playCount` — nên nó sẽ liên tục đẩy
+  /// hạn xoá ra xa mỗi lần có người bấm vào link cũ; còn `ModerationLog` thì một
+  /// game có thể bị gỡ rồi cho hiện lại rồi gỡ lần nữa, nên đọc log là phải tự
+  /// quyết định lần nào mới tính, đúng thứ một cột trả lời được bằng một giá trị.
+  ///
+  /// Phải trả về NULL khi cho hiện lại. Không xoá thì game hiện lại vẫn mang hạn
+  /// cũ, và bảy ngày sau nó bị xoá trong lúc đang chạy bình thường trên trang chủ.
+  removedAt DateTime?
+
   child            Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
   reports          Report[]
   moderationLogs   ModerationLog[]
@@ -270,8 +283,21 @@ enum TakedownStatus {
 /// cầu chưa cam đoan, nên mọi hàng trong bảng đều đã cam đoan. Một cột luôn luôn
 /// `true` không nói lên gì.
 model TakedownRequest {
-  id     String @id @default(cuid())
-  gameId String
+  id String @id @default(cuid())
+
+  /// Null khi game đã bị xoá hẳn sau hạn giữ — xem `gameTitle` ngay dưới.
+  gameId String?
+
+  /// Tên game lúc nhận yêu cầu, chụp lại tại chỗ.
+  ///
+  /// VÌ SAO PHẢI CHỤP. Game bị gỡ hẳn sẽ bị xoá khỏi DB sau 7 ngày, và đây là bảng
+  /// DUY NHẤT trong hệ thống mang nghĩa vụ pháp lý: nó ghi ai khiếu nại, căn cứ gì,
+  /// và ta đã xử lý ra sao. Để `onDelete: Cascade` như trước thì việc dọn dữ liệu
+  /// tự xoá luôn bằng chứng đã xử lý đúng khiếu nại — nghĩa là càng làm đúng (gỡ
+  /// hẳn) thì càng mất hồ sơ. Nên khoá ngoại là `SetNull`, và tên game phải nằm
+  /// ngay trong hàng này, không thì hàng còn lại chỉ nói "có người khiếu nại một
+  /// game nào đó".
+  gameTitle String @default("")
 
   /// Người khiếu nại tự khai. KHÔNG xác minh được — đó chính là lý do phải có
   /// bước admin xem lại, chứ không gỡ hẳn ngay khi nhận.
@@ -301,11 +327,15 @@ model TakedownRequest {
   resolvedBy     String?
   resolutionNote String    @default("")
 
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game Game? @relation(fields: [gameId], references: [id], onDelete: SetNull)
 
   /// Chống trùng theo EMAIL người khiếu nại, không theo IP: người khiếu nại tự khai
   /// danh tính, và chính danh tính đó mới là thứ "cùng một người" nghĩa là gì ở đây.
   /// Gửi lại thì im lặng coi như đã nhận, đúng cách `reportGame` xử lý báo cáo trùng.
+  ///
+  /// Với `gameId` null (game đã xoá) Postgres coi mọi hàng là khác nhau, nên ràng
+  /// buộc này lặng lẽ hết tác dụng ở đó. Đúng ý: game không còn thì không còn gì để
+  /// khiếu nại trùng, và hàng cũ chỉ nằm lại làm hồ sơ.
   @@unique([gameId, claimantEmail])
   @@index([status, createdAt])
   @@index([ipHash, createdAt])
