@@ -125,6 +125,26 @@ Bốn điều phải biết trước khi bấm:
 - **Việc này không đảo lại được.** Không có bảy ngày như game bị gỡ. Đường cứu duy nhất
   là bản sao lưu.
 
+### Ẩn game và xoá hẳn game — không giống nhau
+
+Trên trang của bố mẹ (`/phu-huynh`) mỗi game có hai nút:
+
+| Nút | Làm gì | Nội dung còn trên mạng? |
+|---|---|---|
+| **Ẩn game** | rút khỏi trang, `/game/<id>` trả 404 | **CÒN** — ai có URL file vẫn mở được, vĩnh viễn |
+| **Xoá hẳn** | `REMOVED` + bắt đầu đếm ngược | file bị dọn sau `REMOVED_KEEP_DAYS` ngày |
+
+Player origin phục vụ theo mã nội dung và **không tra database**, nên ẩn không thu hồi
+file. Đo được: game admin đã gỡ thì trang trả **404** mà file HTML và `.sb3` vẫn trả
+**200**. `storage:prune` chỉ xoá file mồ côi, mà game đang ẩn vẫn trỏ tới file.
+
+Ba chốt của nút Xoá hẳn: game đã `REMOVED` không có nút; game **đang có khiếu nại bản
+quyền** cũng không (đội kiểm duyệt cần xem nội dung để trả lời trong hạn); phụ huynh
+**không tự bật lại được**. Thư gửi ngay lúc xoá, kèm link tải `.sb3` và ngày file mất.
+
+File `.sb3` gốc và ảnh bìa **có thể dùng chung** giữa hai game dựng từ cùng một file — khi
+đó xoá một game không xoá file. Bản đã đóng gói thì luôn mất, vì mã của nó là riêng.
+
 ### Xem thư nhắc việc có hạn
 
 ```bash
@@ -177,7 +197,7 @@ delete from "Parent" where email like 'e2e-%';
 delete from "Game" where title = 'Game kiểm thử e2e'
    or title like 'Game hạn giữ %' or title like 'Game bản quyền %'
    or title like 'Game kiểm duyệt %' or title like 'Game xoá nhà %'
-   or title like 'Game nhắc việc %';
+   or title like 'Game nhắc việc %' or title like 'Game ẩn xoá %';
 delete from "ErrorLog" where message like 'Loi kiem thu %';
 -- `LoginAttempt` không có khoá ngoại nên hai lệnh trên KHÔNG kéo theo nó.
 delete from "LoginAttempt" where identity like '%e2e-%';

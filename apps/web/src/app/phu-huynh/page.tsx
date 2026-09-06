@@ -9,8 +9,14 @@ import { Field, TextInput } from '@/components/field';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
-import { GameVisibilityToggle, LockToggle, ResetPasswordForm } from './child-controls';
+import {
+  DeleteGameButton,
+  GameVisibilityToggle,
+  LockToggle,
+  ResetPasswordForm,
+} from './child-controls';
 import { VerifyEmailButton } from './verify-email-button';
+import { NGAY_GIU_GAME_DA_GO } from '@/lib/moderation';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,9 +58,20 @@ export default async function ParentDashboard() {
     <>
       <PageTitle title="Trang của bố mẹ" lead={actor.email} />
 
+      {/*
+        Câu này trước đây dừng ở "ẩn bất kỳ game nào", và nó nói quá đúng cái điều người
+        đọc cần biết chính xác nhất. Ẩn rút game khỏi trang, nhưng file đã đóng gói và
+        file .sb3 vẫn được phục vụ theo địa chỉ nội dung cho ai còn giữ URL — đo được:
+        trang /game/<id> của một game đã gỡ trả 404 trong khi hai file của nó vẫn trả 200.
+        Người bấm ẩn vì game để lộ gì đó về con mình cần biết ranh giới ấy TRƯỚC khi bấm,
+        chứ không phải sau.
+      */}
       <Notice tone="info">
         Game của bé được hiển thị công khai ngay sau khi đăng. Bố mẹ xem lại ở đây và ẩn bất kỳ
-        game nào, bất cứ lúc nào.
+        game nào, bất cứ lúc nào. <strong>Ẩn</strong> là rút game khỏi trang — ai đang giữ sẵn
+        link tới file game thì vẫn mở được. Muốn nội dung không còn trên mạng nữa thì bấm{' '}
+        <strong>Xoá hẳn</strong>: chúng tôi xoá cả file gốc sau {NGAY_GIU_GAME_DA_GO} ngày, và
+        gửi bạn link tải về trước ngày đó.
       </Notice>
 
       {/*
@@ -169,7 +186,34 @@ export default async function ParentDashboard() {
                         làm người ta bực và tưởng web hỏng.
                       */}
                       {game.status !== 'REMOVED' && !biKhieuNai.has(game.id) && (
-                        <GameVisibilityToggle gameId={game.id} hidden={game.status === 'HIDDEN'} />
+                        /* `ml-auto justify-end`: khi hộp xác nhận mở ra nó rộng cả thẻ và
+                           đẩy hai nút lên dòng trên — không có hai class này thì "Ẩn game"
+                           nhảy từ mép phải sang mép trái, tức một nút không liên quan tự
+                           di chuyển vì người dùng bấm nút bên cạnh nó.
+
+                           Chú thích này là comment JS thường, KHÔNG bọc trong ngoặc nhọn:
+                           chỗ này là vị trí BIỂU THỨC (nhánh của `&&`), nơi comment kiểu
+                           JSX không hợp lệ — sai thì dev server trả 500 với
+                           "Expected '</', got 'className'". Bẫy đã trả giá hai lần.
+
+                           Và đừng viết ký tự đóng comment vào giữa phần chữ: nó kết thúc
+                           comment ngay tại đó, phần còn lại thành code rác, lỗi báo ở một
+                           dòng chẳng liên quan. Trả giá lần thứ ba trong cùng phiên. */
+                        <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                          <GameVisibilityToggle gameId={game.id} hidden={game.status === 'HIDDEN'} />
+                          {/*
+                            "Xoá hẳn" đứng CẠNH "Ẩn game" chứ không nằm ở đâu khác, vì hai
+                            nút này là hai việc khác nhau mà người dùng đang tưởng là hai
+                            mức của một việc: ẩn rút game khỏi trang, xoá mới thu hồi được
+                            file. Để chúng xa nhau thì người cần cái thứ hai sẽ dừng ở cái
+                            thứ nhất và tưởng đã xong.
+                          */}
+                          <DeleteGameButton
+                            gameId={game.id}
+                            title={game.title}
+                            soNgayGiu={NGAY_GIU_GAME_DA_GO}
+                          />
+                        </span>
                       )}
                     </li>
                   ))}

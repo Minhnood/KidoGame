@@ -122,6 +122,37 @@ export default function TermsPage() {
           duyệt — chỉ không tự động thay đổi trạng thái game. Đây là cách chúng tôi tránh việc một
           người đổi mạng vài lần là ẩn được game của bất kỳ ai.
         </p>
+        {/*
+          RANH GIỚI GIỮA "ẨN" VÀ "XOÁ", nói ra vì nó không hiển nhiên và vì nó quyết
+          định người ta bấm nút nào.
+
+          File game được phục vụ theo địa chỉ nội dung, ở một origin không tra database
+          — nên ẩn một game KHÔNG thu hồi file của nó, và với game chỉ bị ẩn thì tình
+          trạng đó là vĩnh viễn (cơ chế dọn đĩa chỉ xoá file không game nào còn trỏ tới).
+          Đo được: trang của một game đã gỡ trả 404 trong khi hai file của nó vẫn trả 200.
+
+          Người cần thu hồi nội dung thật thường là phụ huynh phát hiện game để lộ gì đó
+          về con mình. Họ phải biết ranh giới này trước khi bấm, không phải sau.
+
+          MỆNH ĐỀ "nếu không còn game nào khác dùng đúng file đó" KHÔNG phải rào chữ:
+          storage địa chỉ hoá theo nội dung, nên hai game dựng từ cùng một .sb3 dùng
+          CHUNG cả file gốc lẫn ảnh bìa — đo trên dữ liệu thật: tám game cho ra tám mã
+          HTML khác nhau (HTML mang tên game) nhưng chỉ sáu mã .sb3, hai cặp trùng. Bản
+          đã đóng gói thì luôn mất, vì mã của nó là riêng. Bỏ mệnh đề ấy đi là hứa một
+          việc mà cơ chế không làm — và không làm ĐÚNG, vì xoá file theo mã nội dung là
+          xoá mất bản gốc của game khác.
+        */}
+        <p>
+          <strong>“Ẩn” và “xoá hẳn” không giống nhau, và đây là chỗ nên đọc kỹ.</strong> Ẩn là
+          rút game khỏi trang: không ai tìm thấy nó nữa, và mở trang game thì báo không tồn tại.
+          Nhưng file game đã đóng gói được phục vụ theo mã nội dung, nên{' '}
+          <em>ai đang giữ sẵn link tới đúng file đó vẫn mở được</em>. Muốn nội dung không còn
+          trên mạng nữa thì bố mẹ bấm <strong>Xoá hẳn</strong> ở trang của bố mẹ: game rời trang
+          ngay, và sau {NGAY_GIU_GAME_DA_GO} ngày chúng tôi xoá thật bản đã đóng gói — không ai
+          mở được nữa, kể cả bằng link cũ — cùng ảnh bìa và file <code>.sb3</code> gốc, nếu
+          không còn game nào khác dùng đúng file đó. Ngay lúc bấm, bố mẹ nhận một email kèm link
+          tải bản gốc để kịp giữ lại công của bé.
+        </p>
       </Section>
 
       <Section id="ban-quyen" title="Bản quyền">

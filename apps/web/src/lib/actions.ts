@@ -27,6 +27,7 @@ import {
   adminRestoreGame,
   adminSetChildLocked,
   communityStatus,
+  parentRemoveGame,
   reportGame,
 } from './moderation';
 import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
@@ -377,6 +378,38 @@ export async function setGameHiddenAction(_prev: FormState, form: FormData): Pro
         note: 'Phụ huynh thao tác từ trang quản lý',
       },
     });
+  });
+  revalidatePath('/phu-huynh');
+  return state;
+}
+
+/**
+ * Phụ huynh xoá hẳn một game của con mình.
+ *
+ * Đường thu hồi thật, khác nút "Ẩn game": ẩn chỉ rút game khỏi trang, còn file HTML và
+ * `.sb3` vẫn được player origin phục vụ theo hash cho bất cứ ai có URL — vĩnh viễn, vì
+ * `storage:prune` chỉ xoá file mồ côi. Xoá thì `removedAt` bắt đầu chạy và job dọn hằng
+ * đêm xoá thật cả hàng DB lẫn file.
+ *
+ * Chốt "đang có khiếu nại bản quyền" đặt ở đây chứ không trong `parentRemoveGame`, vì
+ * `gameDangBiKhieuNai` sống ở `takedown.ts` và file đó đã import `moderation.ts` — gọi
+ * ngược lại là một vòng import. Cùng tầng, cùng điều kiện với `setGameHiddenAction`.
+ */
+export async function parentRemoveGameAction(
+  _prev: FormState,
+  form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    const parentId = await requireParent();
+    const gameId = String(form.get('gameId') ?? '');
+
+    if ((await gameDangBiKhieuNai([gameId])).has(gameId)) {
+      throw new AuthError(
+        'Game này đang tạm ẩn vì có yêu cầu gỡ bản quyền chờ xử lý, nên chưa xoá được. Đội kiểm duyệt sẽ trả lời trước, sau đó bạn xoá được.'
+      );
+    }
+
+    await parentRemoveGame(parentId, gameId);
   });
   revalidatePath('/phu-huynh');
   return state;

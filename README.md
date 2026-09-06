@@ -62,6 +62,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 28, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 24, DỌN THẬT
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
@@ -73,7 +74,14 @@ một hàng — nó sẽ đỏ ở phép kiểm "gửi trùng không tạo thêm
 mode violation`, một triệu chứng không chỉ về đâu cả. Dọn bằng:
 `delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';`
 
-**`e2e-xoa-gia-dinh.mjs` và `e2e-nhac-viec.mjs` cũng phải chạy SAU `e2e-takedown.mjs`**,
+**`e2e-an-vs-xoa.mjs` chạy `db:prune-removed --xoa` và `storage:prune --xoa` THẬT** trên
+máy đang chạy nó — không có cách nào khác để kiểm rằng "xoá hẳn" thu hồi được file. Hệ quả
+ngoài phạm vi bài: mọi file mồ côi khác trên đĩa cũng bị dọn, và mọi game `REMOVED` đã quá
+hạn giữ cũng bị xoá thật. Trên máy dev đó đúng là việc nên làm; **đừng** chạy nó với
+`DATABASE_URL` trỏ vào production.
+
+**`e2e-xoa-gia-dinh.mjs`, `e2e-nhac-viec.mjs` và `e2e-an-vs-xoa.mjs` cũng phải chạy SAU
+`e2e-takedown.mjs`**,
 cùng lý do: cả hai dựng yêu cầu gỡ bản quyền trong hàng đợi. Bài đầu kiểm rằng hồ sơ ấy
 sống sót qua việc xoá cả gia đình; bài sau dựng ba yêu cầu rồi kéo `createdAt` về quá khứ
 để có đủ cả ba nhóm hạn. Cả hai tự dọn ở cuối.
@@ -1115,6 +1123,52 @@ không, mà cả hai đều báo là ổn. Thiếu nhóm đó ở production th�
 bước nhắc đỏ trong log, đúng hướng hỏng cần; ở dev nó chỉ in ra stdout rồi coi như xong.
 
 Bộ kiểm: `node infra/e2e-nhac-viec.mjs` (28).
+
+### "Ẩn" không thu hồi nội dung — và phụ huynh xoá hẳn được
+
+**Đo được, không phải suy luận.** Với một game admin đã gỡ:
+
+| | Trang `/game/<id>` | File HTML trên player | File `.sb3` |
+|---|---|---|---|
+| người thường | **404** | **200** | **200** |
+
+Player origin phục vụ **thuần theo mã nội dung và không tra database** (xem
+`infra/player-server.mjs`). Nên nút "Ẩn game" của phụ huynh chỉ rút game khỏi trang: ai
+còn giữ URL của file vẫn mở được, `cache-control: immutable`. Với game chỉ bị **ẩn** thì
+tình trạng đó là **vĩnh viễn**, vì `storage:prune` chỉ xoá file *mồ côi* và game đang ẩn
+vẫn trỏ tới file nên file không bao giờ thành mồ côi.
+
+Lý do thường nhất để một phụ huynh bấm ẩn lại chính là game để lộ gì đó về con họ — nên
+trước bản này, thao tác duy nhất họ làm được không hề lấy nội dung ấy khỏi mạng, không có
+đường nào khác, và cả trang phụ huynh lẫn `/dieu-khoan` đều không nói ra.
+
+Hai việc đã làm:
+
+1. **Nút "Xoá hẳn" cho phụ huynh**, ngay cạnh "Ẩn game" — cố ý cạnh nhau, vì người dùng
+   đang tưởng chúng là hai mức của một việc; để xa nhau thì người cần cái thứ hai sẽ dừng
+   ở cái thứ nhất và tưởng đã xong. Nó dùng lại **đúng cơ chế của `adminRemoveGame`**:
+   `REMOVED` + `removedAt`, rồi job dọn hằng đêm xoá thật. Không thêm trạng thái thứ năm,
+   không xoá file tại chỗ. Thư gửi ngay kèm link tải `.sb3` và ngày file mất.
+2. **Nói thật** ở trang phụ huynh và `/dieu-khoan`: ẩn là gì, xoá là gì, và ranh giới.
+
+Ba chốt: game `REMOVED` không có nút; game **đang có khiếu nại bản quyền** cũng không —
+nhất quán với `setGameHiddenAction`, và cần thiết vì `/dieu-khoan` hứa với người khiếu nại
+rằng đội kiểm duyệt *xem* nội dung rồi trả lời trong hạn, mà một hàng DB đã xoá thì không
+còn gì để xem; và phụ huynh **không tự bật lại được**, giống game bị admin gỡ.
+
+**Mệnh đề "nếu không còn game nào khác dùng đúng file đó" trên `/dieu-khoan` không phải
+rào chữ.** Đo trên dữ liệu thật: tám game cho ra **tám** mã HTML khác nhau (HTML mang tên
+game) nhưng chỉ **sáu** mã `.sb3` — hai cặp trùng. Nên bản đã đóng gói thì luôn mất khi
+xoá, còn `.sb3` gốc và ảnh bìa chỉ mất khi không game nào khác dùng chúng. Bỏ mệnh đề ấy
+là hứa một việc mà cơ chế không làm — và không nên làm, vì xoá theo mã nội dung là xoá mất
+bản gốc của game khác.
+
+Hộp xác nhận trên nút nói **gọn hơn** `/dieu-khoan` và cố ý không "sửa cho khớp": trang
+điều khoản mô tả cơ chế, hộp xác nhận thì cảnh báo, và nó lệch về phía *mạnh hơn* thực tế
+— hướng đúng để lệch. Việc phụ huynh cần làm cũng không đổi: tải bản gốc về trước ngày đó.
+
+Bộ kiểm: `node infra/e2e-an-vs-xoa.mjs` (24). Nó canh cả ba sự thật ở trên, kể cả sự thật
+số ba — chạy prune thật rồi khẳng định HTML trả 404 trong khi `.sb3` dùng chung vẫn trả 200.
 
 ## Cấu trúc
 
