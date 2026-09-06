@@ -295,7 +295,12 @@ export default async function AdminPage({
                   key={req.id}
                   data-testid="admin-takedown"
                   data-request-id={req.id}
-                  className="rounded-card border border-warn-border bg-warn-bg p-5"
+                  /* Cả hàng đợi này đã nằm trên nền cảnh báo, nên vạch trái ở đây chỉ
+                     phân biệt QUÁ HẠN với chưa: đỏ là hạn đã hứa công khai bị vỡ, cam
+                     là đang trong hạn. Cùng thứ tiếng với ba tab kia. */
+                  className={`rounded-card border border-warn-border bg-warn-bg p-5 border-l-4 ${
+                    overdue ? 'border-l-danger' : 'border-l-accent'
+                  }`}
                 >
                   {/*
                     `req.game` CÓ THỂ NULL, và đó là trạng thái bình thường chứ không
@@ -414,7 +419,26 @@ export default async function AdminPage({
         </EmptyState>
       ) : (
         <ul className="mb-8 mt-3 list-none space-y-4 p-0" data-testid="admin-list">
-          {games.map((game) => (
+          {games.map((game) => {
+            /*
+             * VẠCH TRẠNG THÁI, cùng thứ tiếng đã dùng ở Tổng quan và ở tab Lỗi: đỏ =
+             * có hạn hoặc mất vĩnh viễn, cam = có việc chờ người, xám = không có gì.
+             *
+             * Ở đây "đỏ" là game ĐÃ GỠ, vì chỉ nhóm đó có đồng hồ chạy: bảy ngày nữa
+             * hàng DB, bản đóng gói, ảnh bìa và `.sb3` gốc của bé đi hẳn, và nút "Cho
+             * hiện lại" trên chính thẻ này hết tác dụng. Mọi trạng thái khác đều đảo
+             * lại được, nên không cái nào đáng tranh màu đỏ với nó.
+             *
+             * Game đang hiện mà có báo cáo cũng lên cam: nó là việc chờ người xem, dù
+             * hệ thống chưa siết gì cả.
+             */
+            const vach =
+              game.status === 'REMOVED'
+                ? 'border-l-danger'
+                : game.status !== 'PUBLISHED' || game.reportCount > 0
+                  ? 'border-l-accent'
+                  : 'border-l-border';
+            return (
             <li
               key={game.id}
               /*
@@ -423,7 +447,7 @@ export default async function AdminPage({
                 trống gần một nghìn pixel bên phải mỗi thẻ, trong khi cụm nút thì nằm
                 dưới ảnh và đẩy thẻ cao lên.
               */
-              className={`p-5 ${MAT_THE} xl:flex xl:items-start xl:gap-6`}
+              className={`border-l-4 p-5 ${MAT_THE} ${vach} xl:flex xl:items-start xl:gap-6`}
               data-testid="admin-game"
               data-game-id={game.id}
             >
@@ -566,7 +590,8 @@ export default async function AdminPage({
                 <ChildLockButton childId={game.child.id} isLocked={game.child.isLocked} />
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
