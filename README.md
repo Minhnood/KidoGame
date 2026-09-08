@@ -602,6 +602,11 @@ máy local. Ở production chính Caddy serve thư mục `storage`, đúng như
 Trước khi bắt đầu: trỏ A/AAAA của **cả hai** domain về IP của VPS. Caddy xin
 chứng chỉ ngay lúc khởi động, DNS chưa trỏ là thất bại.
 
+> Chưa có VPS lẫn domain? **[`infra/ORACLE-FREE.md`](infra/ORACLE-FREE.md)** đi từ
+> chỗ chưa có gì tới đúng điểm này: một VPS ARM miễn phí ở Singapore, mở cổng (Oracle
+> chặn 80/443 ở **hai** tầng), Docker arm64, và một domain với ba subdomain. Kèm cả
+> chỗ bảo mật bị yếu đi khi dùng một domain thay vì hai.
+
 ```bash
 cd infra
 cp .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY,
@@ -649,7 +654,14 @@ cp .env.example .env
 #   APP_DOMAIN=app.localhost
 #   PLAYER_DOMAIN=play.localhost
 #   POSTGRES_PASSWORD=$(openssl rand -hex 24)
-#   RESEND_API_KEY=re_dummy_local   # BẮT BUỘC có giá trị, compose khai dạng `:?`
+#   RESEND_API_KEY=re_dummy_local   # KHÔNG còn bắt buộc để `up` — xem
+#                                   # docker-compose.yml:99. Nhưng image đặt
+#                                   # NODE_ENV=production (Dockerfile:78), nên giá
+#                                   # trị giữ chỗ kiểu `re_xxx` KHÔNG rơi về
+#                                   # transport console như trên máy dev: lá thư đầu
+#                                   # tiên sẽ NÉM LỖI. Muốn thử luồng mail trên stack
+#                                   # local thì khai SMTP_* thật, và hỏi trước bằng
+#                                   # `node infra/mail-check.mjs`.
 
 docker compose up -d --build
 docker compose run --rm web pnpm --filter @kidogame/web db:deploy
