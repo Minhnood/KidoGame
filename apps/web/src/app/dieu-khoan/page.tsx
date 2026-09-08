@@ -163,9 +163,33 @@ export default function TermsPage() {
         </p>
         <p>
           Game bé đăng vẫn là của bé. Bằng việc đăng lên đây, bé cho phép KidoGame lưu trữ game và
-          hiển thị cho người khác chơi. Người chơi khác tải được file <code>.sb3</code> gốc để mở
-          ra học — đây là chủ ý, giống hệt cách Scratch hoạt động. Bé không muốn vậy thì đừng đăng
+          hiển thị cho người khác chơi. Người chơi khác tải được file <code>.sb3</code> để mở ra
+          học — đây là chủ ý, giống hệt cách Scratch hoạt động. Bé không muốn vậy thì đừng đăng
           game đó lên.
+        </p>
+        {/*
+          KHÔNG dùng chữ "gốc" cho file tải về, và nói ra vì sao.
+
+          `validateAndNormalize` trong packages/sb3 RE-ZIP file upload, chỉ giữ
+          project.json và những asset thực sự được tham chiếu — mọi thứ khác trong zip
+          bị bỏ, vì đó là chỗ payload ẩn hay nằm và re-zip chắc chắn hơn hẳn việc cố
+          phát hiện từng loại. File lưu trên đĩa được đánh địa chỉ theo hash của BẢN ĐÃ
+          RE-ZIP, nên không nơi nào trong hệ thống còn giữ byte gốc người dùng gửi lên.
+          Đo được: một file 10,02MB upload lên, tải về ra 10,04MB — bỏ bớt entry nhưng
+          mức nén khác nên còn phình ra.
+
+          Vì sao phải nói: có hai lá thư đưa link tải này kèm câu "để kịp giữ lại công
+          của bé" — thư gỡ game theo kiểm duyệt, và chạy khô của lệnh xoá tài khoản gia
+          đình. Một đứa trẻ để dành sprite hay đoạn nhạc CHƯA DÙNG trong project, chuyện
+          rất thường khi đang làm dở, thì tải về sẽ không còn. Gọi đó là "bản gốc" là
+          hứa nhiều hơn cơ chế, đúng vào lúc hệ thống nói sẽ trả lại công của nó.
+        */}
+        <p>
+          Một lưu ý về file tải về, cho cả người chơi lẫn bố mẹ: đó <strong>không phải</strong>
+          đúng file bé đã tải lên. Khi nhận game, hệ thống đóng gói lại file{' '}
+          <code>.sb3</code> để loại những thứ có thể giấu trong đó — bản lưu chỉ gồm project và{' '}
+          <strong>những asset game đang dùng</strong>. Mở bằng Scratch thì không khác gì, nhưng
+          hình hay âm thanh bé để dành mà chưa dùng tới sẽ không có trong file tải về.
         </p>
         <p>
           Nếu bạn là người làm ra một game và thấy nó bị đăng lại ở đây mà không được phép, hãy{' '}

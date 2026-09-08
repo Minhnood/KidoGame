@@ -128,6 +128,18 @@ async function main() {
       for (let i = 0; i < links.length; i++) {
         console.log(`  ${tk.games[i].title}\n    ${links[i]}`);
       }
+      /*
+       * Nói kèm, vì người chạy lệnh này là người sẽ soạn thư cho phụ huynh.
+       *
+       * `validateAndNormalize` re-zip file lúc nhận, chỉ giữ project.json và asset được
+       * tham chiếu, nên đây KHÔNG phải byte bé đã gửi lên. Hứa "bản gốc" trong thư rồi
+       * phụ huynh mở ra thấy thiếu sprite con họ để dành là hỏng niềm tin đúng lúc tài
+       * khoản đã xoá và không còn gì kiểm lại.
+       */
+      console.log(
+        '\nNói rõ trong thư: file này là bản hệ thống đã đóng gói lại, gồm project và\n' +
+          'mọi asset game đang dùng. Asset bé để dành mà chưa dùng thì không có trong đó.'
+      );
     }
     console.log('\nChạy khô: chưa xoá gì. Thêm --xoa để xoá thật.');
     return;

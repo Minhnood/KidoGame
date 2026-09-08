@@ -444,6 +444,23 @@ export async function adminRemoveGame(adminId: string, gameId: string, note: str
       'File tải về mang tên là một chuỗi dài — đó là mã nội dung của chính file. Đổi tên',
       'lại cho dễ nhớ rồi mở bằng Scratch như bình thường, nội dung không đổi.',
       '',
+      /*
+       * PHẢI nói ra chuyện này, ở ĐÂY.
+       *
+       * `validateAndNormalize` re-zip file lúc nhận, chỉ giữ project.json và asset
+       * ĐƯỢC THAM CHIẾU — mọi thứ khác bị bỏ, vì đó là chỗ payload ẩn hay nằm. Storage
+       * đánh địa chỉ theo hash của bản đã re-zip, nên byte gốc người dùng gửi lên không
+       * còn ở đâu trong hệ thống. Đo được: upload 10,02MB, tải về 10,04MB.
+       *
+       * Lá thư này là lần DUY NHẤT phụ huynh còn kịp lấy lại công của con trước ngày
+       * xoá hẳn. Để họ tin đây là đúng file bé đã gửi, rồi mở ra thấy thiếu mấy con
+       * sprite bé để dành, là làm họ mất niềm tin đúng lúc không còn cách nào kiểm lại.
+       */
+      'Một lưu ý: lúc nhận game, hệ thống đã đóng gói lại file .sb3 để loại những thứ có',
+      'thể giấu trong đó. File này gồm project và mọi asset game đang dùng — mở ra chơi và',
+      'sửa được như thường. Nhưng hình hay âm thanh bé để dành mà chưa dùng tới thì không',
+      'có trong đây.',
+      '',
       'Nếu bạn cho rằng đây là nhầm lẫn, trả lời thư này giúp chúng tôi.',
       '',
       'KidoGame',
@@ -550,6 +567,23 @@ export async function parentRemoveGame(parentId: string, gameId: string): Promis
       '',
       'File tải về mang tên là một chuỗi dài — đó là mã nội dung của chính file. Đổi tên',
       'lại cho dễ nhớ rồi mở bằng Scratch như bình thường, nội dung không đổi.',
+      '',
+      /*
+       * PHẢI nói ra chuyện này, ở ĐÂY.
+       *
+       * `validateAndNormalize` re-zip file lúc nhận, chỉ giữ project.json và asset
+       * ĐƯỢC THAM CHIẾU — mọi thứ khác bị bỏ, vì đó là chỗ payload ẩn hay nằm. Storage
+       * đánh địa chỉ theo hash của bản đã re-zip, nên byte gốc người dùng gửi lên không
+       * còn ở đâu trong hệ thống. Đo được: upload 10,02MB, tải về 10,04MB.
+       *
+       * Lá thư này là lần DUY NHẤT phụ huynh còn kịp lấy lại công của con trước ngày
+       * xoá hẳn. Để họ tin đây là đúng file bé đã gửi, rồi mở ra thấy thiếu mấy con
+       * sprite bé để dành, là làm họ mất niềm tin đúng lúc không còn cách nào kiểm lại.
+       */
+      'Một lưu ý: lúc nhận game, hệ thống đã đóng gói lại file .sb3 để loại những thứ có',
+      'thể giấu trong đó. File này gồm project và mọi asset game đang dùng — mở ra chơi và',
+      'sửa được như thường. Nhưng hình hay âm thanh bé để dành mà chưa dùng tới thì không',
+      'có trong đây.',
       '',
       'Bạn không tự bật lại game này được. Nếu bấm nhầm, trả lời thư này trước ngày trên',
       'thì chúng tôi còn kịp giúp.',
