@@ -263,6 +263,27 @@ const mailTs = doc('apps/web/src/lib/mail.ts');
    */
   check('Bản HTML lấy chân thư từ cùng hàm chanThu()', /\$\{esc\(chan\)\}/.test(mailTs));
   check('sendMail gắn chân thư đúng một chỗ', demLan(mailTs, '${chanThu()}') === 1);
+
+  /*
+   * Mỗi transport phải GHI LẠI việc đã trao thư cho máy chủ mail.
+   *
+   * Cả hai đường từng vứt giá trị trả về, nên "không ném lỗi" là toàn bộ điều hệ
+   * thống biết về một lá thư đã gửi. Ngày 9/9 có đúng một lá báo là đã gửi mà hòm
+   * thư người nhận không thấy, và phải viết script riêng gọi thẳng nodemailer mới
+   * biết Gmail đã trả `250 OK`. Đếm theo SỐ TRANSPORT chứ không chỉ kiểm hai cái
+   * đang có: thêm đường thứ ba mà quên ghi log thì phép này đỏ.
+   */
+  const soGhiLai = demLan(mailTs, 'ghiLaiDaTrao(');
+  check(
+    'Mỗi transport ghi lại id và phản hồi của máy chủ mail',
+    soGhiLai === soTransport + 1,
+    `${soGhiLai - 1} chỗ gọi / ${soTransport} transport`
+  );
+  /*
+   * `rejected` là trường đáng giá nhất: nodemailer chỉ NÉM khi TOÀN BỘ người nhận bị
+   * từ chối, nên gửi nhiều người mà rớt một người là im lặng hoàn toàn.
+   */
+  check('Đường SMTP có đọc info.rejected', /info\.rejected/.test(mailTs));
 }
 
 {

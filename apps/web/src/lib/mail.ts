@@ -398,10 +398,34 @@ async function layTransporter(cfg: CauHinhSmtp) {
   return transporter;
 }
 
+/**
+ * Một dòng log cho mỗi lá thư đã trao được cho máy chủ mail.
+ *
+ * VÌ SAO CẦN. Trước đây cả hai transport đều VỨT giá trị trả về, nên toàn bộ điều hệ
+ * thống biết về một lá thư đã gửi là "không ném lỗi". Khi có người nói "tôi không
+ * nhận được thư" thì không có gì để đối chiếu: không biết máy chủ mail đã nhận chưa,
+ * không có id nào để tra. Đã đứng đúng vào chỗ đó ngày 9/9 — một lá thư báo là đã
+ * gửi, hòm thư người nhận không thấy, và phải viết một script riêng gọi thẳng
+ * nodemailer mới biết được là Gmail đã trả `250 OK` và thư nằm trong Spam.
+ *
+ * `rejected` là thứ đáng giá nhất ở đây: nodemailer chỉ NÉM khi TOÀN BỘ người nhận bị
+ * từ chối. Gửi cho nhiều người mà rớt một người thì lặng thinh — chính là cách hỏng
+ * không ai thấy được nếu không đọc trường này.
+ *
+ * Log địa chỉ người nhận, KHÔNG log thân thư: mối lo đã ghi ở `sendMail` là token
+ * trong log, mà token nằm trong thân. Địa chỉ thì người vận hành vốn đã có cả bảng
+ * trong DB, và thiếu nó thì dòng log này không trả lời được câu hỏi duy nhất nó sinh
+ * ra để trả lời.
+ */
+function ghiLaiDaTrao(duong: string, to: string, id: string, phanHoi: string, rot: string[] = []) {
+  console.log(`[mail] ${duong} đã trao — tới=${to} id=${id} phản hồi=${phanHoi}`);
+  if (rot.length) console.error(`[mail] ${duong} TỪ CHỐI ${rot.length} người nhận: ${rot.join(', ')}`);
+}
+
 async function sendViaSmtp(message: ThuGui, cfg: CauHinhSmtp): Promise<void> {
   const transporter = await layTransporter(cfg);
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: mailFrom(),
       to: message.to,
       // `undefined` chứ không phải chuỗi rỗng: nodemailer dựng hẳn một header
@@ -413,6 +437,13 @@ async function sendViaSmtp(message: ThuGui, cfg: CauHinhSmtp): Promise<void> {
       text: message.text,
       html: dungHtmlTuText(message.text, message.subject),
     });
+    ghiLaiDaTrao(
+      'SMTP',
+      message.to,
+      String(info.messageId ?? '—'),
+      String(info.response ?? '—').trim(),
+      Array.isArray(info.rejected) ? info.rejected.map(String) : []
+    );
   } catch (err) {
     /*
      * Bọc lại kèm host và user để dòng lỗi tự nói ra chỗ cần sửa. Nguyên nhân hay
@@ -452,6 +483,13 @@ async function sendViaResend(message: ThuGui, apiKey: string): Promise<void> {
     const detail = await res.text().catch(() => '');
     throw new Error(`Resend trả về ${res.status}: ${detail.slice(0, 300)}`);
   }
+
+  /*
+   * Cùng một dòng log với đường SMTP, cố ý: người đi tra "thư đã gửi chưa" không nên
+   * phải biết bản cài đặt này đang dùng đường nào. Resend trả id trong body JSON.
+   */
+  const than = (await res.json().catch(() => null)) as { id?: string } | null;
+  ghiLaiDaTrao('Resend', message.to, than?.id ?? '—', `HTTP ${res.status}`);
 }
 
 /**
