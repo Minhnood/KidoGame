@@ -15,7 +15,7 @@ pnpm install
 createdb kidogame
 
 cd apps/web
-cp .env.example .env          # sửa DATABASE_URL cho đúng user của bạn
+cp -n .env.example .env          # sửa DATABASE_URL cho đúng user của bạn
 pnpm db:push                  # tạo bảng + áp dụng constraints.sql
 pnpm db:seed                  # tạo tài khoản demo
 ```
@@ -650,7 +650,7 @@ chứng chỉ ngay lúc khởi động, DNS chưa trỏ là thất bại.
 
 ```bash
 cd infra
-cp .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY,
+cp -n .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY,
                           # OPERATOR_NAME, OPERATOR_EMAIL
 docker compose up -d --build
 
@@ -690,7 +690,7 @@ bằng `.localhost` — Caddy coi chúng là nội bộ nên cấp chứng chỉ
 
 ```bash
 cd infra
-cp .env.example .env
+cp -n .env.example .env
 # rồi sửa trong .env:
 #   APP_DOMAIN=app.localhost
 #   PLAYER_DOMAIN=play.localhost

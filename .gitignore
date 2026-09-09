@@ -10,6 +10,16 @@ infra/ssh/*
 !infra/ssh/.gitkeep
 .env
 .env.local
+# Mọi biến thể còn lại của .env, và `!` để giữ lại đúng file mẫu.
+#
+# Không phải lo xa: `infra/.env` giữ POSTGRES_PASSWORD, App Password SMTP và tên
+# miền thật, còn `infra/VPS-TUNG-BUOC.md` thì bảo người dùng sửa file ấy bằng
+# `nano`. Sao lưu trước khi sửa là phản xạ đúng — `cp .env .env.bak` — và với hai
+# dòng trên thì bản sao ấy KHÔNG được bỏ qua, nên một `git add -A` là đẩy mật khẩu
+# vào lịch sử của một repo công khai, nơi xoá đi cũng không mất. Đã suýt xảy ra
+# đúng như vậy ngày 9/9 khi khôi phục cấu hình mail.
+.env.*
+!.env.example
 .next/
 dist/
 *.log

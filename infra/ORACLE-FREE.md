@@ -290,7 +290,7 @@ CSP dựng lại theo request trong `src/middleware.ts`).
 Đến đây fen có: instance ARM chạy, hai cổng mở đã kiểm từ ngoài, Docker arm64, và ba
 subdomain trỏ đúng IP.
 
-Tiếp theo là `git clone`, `cp .env.example .env` rồi `docker compose up -d --build` —
+Tiếp theo là `git clone`, `cp -n .env.example .env` rồi `docker compose up -d --build` —
 đi theo [README, mục Triển khai lên VPS (M5)](../README.md#triển-khai-lên-vps-m5).
 
 Hai nhóm biến trong `.env` mà bản thử vẫn phải khai, và **cả hai đều không làm stack

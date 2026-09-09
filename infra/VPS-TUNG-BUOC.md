@@ -314,11 +314,16 @@ Mất 10–30 giây. Muốn cập nhật code về sau thì chạy lại đúng 
 
 ```bash
 cd ~/KidoGame/infra
-cp .env.example .env
+cp -n .env.example .env
 openssl rand -hex 24
 ```
 
 Dòng cuối in ra một chuỗi dài — **copy nó**, đó là mật khẩu database.
+
+> **`-n` nghĩa là "đã có `.env` rồi thì đừng đụng vào".** Quan trọng ở những lần
+> chạy SAU: `cp` không có `-n` sẽ ghi đè file đang chạy, không hỏi gì, và file đó
+> không theo git nên mất là mất hẳn — mật khẩu database, App Password mail, tất cả.
+> `-n` bỏ qua thì **im lặng**, không in gì; muốn chắc thì `ls -l .env` trước.
 
 Rồi mở file:
 
