@@ -154,9 +154,32 @@ check(
  * nghĩa (hay một ô đếm sai `where`) vẫn cho ra một trang trông bình thường, và người
  * trực bấm "2 đã gỡ" rồi đọc một danh sách ba dòng mà không biết cái nào đúng.
  */
+/**
+ * Đếm thẻ game qua HẾT các trang của một bộ lọc, không chỉ trang đầu.
+ *
+ * Bản trước chỉ đếm trang 1 và nó xanh suốt cho tới ngày DB dev có 21 game
+ * PUBLISHED — đúng một game quá `PAGE_SIZE = 20` của `/admin`. Lúc đó phép kiểm đỏ
+ * với thông điệp "chú giải (21) dẫn tới đúng 21 game — danh sách: 20", tức tố donut
+ * đếm sai trong khi cả donut lẫn danh sách đều đúng, chỉ là danh sách có hai trang.
+ * Đó là loại đỏ tốn nhất: nó gửi người đọc đi sửa một chỗ không hỏng.
+ *
+ * Dừng khi một trang không còn thẻ nào, và chốt trần số vòng để một bộ lọc hỏng kiểu
+ * "trang nào cũng trả về cùng một trang" không quay vô tận.
+ */
+async function demQuaMoiTrang(href) {
+  let tong = 0;
+  for (let trang = 1; trang <= 50; trang++) {
+    const url = `${ADMIN}${href}${href.includes('?') ? '&' : '?'}trang=${trang}`;
+    await p.goto(url, { waitUntil: 'networkidle' });
+    const soThe = await p.locator('[data-testid=admin-game]').count();
+    tong += soThe;
+    if (soThe === 0) break;
+  }
+  return tong;
+}
+
 for (const m of muc) {
-  await p.goto(`${ADMIN}${m.href}`, { waitUntil: 'networkidle' });
-  const soThe = await p.locator('[data-testid=admin-game]').count();
+  const soThe = await demQuaMoiTrang(m.href);
   const nhan = m.chu.replace(/\s+\d+\s+(\d+%|—)\s*$/, '').trim();
   check(
     `Chú giải "${nhan}" (${m.so}) dẫn tới đúng ${m.so} game`,
