@@ -266,11 +266,33 @@ thứ chỏi nhau.
 **[MAC]** — một lệnh, chạy từ **máy Mac**, không phải trong VPS.
 
 ```bash
-rsync -az --info=progress2 \
+rsync -az --stats \
   --exclude node_modules --exclude .next --exclude storage \
   --exclude backups --exclude .env \
   ~/Work/KidoGame/ kidovps:KidoGame/
 ```
+
+Thấy gì: một bảng số, dòng cần nhìn là **`Number of files transferred`**. Lần đầu
+là vài nghìn; những lần sau chỉ vài chục — đúng số file vừa sửa.
+
+> **`--stats` chứ KHÔNG phải `--info=progress2`.** macOS không dùng rsync của GNU mà
+> dùng **openrsync** (`rsync --version` in ra `protocol version 29`), và bản đó
+> **không hiểu `--info=`**. Gõ vào thì nó in một khối `usage:` dài rồi **không chuyển
+> file nào** — mà nếu đang nối lệnh qua `|` thì mã thoát vẫn là 0, nên nhìn qua y như
+> vừa chạy xong. Đã mất một lượt deploy vì đúng chuyện này ngày 9/9: bảo là xong,
+> mà trên VPS không có file mới nào.
+>
+> **Cách kiểm chắc chắn** sau mỗi lần đẩy — chạy lại đúng lệnh trên nhưng thêm
+> `-n` (chạy khô) và `-c` (so theo nội dung, không so theo giờ sửa file):
+>
+> ```bash
+> rsync -acn --itemize-changes \
+>   --exclude node_modules --exclude .next --exclude storage \
+>   --exclude backups --exclude .env --exclude .git \
+>   ~/Work/KidoGame/ kidovps:KidoGame/
+> ```
+>
+> Không in ra dòng nào nghĩa là hai bên giống hệt.
 
 Đường đích `kidovps:KidoGame/` không có dấu `/` đầu, nên nó là **thư mục nhà của
 user** — `/home/minh/KidoGame` với user thường, `/root/KidoGame` nếu đang là root.
