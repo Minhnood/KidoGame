@@ -317,9 +317,16 @@ export async function setChildLockedAction(_prev: FormState, form: FormData): Pr
  * phụ huynh phải gỡ được ngay mà không cần chờ admin.
  */
 export async function setGameHiddenAction(_prev: FormState, form: FormData): Promise<FormState> {
+  /*
+   * Đọc `gameId` NGOÀI `run` để dòng `revalidatePath` cuối hàm dùng lại được. Nó
+   * không phải là chỗ kiểm quyền — quyền vẫn kiểm bên trong, bằng truy vấn đòi
+   * `child: { parentId }` — nên một id bịa ra ở đây chỉ làm mới lại một trang mà
+   * người bịa vốn đã xem được.
+   */
+  const gameId = String(form.get('gameId') ?? '');
+
   const state = await run(async () => {
     const parentId = await requireParent();
-    const gameId = String(form.get('gameId') ?? '');
     const hidden = String(form.get('hidden')) === 'true';
 
     // Chỉ cho phép tác động lên game của con MÌNH.
@@ -381,6 +388,16 @@ export async function setGameHiddenAction(_prev: FormState, form: FormData): Pro
     });
   });
   revalidatePath('/phu-huynh');
+  /*
+   * Và cả trang của chính game đó, vì nút "Ẩn game" giờ cũng nằm ở đấy.
+   *
+   * Thiếu dòng này thì bấm xong không có gì đổi trên màn hình — nhãn vẫn là "Ẩn
+   * game", dải cảnh báo không hiện — trong khi DB đã đổi thật. Người dùng sẽ bấm
+   * lần nữa. Ba trang liên quan đều `force-dynamic`, nhưng đó chỉ nói về lượt điều
+   * hướng mới; sau một server action thì đây mới là thứ bảo router vẽ lại trang
+   * đang đứng.
+   */
+  if (gameId) revalidatePath(`/game/${gameId}`);
   return state;
 }
 

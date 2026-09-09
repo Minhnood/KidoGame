@@ -48,6 +48,19 @@ const MAIL_LOG = batBuocMailLog('e2e-an-vs-xoa');
 
 const suffix = randomBytes(4).toString('hex');
 const PARENT_EMAIL = `e2e-avx-${suffix}@kidogame.test`;
+/*
+ * Nhà THỨ HAI — một phụ huynh thật, đăng nhập thật, không có con nào ở đây.
+ *
+ * Cần vì điều kiện đáng canh nhất của nút ẩn trên trang game là "đúng bố mẹ của bé
+ * NÀY", chứ không phải "có đăng nhập". Đo bằng khách chưa đăng nhập thì gỡ mất vế
+ * `parentId` đi phép kiểm vẫn xanh nguyên — trong khi lúc đó mọi phụ huynh khác đều
+ * xem được game đang ẩn của nhà người ta và bấm ẩn được game của con họ.
+ *
+ * Cố ý KHÔNG xác minh email tài khoản này: chưa xác minh chỉ chặn việc tạo tài khoản
+ * cho con, không chặn đăng nhập — nên đây vẫn đúng là một phiên phụ huynh hợp lệ, và
+ * bớt được một vòng đọc hộp thư.
+ */
+const PARENT2_EMAIL = `e2e-avx2-${suffix}@kidogame.test`;
 const PASS = 'matkhau-dai-1234';
 const CHILD_USER = `eavx${suffix}`;
 const CHILD_PASS = 'be1234';
@@ -98,6 +111,23 @@ const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1
 
 // ---------- Dựng: phụ huynh -> bé -> ba game (hai game dùng CHUNG file .sb3) ----------
 const parentCtx = await newSession();
+
+/** Phiên của nhà hàng xóm — xem ghi chú ở `PARENT2_EMAIL`. */
+const parent2Ctx = await newSession();
+{
+  const p = await parent2Ctx.newPage();
+  await p.goto(`${APP}/dang-ky`, { waitUntil: 'networkidle' });
+  await p.fill('#email', PARENT2_EMAIL);
+  await p.fill('#password', PASS);
+  await p.click('[data-testid=auth-form] button[type=submit]');
+  await p.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
+  check(
+    'Dựng được một phụ huynh thứ hai để thử ranh giới quyền',
+    dem(`select count(*) from "Parent" where email = '${PARENT2_EMAIL}'`) === 1
+  );
+  await p.close();
+}
+
 const games = [];
 {
   const p = await parentCtx.newPage();
@@ -164,6 +194,35 @@ check('… nhưng HTML của chúng là hai file khác nhau (HTML mang tên game
   const parent = await parentCtx.newPage();
   await parent.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
 
+  /*
+   * Ảnh bìa trong danh sách game của bé. Đo TRƯỚC khi ẩn, lúc trang còn ở trạng
+   * thái bình thường.
+   *
+   * `naturalWidth` chứ không phải "thẻ img có tồn tại không": một ô ảnh vỡ vẫn là
+   * một thẻ `img` đầy đủ trong DOM, và đó đúng là cách hỏng dễ xảy ra nhất ở đây —
+   * sai một mắt xích trong `objectUrl('thumb', …)` thì trang vẫn dựng, vẫn 200,
+   * chỉ có ảnh là không bao giờ hiện.
+   */
+  const anhBia = parent.locator('[data-testid=anh-bia-game]').first();
+  check('Trang bố mẹ có ảnh bìa game', (await anhBia.count()) > 0);
+  const anh = await anhBia.evaluate((el) => ({
+    tai: el.naturalWidth > 0 && el.naturalHeight > 0,
+    alt: el.getAttribute('alt'),
+    rong: Math.round(el.getBoundingClientRect().width),
+    cao: Math.round(el.getBoundingClientRect().height),
+    soLink: el.closest('li').querySelectorAll('a[href]').length,
+  }));
+  check('Ảnh bìa tải được thật, không phải ô vỡ', anh.tai);
+  check('Ảnh bìa giữ khổ 4:3 của sân khấu Scratch', anh.rong === 80 && anh.cao === 60, `${anh.rong}x${anh.cao}`);
+  /*
+   * Hai phép dưới đây đi cùng nhau và chúng nói một điều: ảnh là TRANG TRÍ, nghĩa
+   * nằm ở cái tên bên cạnh. Bọc ảnh thành link nữa thì mỗi game có hai điểm dừng
+   * bàn phím trỏ về cùng một trang và trình đọc màn hình đọc tên game hai lần —
+   * với một nhà bốn game là tám lần.
+   */
+  check('Ảnh bìa có alt rỗng', anh.alt === '', JSON.stringify(anh.alt));
+  check('Thẻ game vẫn chỉ có ĐÚNG MỘT link', anh.soLink === 1, `${anh.soLink} link`);
+
   const dong = parent.locator(`[data-testid=game-visibility]`).first();
   await dong.locator('button[type=submit]').click();
   await parent.waitForTimeout(2500);
@@ -181,19 +240,75 @@ check('… nhưng HTML của chúng là hai file khác nhau (HTML mang tên game
   );
   const [sb3An, htmlAn] = shaCua(idAn);
 
-  const maTrang = (await parent.goto(`${APP}/game/${idAn}`)).status();
   /*
-   * HAI PHÉP KIỂM NÀY LÀ TRỌNG TÂM CỦA CẢ BỘ, và chúng phải đi cùng nhau: một mình
+   * "Người thường" phải là MỘT PHIÊN KHÁC, không phải `parent`.
+   *
+   * Dòng này trước đây gọi `parent.goto(...)` trong khi tên phép kiểm nói "cho người
+   * thường" — và nó xanh suốt chỉ vì hồi đó phụ huynh cũng nhận 404. Khi bố mẹ được
+   * quyền xem game đang ẩn của con mình, phép kiểm đỏ với thông điệp chỉ sai hướng:
+   * nó tố "người thường vào được game đã ẩn", tức báo một lỗ bảo mật không hề có.
+   *
+   * Nên tách hẳn hai vai và đo cả hai. Đó mới là ranh giới thật, và nó cũng bắt được
+   * cái lỗ mà tên phép kiểm cũ đang hứa canh.
+   */
+  const khach = await browser.newContext();
+  const trangKhach = await khach.newPage();
+  const maKhach = (await trangKhach.goto(`${APP}/game/${idAn}`)).status();
+  const khachThayNut = await trangKhach.locator('[data-testid=chu-nhan-dieu-khien]').count();
+  await khach.close();
+
+  /* Nhà hàng xóm: ĐANG ĐĂNG NHẬP, chỉ không phải bố mẹ của bé này. */
+  const hangXom = await parent2Ctx.newPage();
+  const maHangXom = (await hangXom.goto(`${APP}/game/${idAn}`)).status();
+  const hangXomThayNut = await hangXom.locator('[data-testid=chu-nhan-dieu-khien]').count();
+  await hangXom.close();
+
+  const maChuNhan = (await parent.goto(`${APP}/game/${idAn}`)).status();
+
+  /*
+   * BA PHÉP KIỂM NÀY LÀ TRỌNG TÂM CỦA CẢ BỘ, và chúng phải đi cùng nhau: một mình
    * "trang trả 404" chỉ nói ẩn có tác dụng, một mình "file trả 200" chỉ nói player còn
    * sống. Đặt cạnh nhau thì chúng nói ra đúng cái ranh giới mà `/dieu-khoan` và trang
    * phụ huynh phải mô tả cho đúng.
    */
-  check('Game đã ẩn: trang /game/<id> trả 404 cho người thường', maTrang === 404, `${maTrang}`);
+  check('Game đã ẩn: trang /game/<id> trả 404 cho người lạ', maKhach === 404, `${maKhach}`);
+  check(
+    'Game đã ẩn: chính bố mẹ của bé vẫn xem được (để còn bấm Hiện lại)',
+    maChuNhan === 200,
+    `${maChuNhan}`
+  );
   check(
     '… nhưng file HTML của nó VẪN trả 200 trên player origin — ẩn không thu hồi nội dung',
     (await maFile('html', htmlAn, '.html')) === 200
   );
   check('… và file .sb3 gốc cũng vẫn trả 200', (await maFile('sb3', sb3An, '.sb3')) === 200);
+
+  /*
+   * Nút ẩn/hiện ngay trên trang chơi game. Đo cả hai vai từ cùng một game, cùng
+   * một thời điểm: chỉ đo "chủ nhân thấy nút" thì một lỗi cho MỌI người thấy nút
+   * vẫn xanh, và cái nút đó bấm vào sẽ ẩn game của con nhà khác.
+   */
+  check(
+    'Trang game: bố mẹ thấy dải điều khiển của mình',
+    (await parent.locator('[data-testid=chu-nhan-dieu-khien]').count()) === 1
+  );
+  check('Trang game: người lạ KHÔNG thấy dải đó', khachThayNut === 0, `${khachThayNut}`);
+  /*
+   * Hai phép này là ranh giới quyền thật, và chúng đắt hơn hẳn hai phép về khách:
+   * một phụ huynh ĐANG ĐĂNG NHẬP mà không phải bố mẹ của bé này phải thấy đúng như
+   * người qua đường. Gỡ vế `parentId` khỏi `laChuNhan` thì đúng hai dòng dưới đây đỏ.
+   */
+  check('Phụ huynh nhà khác vẫn nhận 404 với game đang ẩn', maHangXom === 404, `${maHangXom}`);
+  check(
+    'Phụ huynh nhà khác KHÔNG thấy dải điều khiển',
+    hangXomThayNut === 0,
+    `${hangXomThayNut}`
+  );
+  check(
+    'Game đang ẩn thì nhãn nút là "Hiện lại"',
+    (await parent.locator('[data-testid=game-visibility] button').first().innerText()).trim() ===
+      'Hiện lại'
+  );
 
   await parent.close();
 }
@@ -326,6 +441,7 @@ check('… nhưng HTML của chúng là hai file khác nhau (HTML mang tên game
 // ---------- Dọn ----------
 sql(`delete from "TakedownRequest" where "claimantEmail" = '${CLAIMANT_EMAIL}'`);
 sql(`delete from "Parent" where email = '${PARENT_EMAIL}'`);
+sql(`delete from "Parent" where email = '${PARENT2_EMAIL}'`);
 sql(`delete from "LoginAttempt" where identity like '%${suffix}%'`);
 /* Dọn nốt file của hai game vừa xoá cùng phụ huynh, không thì storage dev tích rác sau
    mỗi lượt chạy. Chạy sau khi hàng DB đã đi nên chúng đã thành mồ côi. */

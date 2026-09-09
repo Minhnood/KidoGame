@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
 import { createChildAction } from '@/lib/actions';
 import { gameDangBiKhieuNai } from '@/lib/takedown';
+import { objectUrl } from '@/lib/storage';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { EmptyState, PageTitle } from '@/components/page';
@@ -36,7 +37,14 @@ export default async function ParentDashboard() {
     include: {
       games: {
         orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, status: true, playCount: true, createdAt: true },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          playCount: true,
+          createdAt: true,
+          thumbSha256: true,
+        },
       },
     },
   });
@@ -154,7 +162,37 @@ export default async function ParentDashboard() {
                       key={game.id}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-border px-3.5 py-2.5"
                     >
-                      <span className="min-w-0">
+                      {/*
+                        Ảnh bìa, và nó KHÔNG phải là link.
+
+                        Tên game ngay cạnh đã dẫn tới đúng chỗ đó rồi. Bọc thêm ảnh
+                        thành link nữa là mỗi game có hai điểm dừng bàn phím trỏ về
+                        cùng một trang, và trình đọc màn hình đọc hai lần — với một
+                        nhà bốn game thì thành tám lần. Nên `alt=""`: ảnh ở đây để
+                        nhận ra game bằng mắt, nghĩa thì nằm ở cái tên.
+
+                        `w-20 h-15` giữ đúng khổ 4:3 của sân khấu Scratch (480×360),
+                        và khai cứng để dòng không nhảy khi ảnh vừa tải xong.
+
+                        Mờ đi khi game không còn hiện: trạng thái đang được nói bằng
+                        chữ ngay bên cạnh, thêm một tín hiệu nhìn thấy trước cả khi
+                        đọc thì cả danh sách đọc được trong một cái liếc.
+                      */}
+                      <span className="flex min-w-0 items-center gap-3">
+                        <img
+                          src={objectUrl('thumb', game.thumbSha256)}
+                          alt=""
+                          width={80}
+                          height={60}
+                          loading="lazy"
+                          data-testid="anh-bia-game"
+                          className={`h-15 w-20 shrink-0 rounded-field border border-border bg-surface object-cover ${
+                            game.status === 'PUBLISHED' && !biKhieuNai.has(game.id)
+                              ? ''
+                              : 'opacity-50'
+                          }`}
+                        />
+                        <span className="min-w-0">
                         <Link href={`/game/${game.id}`} className="font-semibold">
                           {game.title}
                         </Link>
@@ -169,6 +207,7 @@ export default async function ParentDashboard() {
                                   {game.status === 'REMOVED' && ' · đã bị gỡ'}
                                 </>
                               )}
+                        </span>
                         </span>
                       </span>
                       {/*
