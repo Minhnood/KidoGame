@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/lib/password';
+import { dungTags } from './tags';
 
 const prisma = new PrismaClient();
 
@@ -74,15 +75,10 @@ async function main() {
     },
   });
 
-  await prisma.tag.createMany({
-    data: [
-      { slug: 'phieu-luu', label: 'Phiêu lưu' },
-      { slug: 'giai-do', label: 'Giải đố' },
-      { slug: 'hoc-tap', label: 'Học tập' },
-      { slug: 'nghe-thuat', label: 'Nghệ thuật' },
-    ],
-    skipDuplicates: true,
-  });
+  /* Danh mục sống ở `prisma/tags.ts` và `db:deploy` tự chạy nó, nên bản deploy thật
+     có danh mục mà không phải chạy seed. Gọi lại ở đây để `db:seed` một mình vẫn
+     dựng đủ một máy dev dùng được. `skipDuplicates` nên chạy hai lần vô hại. */
+  await dungTags(prisma);
 
   console.log('seed xong:');
   console.log('  phụ huynh:', parent.email, '/ demo1234ab');
