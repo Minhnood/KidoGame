@@ -16,6 +16,10 @@ hệ điều hành** — không phải sửa `/etc/hosts`. Chrome và Safari đ�
 | Player (file game) | `http://127.0.0.1:3001` | `https://<PLAYER_DOMAIN>` |
 | **Quản trị** | `http://admin.localhost:3000` | `https://<ADMIN_DOMAIN>` |
 
+> **File này THEO REPO, mà repo công khai.** Nên cột production để nguyên tên biến chứ
+> không ghi domain thật của bản đang chạy — địa chỉ thật, IP và lối `ssh` nằm trong
+> `BANGIAO.md`, file bị `.gitignore`. Đừng "cho tiện" mà điền chúng vào đây.
+
 **`http://localhost:3000/admin` trả 404, và đó là cố ý.** Không phải 403, không
 redirect: 403 là xác nhận trang có thật và đáng dò tiếp, còn redirect thì công bố luôn
 khu quản trị nằm ở đâu cho bất cứ ai gõ thử. Gõ đúng host quản trị thì mới có.
@@ -50,7 +54,7 @@ Phiên site sống **30 ngày**, phiên quản trị **24 giờ**.
 
 | Đường dẫn | Tab | Trả lời câu hỏi |
 |---|---|---|
-| `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không · 12 ô số + 2 biểu đồ |
+| `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không · 12 ô số + 3 biểu đồ |
 | `/admin` | Kiểm duyệt | Có gì trong hàng đợi nội dung |
 | `/admin/tai-khoan` | Tài khoản | Gia đình này là ai · khoá/mở khoá tài khoản bé · xoá cả gia đình |
 | `/admin/loi` | Lỗi | Người dùng tự báo · lỗi máy tự ghi |
@@ -101,7 +105,7 @@ Phụ huynh gửi thư xin xoá tài khoản (quyền này `/dieu-khoan` hứa c
 cùng một lõi:
 
 ```bash
-# 1. XEM TRƯỚC — mặc định không xoá gì. In ra mấy bé, mấy game, và LINK TẢI .sb3 gốc.
+# 1. XEM TRƯỚC — mặc định không xoá gì. In ra mấy bé, mấy game, và LINK TẢI .sb3.
 pnpm --filter @kidogame/web db:xoa-gia-dinh phuhuynh@vidu.com
 
 # 2. Xoá thật. `--admin` là email của người chịu trách nhiệm, để ghi vào vết kiểm duyệt.
@@ -118,6 +122,11 @@ Bốn điều phải biết trước khi bấm:
 
 - **Gửi link tải `.sb3` cho phụ huynh trước khi xoá.** Lần chạy khô in sẵn. Xoá rồi thì
   file thành mồ côi và `storage:prune --xoa` dọn mất — sau đó không lấy lại được.
+  **Đừng gọi đó là "file gốc" khi viết thư cho phụ huynh:** lúc nhận game, hệ thống
+  re-zip để loại thứ có thể giấu trong đó, nên bản lưu chỉ gồm project và **asset đang
+  dùng**. Hình hay đoạn nhạc bé để dành mà chưa dùng thì không có trong file tải về —
+  chuyện rất thường khi đang làm dở. Cơ chế ở `packages/sb3/src/validate.ts`, giải
+  thích đầy đủ trên `/dieu-khoan`.
 - **Hồ sơ yêu cầu gỡ bản quyền ở lại** (chụp tên game, bỏ liên kết). Cả những yêu cầu do
   chính email đó gửi đi cũng ở lại; chạy khô có đếm ra, xử lý riêng nếu cần.
 - **Tài khoản có `isAdmin` thì bị từ chối.** Gỡ quyền trước — không thì mọi vết kiểm
@@ -177,7 +186,7 @@ Ba chốt của nút Xoá hẳn: game đã `REMOVED` không có nút; game **đa
 quyền** cũng không (đội kiểm duyệt cần xem nội dung để trả lời trong hạn); phụ huynh
 **không tự bật lại được**. Thư gửi ngay lúc xoá, kèm link tải `.sb3` và ngày file mất.
 
-File `.sb3` gốc và ảnh bìa **có thể dùng chung** giữa hai game dựng từ cùng một file — khi
+File `.sb3` đã lưu và ảnh bìa **có thể dùng chung** giữa hai game dựng từ cùng một file — khi
 đó xoá một game không xoá file. Bản đã đóng gói thì luôn mất, vì mã của nó là riêng.
 
 ### Xem thư nhắc việc có hạn
@@ -193,6 +202,23 @@ khi có việc có hạn — yêu cầu gỡ quá hạn hoặc sắp tới hạn
 
 Chưa khai `OPERATOR_NAME`/`OPERATOR_EMAIL` thì nó **từ chối gửi** và thoát khác 0 —
 vẫn in đầy đủ danh sách việc ra log trước khi từ chối.
+
+### `OPERATOR_EMAIL` là địa chỉ CÔNG KHAI, cân nhắc trước khi điền
+
+Nó không chỉ là nơi nhận thư nhắc việc. Hai chỗ nữa dùng nó, và cả hai đều hướng ra
+người ngoài:
+
+- **`Reply-To` của mọi thư hệ thống gửi đi** (`mail.ts:518`). Sáu lá thư bảo người nhận
+  trả lời, nặng nhất là thư báo gỡ game vì khiếu nại bản quyền — trả lời thư là đường
+  **duy nhất** để phụ huynh lấy lại `.sb3` trước ngày xoá vĩnh viễn.
+- **In thẳng trên `/dieu-khoan`** làm đơn vị vận hành.
+
+Chưa khai thì `Reply-To` là **`null`** chứ không rơi về `chua-cau-hinh@kidogame.local`
+— `.local` là TLD dành riêng cho thử nghiệm, tức mọi thư trả lời bảo đảm bị trả về.
+Log dev in dòng `│ trả lời:` **kể cả khi trống**, để chỗ vắng mặt nhìn thấy được.
+
+Đổi hai biến này thì chạy lại `cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts`
+(24 phép, không cần server cũng không cần DB).
 
 ---
 
@@ -215,6 +241,13 @@ bê đúng cái tài khoản mật khẩu công khai lên máy thật.
 pnpm --filter @kidogame/web db:make-admin ban@example.com
 pnpm --filter @kidogame/web db:make-admin ban@example.com --bo   # thu hồi
 ```
+
+**Danh mục game không đi cùng `db:seed`.** Bốn danh mục nằm ở `prisma/tags.ts` và
+`db:deploy` chạy nó tự động (`db push` → `db:constraints` → `db:tags`), vì `db:seed`
+thì bị cấm trên máy thật — nó tạo tài khoản có mật khẩu công khai trong repo. Bản
+deploy nào bỏ qua bước này thì **ô chọn danh mục ở `/upload` trống**, mà upload vẫn
+chạy và game vẫn publish, không lỗi ở đâu. Đo:
+`select count(*) from "Tag";` phải ra 4. Chạy lại lúc nào cũng được, nó idempotent.
 
 Người đó phải **tự đăng ký qua web và xác minh email trước**. Nghĩa là mật khẩu do
 chính họ đặt, không đi qua repo, không qua log, không qua tay ai khác — và quyền ẩn

@@ -36,13 +36,18 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 
 ## Kiểm thử
 
-Ba bộ không cần server:
+Bốn bộ không cần server:
 
 ```bash
-pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
-node infra/contrast-check.mjs              # 38 cặp màu, cả hai giao diện
+pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
+node infra/contrast-check.mjs              # 108 cặp màu, cả hai giao diện
 node infra/caddy-config-check.mjs          # 15 phép, +4 nữa nếu có Docker
+cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 24
 ```
+
+Hai bộ cuối canh cùng một loại lỗi: thứ **chỉ hỏng sau khi deploy**. Cấu hình Caddy chỉ
+sai khi `infra/.env` có mặt, và `Reply-To` chỉ rỗng khi `MAIL_FROM` không còn là hòm thư
+thật của người phát triển. Chạy chúng **trước** mỗi lần đưa code lên máy thật.
 
 Còn lại cần **cả hai server đang chạy + Chrome**, và server phải được khởi động với
 **stdout đổ vào file** vì bốn bộ phải đọc link xác minh email từ log:
@@ -54,7 +59,7 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 63 kiểm tra
+SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 66 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 76
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
