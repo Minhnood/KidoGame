@@ -231,58 +231,84 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 ---
 
-# Phần 3 — Lấy code lên VPS (bước 10–12)
+# Phần 3 — Lấy code lên VPS (bước 10–11)
 
-Repo `Minhnood/KidoGame` là **private**, nên VPS cần khoá riêng để đọc.
+Repo `Minhnood/KidoGame` là **private**, nên `git clone` trên VPS sẽ đòi xác thực.
+Bỏ hẳn chuyện đó đi: đẩy code thẳng từ máy Mac.
 
-## Bước 10 — Tạo khoá cho VPS đọc GitHub
+## Bước 10 — Lối tắt `ssh`, để mọi lệnh sau ngắn lại
 
-**[VPS]**
+Làm một lần rồi từ đó gõ `ssh kidovps` thay cho cả dòng dài, và `rsync` cũng dùng
+được cái tên đó.
 
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/kidogame_deploy -N ""
-cat ~/.ssh/kidogame_deploy.pub
-```
-
-Thấy gì: một dòng dài bắt đầu bằng `ssh-ed25519 AAAA...`. **Copy cả dòng đó.**
-
-> Khoá này khác khoá ở bước 3. Bước 3 là để **Mac vào VPS**; bước này là để **VPS
-> đọc GitHub**. Quy tắc: khoá riêng luôn sinh ở máy khởi xướng kết nối.
-
-## Bước 11 — Dán khoá vào GitHub
-
-Trên trình duyệt: **github.com/Minhnood/KidoGame → Settings → Deploy keys →
-Add deploy key**.
-
-- Title: `vps-contabo`
-- Key: dán dòng vừa copy
-- **ĐỪNG tích** "Allow write access" — server chỉ cần đọc
-
-Bấm **Add key**.
-
-## Bước 12 — Clone repo
-
-**[VPS]**
+**[MAC]** — thay `<IP>` bằng IPv4 của VPS.
 
 ```bash
 cat >> ~/.ssh/config <<'EOF'
-Host github.com
-  IdentityFile ~/.ssh/kidogame_deploy
+Host kidovps
+  HostName <IP>
+  User minh
+  IdentityFile ~/.ssh/kidogame-vps
   IdentitiesOnly yes
 EOF
 chmod 600 ~/.ssh/config
-git clone -b dev git@github.com:Minhnood/KidoGame.git
+ssh kidovps hostname
 ```
 
-Lần đầu nó hỏi `Are you sure you want to continue connecting?` — gõ `yes`.
+Thấy gì: tên máy VPS, không hỏi mật khẩu.
 
-Thấy gì: `Cloning into 'KidoGame'...` rồi `done.`
+`User minh` là user tạo ở bước 2 — đổi thành tên fen đã đặt. Nếu bỏ qua bước 2 và
+vẫn dùng `root` thì ghi `User root`, nhưng lúc đó bước 6 đã tắt login root nên hai
+thứ chỏi nhau.
+
+## Bước 11 — Đẩy code lên bằng `rsync`
+
+**[MAC]** — một lệnh, chạy từ **máy Mac**, không phải trong VPS.
+
+```bash
+rsync -az --info=progress2 \
+  --exclude node_modules --exclude .next --exclude storage \
+  --exclude backups --exclude .env \
+  ~/Work/KidoGame/ kidovps:KidoGame/
+```
+
+Đường đích `kidovps:KidoGame/` không có dấu `/` đầu, nên nó là **thư mục nhà của
+user** — `/home/minh/KidoGame` với user thường, `/root/KidoGame` nếu đang là root.
+Viết vậy thì lệnh đúng cho cả hai, khỏi phải sửa theo.
+
+Mất 10–30 giây. Muốn cập nhật code về sau thì chạy lại đúng lệnh này.
+
+**Vì sao `rsync` chứ không phải `git clone`:**
+
+- **Không cần làm gì trên GitHub** — bớt đúng ba nhịp dễ vấp nhất của cả quy trình.
+- **Không có khoá GitHub nào nằm trên VPS.** Deploy key chỉ mở một repo, nhưng
+  Personal Access Token thì mở **mọi** repo của fen — mà token là thứ người ta hay
+  dán vào cho nhanh.
+- **Code đang sửa dở trên máy đi theo luôn**, không phải commit rồi push trước.
+
+**Cái gì bị loại, và vì sao:**
+
+| Loại | Vì sao |
+|---|---|
+| `node_modules` | mấy trăm MB, image tự cài lại lúc build |
+| `.next` | bản build của máy Mac, VPS build lại |
+| `storage` | game của máy dev; VPS chạy trắng cho sạch |
+| `backups` | bản sao lưu local |
+| **`.env`** | **chứa mật khẩu SMTP** — VPS dùng `.env` riêng, tạo ở bước 12 |
+
+`.git` **có** đi theo (khoảng 8MB), nên trên VPS vẫn `git log` được.
+
+> **Đổi lại:** VPS không có remote GitHub nên **không `git pull` được**. Với bản thử
+> thì đủ. Muốn `git pull` thì tạo khoá trên VPS bằng
+> `ssh-keygen -t ed25519 -f ~/.ssh/kidogame_deploy -N ""`, dán nửa `.pub` vào
+> **github.com/Minhnood/KidoGame → Settings → Deploy keys** (**đừng** tích "Allow
+> write access"), rồi khai `Host github.com` trong `~/.ssh/config` của VPS.
 
 ---
 
-# Phần 4 — Chạy (bước 13–15)
+# Phần 4 — Chạy (bước 12–15)
 
-## Bước 13 — Điền file `.env`
+## Bước 12 — Điền file `.env`
 
 **[VPS]**
 
@@ -322,7 +348,7 @@ web, mà thông báo lỗi không hề nhắc tới `ADMIN_DOMAIN` — mất hà
 `sslip.io` là dịch vụ phân giải `<gì-cũng-được>.<ip>.sslip.io` về đúng IP đó, nên
 không cần mua tên miền. Mua sau thì đổi ba dòng này rồi `docker compose up -d`.
 
-## Bước 14 — Dựng stack
+## Bước 13 — Dựng stack
 
 **[VPS]**
 
@@ -340,6 +366,62 @@ docker compose ps
 ```
 
 Thấy gì: năm dòng, `db` và `web` phải là `Up ... (healthy)`.
+
+`db:deploy` chạy ba việc: `db push` dựng schema, `db:constraints` áp ràng buộc
+CHECK, và `db:tags` tạo bốn danh mục game. Việc thứ ba mới thêm — trước đó danh mục
+chỉ được tạo trong `db:seed`, mà `db:seed` cũng tạo tài khoản admin demo có mật khẩu
+nằm công khai trong repo, nên một bản deploy làm đúng thì **không có danh mục nào**:
+ô chọn ở trang upload trống, dãy lọc trang chủ trống, và không có gì báo lỗi.
+
+## Bước 14 — Cắm mail, bắt buộc nếu muốn tự đăng ký
+
+**Bỏ qua bước này thì không tạo được tài khoản nào.** Xác minh email là bắt buộc để
+phụ huynh tạo tài khoản cho bé, và trên VPS `NODE_ENV=production` nên hộp thư dev
+`/dev/thu` **tắt hẳn** — cố ý, vì in thư chứa token ra log production là rò token.
+
+Cách rẻ nhất là SMTP Gmail. Vào **https://myaccount.google.com/apppasswords**, tạo
+một App Password (cần tài khoản đã bật xác minh hai bước), nó cho **16 ký tự**.
+
+Rồi sửa trong `.env` — **nội dung file, không phải lệnh shell**:
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=<gmail cua fen>
+SMTP_PASS=<16 ky tu, XOA HET DAU CACH>
+MAIL_FROM="KidoGame <đúng cái gmail ở SMTP_USER>"
+```
+
+**Ba cái bẫy ở đây, cả ba đã mất thời gian thật:**
+
+1. **App Password chỉ dùng được với ĐÚNG tài khoản Google đã tạo ra nó.** Có nhiều
+   Gmail thì rất dễ tạo trong lúc trình duyệt đang đăng nhập tài khoản khác. Lỗi trả
+   về là `535-5.7.8 Username and Password not accepted`, không hề nhắc chuyện lệch
+   tài khoản. Kiểm bằng ảnh đại diện góc phải trên trang App Passwords.
+2. **`MAIL_FROM` phải trùng `SMTP_USER`.** Gmail **âm thầm viết lại** người gửi thành
+   địa chỉ đã xác thực, không báo lỗi — để lệch là thư đi với người gửi khác hẳn cái
+   mình khai, và không có gì đỏ ở đâu.
+3. **Xoá dấu cách trong 16 ký tự.** Google hiện nó thành bốn nhóm cho dễ đọc nhưng
+   dấu cách không thuộc mật khẩu.
+
+Xong thì **`up -d`, KHÔNG phải `restart`** — biến môi trường chỉ vào container lúc
+**TẠO**, nên `restart` chạy lại container cũ với env cũ và mail vẫn không đi:
+
+**[VPS]**
+
+```bash
+docker compose up -d
+docker compose run --rm web node infra/mail-check.mjs
+```
+
+Phải thấy **7/7 mục đạt**. Rồi gửi thật một lá:
+
+```bash
+docker compose run --rm web node infra/mail-check.mjs --send <email cua fen>
+```
+
+Mở hòm thư kiểm. **Vào Spam cũng tính là hỏng** — Gmail dùng chung dễ vào spam hơn
+domain riêng có DKIM, đó là cái giá của đường rẻ này.
 
 ## Bước 15 — Mở web
 
@@ -370,11 +452,16 @@ Xong. Khu quản trị ở `https://admin.1-2-3-4.sslip.io/admin/dang-nhap`.
 | Bước 5 vẫn hỏi mật khẩu | khoá công khai chưa lên đúng chỗ | làm lại bước 4, xem có báo `added: 1` |
 | Sau bước 6 không vào được | `sshd_config` sai | dùng **tab SSH cũ** sửa lại, hoặc VNC console trong panel Contabo |
 | `docker: permission denied` | chưa đăng nhập lại sau bước 8 | `exit` rồi ssh vào lại |
-| Bước 12 báo `Permission denied (publickey)` | chưa dán deploy key, hoặc dán thiếu | làm lại bước 11, copy **cả** dòng |
-| Bước 14 chết giữa lúc build | hết RAM | thêm swap ở bước 9 rồi chạy lại |
+| Bước 11 `rsync` báo `command not found` | gõ trên VPS chứ không phải trên Mac | `exit` về Mac rồi chạy lại |
+| Bước 11 `rsync` báo `rsync: not found` phía xa | VPS thiếu rsync | `ssh kidovps sudo apt-get install -y rsync` |
+| Bước 13 chết giữa lúc build | hết RAM | thêm swap ở bước 9 rồi chạy lại |
 | `caddy` `Restarting` | `ADMIN_DOMAIN` để trống | điền vào `.env`, rồi `docker compose up -d` |
 | Web báo `Authentication failed against database` | đổi `POSTGRES_PASSWORD` sau khi DB đã tạo | xem ghi chú dưới |
 | Caddy không xin được cert | sslip.io chưa trỏ đúng, hoặc cổng 80 bị chặn | `dig +short app.1-2-3-4.sslip.io` phải ra đúng IP |
+| Mail báo `535-5.7.8` | App Password thuộc tài khoản Google KHÁC `SMTP_USER` | tạo lại App Password trên đúng tài khoản đó |
+| `mail-check` xanh mà thư không tới | thư vào Spam | Gmail dùng chung dễ vào spam; vào Spam tính là hỏng |
+| Ô chọn danh mục ở `/upload` trống | `Tag` rỗng | `docker compose run --rm web pnpm --filter @kidogame/web db:tags` |
+| Đổi `.env` rồi mà không có tác dụng | dùng `restart` thay vì `up -d` | env chỉ vào container lúc TẠO — chạy `docker compose up -d` |
 
 **Về lỗi mật khẩu database:** Postgres chỉ áp `POSTGRES_PASSWORD` **lần đầu** lúc tạo
 dữ liệu. Đổi biến đó sau khi DB đã chạy thì DB vẫn giữ mật khẩu cũ. Sửa:
@@ -394,7 +481,7 @@ named volume — nó giữ toàn bộ game đã đóng gói. Muốn dừng thì 
 
 ---
 
-## Ba việc còn thiếu để mở cho người thật
+## Năm việc còn thiếu để mở cho người thật
 
 Bản này đủ để **thử**. Chưa đủ để mở cho phụ huynh và trẻ thật:
 
@@ -405,3 +492,11 @@ Bản này đủ để **thử**. Chưa đủ để mở cho phụ huynh và tr�
    kèm request từ game về app. Xem `docker-compose.yml:19`.
 3. **`OPERATOR_NAME` / `OPERATOR_EMAIL`** trong `.env`. Thiếu thì thư gửi ra không có
    `Reply-To`, mà sáu lá thư trong hệ thống bảo người nhận "trả lời thư này".
+4. **Tắt đăng nhập bằng mật khẩu và tắt login `root`** — phần 1, nếu lúc dựng nhanh
+   đã bỏ qua. Đây không phải lo xa: đo trên một VPS Contabo mới, sau **23 giờ** đã có
+   **26.466 lần** bị thử đoán mật khẩu SSH, khoảng 19 lần mỗi phút, từ bot quét cả
+   Internet. Tên chúng thử nhiều nhất là `admin`, `user`, `deploy`, `test`. Đếm lại
+   trên máy mình bằng:
+   `journalctl -u ssh --no-pager | grep -ciE "Failed password|Invalid user"`
+5. **Người trực đọc hàng đợi `/admin` hằng ngày.** Game hiện công khai ngay khi đăng,
+   không qua duyệt trước — cơ chế kiểm soát nằm ở phía sau, và nó cần người.
