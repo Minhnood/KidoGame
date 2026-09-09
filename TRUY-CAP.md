@@ -217,8 +217,19 @@ Chưa khai thì `Reply-To` là **`null`** chứ không rơi về `chua-cau-hinh@
 — `.local` là TLD dành riêng cho thử nghiệm, tức mọi thư trả lời bảo đảm bị trả về.
 Log dev in dòng `│ trả lời:` **kể cả khi trống**, để chỗ vắng mặt nhìn thấy được.
 
+**Địa chỉ dưới TLD dành riêng bị coi là CHƯA KHAI.** `.local` · `.localhost` · `.test` ·
+`.example` · `.invalid` — RFC giữ lại và cấm uỷ quyền cho ai, nên thư gửi tới đó bảo đảm
+bị trả về. Điền một địa chỉ như vậy thì `isOperatorConfigured()` trả `false`, và cả bốn
+nơi dùng nó cùng làm đúng: không đặt `Reply-To`, thư nhắc việc **từ chối gửi** và nói rõ
+địa chỉ nào sai, `/dieu-khoan` **hiện cảnh báo** thay vì in một địa chỉ chết ra công
+khai. Luật chặn theo **đuôi tên miền**, nên `ban@local-school.edu.vn` vẫn dùng được bình
+thường.
+
+Chốt này **không** đoán xa hơn: gõ sai chính tả một tên miền thật thì nó vẫn nhận. Kiểm
+địa chỉ có người đọc hay không là việc của `node infra/mail-check.mjs --send <email>`.
+
 Đổi hai biến này thì chạy lại `cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts`
-(24 phép, không cần server cũng không cần DB).
+(46 phép, không cần server cũng không cần DB).
 
 ---
 

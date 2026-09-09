@@ -42,7 +42,7 @@ Bốn bộ không cần server:
 pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 108 cặp màu, cả hai giao diện
 node infra/caddy-config-check.mjs          # 15 phép, +4 nữa nếu có Docker
-cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 24
+cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 46
 ```
 
 Hai bộ cuối canh cùng một loại lỗi: thứ **chỉ hỏng sau khi deploy**. Cấu hình Caddy chỉ

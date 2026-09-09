@@ -51,7 +51,19 @@ const check = (name: string, ok: boolean, detail = '') => {
   console.log(`${ok ? '✅' : '❌'} ${name}${detail ? ` — ${detail}` : ''}`);
 };
 
-const OP_EMAIL = 'lienhe@vidu.test';
+/*
+ * Địa chỉ mẫu của đơn vị vận hành. Trước đây là `lienhe@vidu.test` và PHẢI đổi:
+ * `.test` giờ nằm trong danh sách TLD không nhận được thư, nên `isOperatorConfigured()`
+ * coi nó là chưa cấu hình và cả nhánh "đã khai" của bộ này sẽ đo nhầm nhánh kia.
+ *
+ * Đổi sang `.vn` KHÔNG làm yếu lớp chặn gửi thật mà đầu file nói tới: lớp đó nằm ở
+ * địa chỉ NGƯỜI NHẬN (`ai-do@vidu.test` trong `guiRoiLay`), còn đây chỉ là giá trị
+ * của header `Reply-To` — không transport nào gửi thư tới nó.
+ */
+const OP_EMAIL = 'lienhe@kidogame.vn';
+
+/** Địa chỉ có mặt nhưng nằm dưới TLD không bao giờ nhận được thư. */
+const OP_EMAIL_CHET = 'lienhe@kidogame.local';
 const THAN = [
   'Chào bạn,',
   '',
@@ -73,14 +85,14 @@ async function guiRoiLay(text = THAN) {
   return docHopThuDev()[0];
 }
 
-function datOperator(bat: boolean) {
-  if (bat) {
-    process.env.OPERATOR_NAME = 'Trung tâm Ví Dụ';
-    process.env.OPERATOR_EMAIL = OP_EMAIL;
-  } else {
+function datOperator(bat: boolean | string) {
+  if (bat === false) {
     delete process.env.OPERATOR_NAME;
     delete process.env.OPERATOR_EMAIL;
+    return;
   }
+  process.env.OPERATOR_NAME = 'Trung tâm Ví Dụ';
+  process.env.OPERATOR_EMAIL = bat === true ? OP_EMAIL : bat;
 }
 
 /** Đếm số lần một chuỗi xuất hiện. Dùng để bắt chân thư in hai lần. */
@@ -139,6 +151,68 @@ datOperator(false);
   check('Chân thư không rò địa chỉ giữ chỗ .local ra thư người dùng', thu?.text.includes('kidogame.local') === false);
   check(`Chưa cấu hình cũng không quay lại câu cũ "${CAU_CU}"`, thu?.text.includes(CAU_CU) === false);
   check('Vẫn còn dòng giới thiệu KidoGame ở chân thư', thu?.text.includes('gửi tự động từ KidoGame') === true);
+}
+
+// ---------------------------------------------------------------------------
+console.log('\n── Đã khai NHƯNG địa chỉ không nhận được thư ────────────────');
+
+/*
+ * Nhánh này từng KHÔNG có, và đó là một lỗ thật: `isOperatorConfigured()` chỉ hỏi
+ * "hai biến có rỗng không", nên `OPERATOR_EMAIL=lienhe@kidogame.local` — đúng cái
+ * `apps/web/.env` khai suốt — đi thẳng vào `Reply-To`. `.local` là TLD dành cho
+ * mDNS nội bộ, thư gửi tới đó bảo đảm bị trả về. Tức là header có mặt, trông đúng,
+ * và mọi thư trả lời chết.
+ *
+ * Bộ kiểm cũ vẫn 24/24 với cấu hình đó, vì cả hai nhánh nó đo đều không phải nhánh
+ * này. Một bộ kiểm hai nhánh không tự thấy nhánh thứ ba.
+ */
+const CAC_TLD_CHET = ['.local', '.localhost', '.test', '.example', '.invalid'];
+
+for (const tld of CAC_TLD_CHET) {
+  datOperator(`lienhe@vidu${tld}`);
+  const thu = await guiRoiLay();
+  check(`TLD ${tld}: không đặt Reply-To`, thu?.replyTo === null, String(thu?.replyTo));
+}
+
+datOperator(OP_EMAIL_CHET);
+{
+  const thu = await guiRoiLay();
+
+  /*
+   * Không chỉ bỏ header — chân thư cũng phải im. Nêu một địa chỉ chết trong thân
+   * thư còn tệ hơn header vắng mặt: người đọc THẤY chỗ để gửi, gửi thật, rồi nhận
+   * thư trả về. Ở lá thư báo gỡ game vì bản quyền, quãng thời gian mất đi vì cú
+   * đó là quãng đếm ngược tới ngày xoá vĩnh viễn file của một đứa trẻ.
+   */
+  check('Chân thư không nêu địa chỉ chết', thu?.text.includes(OP_EMAIL_CHET) === false);
+  check('Chân thư không hứa gì về việc trả lời', thu?.text.includes(CAU_TRA_LOI) === false);
+  check('Vẫn giữ dòng giới thiệu KidoGame', thu?.text.includes('gửi tự động từ KidoGame') === true);
+
+  const html = dungHtmlTuText(thu?.text ?? '', 'Thử');
+  check('Bản HTML cũng không nêu địa chỉ chết', !html.includes(OP_EMAIL_CHET));
+}
+
+{
+  /*
+   * Tên miền THẬT phải đi qua được. Một chốt an toàn chặn nhầm mọi thứ thì người
+   * ta gỡ nó, và lúc đó lỗ cũ mở lại nguyên vẹn.
+   */
+  for (const dia of ['lienhe@kidogame.vn', 'a@b.com', 'ban@localhost.example.org']) {
+    datOperator(dia);
+    const thu = await guiRoiLay();
+    check(`Địa chỉ dùng được vẫn vào Reply-To: ${dia}`, thu?.replyTo === dia, String(thu?.replyTo));
+  }
+}
+
+{
+  /*
+   * `.local` phải chặn theo TLD chứ không theo chuỗi con: một tên miền thật hoàn
+   * toàn có thể chứa chữ "local" ở giữa. Bắt bằng `includes` là chặn nhầm địa chỉ
+   * thật, và đó là kiểu chốt bị gỡ trong ba tháng.
+   */
+  datOperator('ban@local-school.edu.vn');
+  const thu = await guiRoiLay();
+  check('Không chặn nhầm tên miền có chữ "local" ở giữa', thu?.replyTo === 'ban@local-school.edu.vn', String(thu?.replyTo));
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +296,35 @@ const mailTs = doc('apps/web/src/lib/mail.ts');
    */
   const soDongKhai = compose.split('\n').filter((d) => /^\s*OPERATOR_EMAIL:/.test(d)).length;
   check('Compose khai OPERATOR_EMAIL cho cả hai service gửi thư (web và prune)', soDongKhai === 2, `${soDongKhai} dòng khai`);
+}
+
+{
+  /*
+   * Chốt địa chỉ chết nằm trong `isOperatorConfigured()`, KHÔNG nằm trong `mail.ts`,
+   * và chỗ đặt nó là cả điểm của bản sửa: bốn nơi hỏi hàm đó, mỗi nơi hỏng một kiểu
+   * khi địa chỉ có mặt nhưng chết. Ai đó "dọn cho gọn" bằng cách chuyển chốt sang
+   * riêng `mail.ts` thì `Reply-To` vẫn đúng — mọi phép kiểm ở trên vẫn xanh — trong
+   * khi `/dieu-khoan` lại in địa chỉ chết ra công khai và thư nhắc việc lại gửi vào
+   * hư không mỗi đêm. Phép kiểm này canh đúng chỗ đó.
+   */
+  const operatorTs = doc('apps/web/src/lib/operator.ts');
+  check('Chốt địa chỉ chết nằm trong isOperatorConfigured()', /isOperatorConfigured\(\)[^}]*laDiaChiChet/s.test(operatorTs));
+
+  for (const tld of CAC_TLD_CHET) {
+    check(`Danh sách TLD chết còn ${tld}`, operatorTs.includes(`'${tld}'`));
+  }
+
+  /*
+   * Ba nơi còn lại phải HỎI hàm đó chứ không tự kiểm lấy. Đếm nơi gọi, không đọc
+   * nội dung: cái cần giữ là "một luật, một chỗ".
+   */
+  for (const p of [
+    'apps/web/prisma/nhac-viec-co-han.ts',
+    'apps/web/src/app/dieu-khoan/page.tsx',
+    'apps/web/src/lib/mail.ts',
+  ]) {
+    check(`${p.split('/').pop()} vẫn hỏi isOperatorConfigured()`, doc(p).includes('isOperatorConfigured('));
+  }
 }
 
 const failed = results.filter((r) => !r.ok);

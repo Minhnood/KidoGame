@@ -33,7 +33,12 @@
 import { prisma } from '../src/lib/db';
 import { sendMail } from '../src/lib/mail';
 import { ngayVi } from '../src/lib/moderation';
-import { isOperatorConfigured, operator, TAKEDOWN_SLA_WORKING_DAYS } from '../src/lib/operator';
+import {
+  isOperatorConfigured,
+  laDiaChiChet,
+  operator,
+  TAKEDOWN_SLA_WORKING_DAYS,
+} from '../src/lib/operator';
 import {
   docViecCoHan,
   NHAC_TRUOC_NGAY_LAM_VIEC,
@@ -160,9 +165,24 @@ async function main() {
    */
   if (!isOperatorConfigured()) {
     console.error(
-      '\nDỪNG: chưa khai OPERATOR_NAME và OPERATOR_EMAIL, nên không có địa chỉ nào để gửi.'
+      '\nDỪNG: chưa có địa chỉ đơn vị vận hành nào GỬI ĐƯỢC, nên không gửi thư nhắc.'
     );
-    console.error(`Mặc định là ${operator().email} — gửi vào đó là gửi vào hư không.`);
+    /*
+     * Nói ra địa chỉ đang thấy, và nói vì sao nó không dùng được. Hai cách hỏng ở
+     * đây rất khác nhau nhưng cùng đi tới dòng này: biến chưa khai, hoặc biến đã
+     * khai một địa chỉ dưới TLD không bao giờ nhận được thư. Chỉ in "chưa khai"
+     * cho cả hai thì người đã gõ địa chỉ vào `.env` sẽ đi kiểm sai chỗ.
+     */
+    const email = process.env.OPERATOR_EMAIL?.trim();
+    if (email && laDiaChiChet(email)) {
+      console.error(
+        `OPERATOR_EMAIL đang là ${email} — đuôi tên miền đó không bao giờ nhận được thư`
+      );
+      console.error('(.local .localhost .test .example .invalid đều bị Internet trả về).');
+    } else {
+      console.error('Chưa khai OPERATOR_NAME và OPERATOR_EMAIL trong infra/.env.');
+      console.error(`Mặc định là ${operator().email} — gửi vào đó là gửi vào hư không.`);
+    }
     process.exitCode = 2;
     return;
   }

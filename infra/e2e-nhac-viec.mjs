@@ -42,7 +42,20 @@ const PASS = 'matkhau-dai-1234';
 const CHILD_PASS = 'be1234';
 const PARENT_EMAIL = `e2e-nv-${suffix}@kidogame.test`;
 const CHILD_USER = `env${suffix}`;
-const OPERATOR_EMAIL = `van-hanh-${suffix}@vidu.test`;
+/*
+ * Địa chỉ đơn vị vận hành cho nhánh "đã cấu hình". Trước đây là `@vidu.test`, chọn
+ * `.test` vì thư gửi tới đó bảo đảm không tới ai. Không dùng được nữa:
+ * `isOperatorConfigured()` giờ coi `.test` là địa chỉ chết, nên script sẽ TỪ CHỐI gửi
+ * và nhánh này lại đo nhầm nhánh kia.
+ *
+ * Lớp chặn gửi thật chuyển sang chỗ chắc hơn hẳn: khối "có cấu hình" bên dưới xoá
+ * rỗng cả bốn biến transport trước khi chạy, nên không có đường gửi nào tồn tại —
+ * mạnh hơn việc trông vào một địa chỉ bị trả về sau khi thư đã rời máy.
+ */
+const OPERATOR_EMAIL = `van-hanh-${suffix}@vidu.vn`;
+
+/** Xoá mọi đường gửi thật khỏi tiến trình con. Xem ghi chú ở OPERATOR_EMAIL. */
+const KHONG_CO_TRANSPORT = { SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '' };
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -278,9 +291,29 @@ let dauRa = '';
   );
 }
 
+// ---------- Khai một địa chỉ KHÔNG NHẬN ĐƯỢC THƯ thì cũng từ chối ----------
+{
+  /*
+   * Nhánh thứ ba, thêm sau khi phát hiện `isOperatorConfigured()` chỉ hỏi "hai biến
+   * có rỗng không". Một địa chỉ dưới TLD dành riêng (`.local`, `.test`, `.invalid`…)
+   * KHÔNG BAO GIỜ nhận được thư, nên gửi vào đó là gửi vào hư không — nhưng script
+   * lại in `✓ Đã gửi tới …`, một dòng báo thành công cho việc không xảy ra, mỗi đêm.
+   * Nguy hơn nhánh "chưa khai" đúng ở chỗ đó: chưa khai thì có người thấy, còn khai
+   * sai kiểu này thì mọi dấu hiệu đều nói là ổn.
+   */
+  const { ma, out } = chayNhac(['--gui'], {
+    OPERATOR_NAME: 'Đơn vị kiểm thử',
+    OPERATOR_EMAIL: `van-hanh-${suffix}@vidu.local`,
+  });
+  check('Địa chỉ dưới TLD chết thì từ chối gửi', ma !== 0, `mã ${ma}`);
+  check('… và nói rõ địa chỉ nào đang sai', out.includes(`van-hanh-${suffix}@vidu.local`));
+  check('… KHÔNG in dòng báo đã gửi', !/✓ Đã gửi/.test(out));
+}
+
 // ---------- Có cấu hình thì gửi thật ----------
 {
   const { ma, out } = chayNhac(['--gui'], {
+    ...KHONG_CO_TRANSPORT,
     OPERATOR_NAME: 'Đơn vị kiểm thử',
     OPERATOR_EMAIL: OPERATOR_EMAIL,
   });

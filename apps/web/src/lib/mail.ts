@@ -298,9 +298,12 @@ function ghiLaiChoDev(message: ThuGui, nhan: string): void {
    * In cả dòng "chưa khai OPERATOR_EMAIL" thay vì giấu dòng đi khi trống: một dòng
    * vắng mặt thì không ai nhận ra là nó vắng.
    */
+  const opEmail = process.env.OPERATOR_EMAIL?.trim();
   const dongTraLoi = message.replyTo
     ? `│ trả lời: ${message.replyTo}`
-    : '│ trả lời: (chưa khai OPERATOR_EMAIL — thư trả lời rơi về MAIL_FROM)';
+    : opEmail
+      ? `│ trả lời: (BỎ QUA ${opEmail} — tên miền đó không nhận được thư; rơi về MAIL_FROM)`
+      : '│ trả lời: (chưa khai OPERATOR_EMAIL — thư trả lời rơi về MAIL_FROM)';
 
   console.log(
     [

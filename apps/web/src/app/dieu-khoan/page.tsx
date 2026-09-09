@@ -54,10 +54,18 @@ export default function TermsPage() {
         lead="Viết để phụ huynh đọc hết trong năm phút. Có chỗ nào chưa rõ thì email cho chúng tôi."
       />
 
+      {/*
+        Cảnh báo này giờ hiện thêm một trường hợp nữa: `OPERATOR_EMAIL` ĐÃ khai
+        nhưng nằm dưới một TLD không bao giờ nhận được thư (`.local`, `.test`…).
+        Trước đây chỗ đó lặng thinh và trang in địa chỉ chết ra công khai làm nơi
+        nhận khiếu nại bản quyền — tức là mặt hứa vẫn đứng nguyên trong khi đường
+        thư đằng sau đã đứt. Xem `isOperatorConfigured()` trong lib/operator.ts.
+      */}
       {!isOperatorConfigured() && (
         <Notice tone="warn">
-          Bản cài đặt này chưa khai <code>OPERATOR_NAME</code> và <code>OPERATOR_EMAIL</code> trong{' '}
-          <code>infra/.env</code>, nên phần liên hệ bên dưới chưa dùng được.
+          Bản cài đặt này chưa có địa chỉ liên hệ dùng được: <code>OPERATOR_NAME</code> và{' '}
+          <code>OPERATOR_EMAIL</code> trong <code>infra/.env</code> còn trống, hoặc email đang khai
+          nằm dưới một tên miền không nhận được thư. Phần liên hệ bên dưới chưa dùng được.
         </Notice>
       )}
 
