@@ -147,9 +147,34 @@ services:
       - '443:443'
       - '443:443/udp' # HTTP/3
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
-      PLAYER_DOMAIN: ${PLAYER_DOMAIN}
-      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
+      # Lặp lại `:?` của service `web` chứ không viết `${APP_DOMAIN}` trần, dù rỗng ở
+      # đây đã bị chặn từ trên: mọi biến làm TÊN SITE phải tự đỡ lấy mình. Rỗng ở
+      # dòng này là Caddy từ chối cả file — xem ghi chú dài ở ADMIN_DOMAIN bên dưới —
+      # nên để nó dựa vào một `:?` nằm ở service khác là đặt cược rằng không ai gỡ
+      # `:?` đó. Cược đó đã thua một lần: cả nhóm mail từng có `:?` và đã bị bỏ.
+      APP_DOMAIN: ${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
+      PLAYER_DOMAIN: ${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # KHÔNG truyền rỗng xuống Caddy, dù `.env.example` mời để trống biến này.
+      #
+      # `Caddyfile` viết `{$ADMIN_DOMAIN:admin.kidogame.vn}`, mà mặc định sau dấu `:`
+      # chỉ áp dụng khi biến CHƯA ĐƯỢC ĐẶT. Truyền `${ADMIN_DOMAIN:-}` là ĐẶT THÀNH
+      # RỖNG — khác hẳn — nên ra một khối site không có tên và Caddy TỪ CHỐI CẢ FILE,
+      # kéo sập luôn app và player. Lỗi in ra là `server block without any key is
+      # global configuration` và không hề nhắc tới `ADMIN_DOMAIN`; compose vẫn xanh,
+      # bốn service kia vẫn healthy, chỉ mình caddy crash loop và dòng ACME nhìn y
+      # như DNS chưa trỏ. Đã mất hàng giờ ở đây một lần.
+      #
+      # Mặc định là `.localhost` chứ không phải tên thật: Caddy coi `.localhost` là
+      # nội bộ nên tự cấp chứng chỉ bằng CA riêng (`issuer:"local"`, ~200ms) — không
+      # ACME thất bại lặp lại, không đốt hạn mức Let's Encrypt, và không DNS công
+      # cộng nào trỏ tới nên không ai ngoài Internet vào được. Đúng bằng ý định đã
+      # ghi trong `Caddyfile`: để trống là TẮT khu quản trị tách riêng.
+      #
+      # Service `web` ở trên vẫn đọc `${ADMIN_DOMAIN:+...}` từ .env, nên nó vẫn thấy
+      # ADMIN_ORIGIN RỖNG và giữ `/admin` trên app domain. Đừng "dọn cho gọn" bằng
+      # cách đặt mặc định này vào `.env.example` — làm thế là bật tách origin sau
+      # lưng người deploy, và triệu chứng khi đó là `/admin` trả 404 trên app domain.
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.localhost}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kidogame.vn}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

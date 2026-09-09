@@ -36,11 +36,12 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 
 ## Kiểm thử
 
-Hai bộ không cần server:
+Ba bộ không cần server:
 
 ```bash
 pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 38 cặp màu, cả hai giao diện
+node infra/caddy-config-check.mjs          # 15 phép, +4 nữa nếu có Docker
 ```
 
 Còn lại cần **cả hai server đang chạy + Chrome**, và server phải được khởi động với
@@ -195,6 +196,41 @@ không có cách nào thấy được điều đó.
 
 Vì vậy bộ này kiểm cả **chuỗi `Set-Cookie` thô**, không chỉ trạng thái cookie cuối cùng.
 Đúng chỗ lỗi đã nấp.
+
+### Một biến rỗng giết cả stack — `caddy-config-check.mjs`
+
+`Caddyfile` lấy tên site từ `{$ADMIN_DOMAIN:admin.kidogame.vn}`, và **mặc định sau dấu
+`:` chỉ áp dụng khi biến CHƯA ĐƯỢC ĐẶT**. Compose thì truyền `${ADMIN_DOMAIN:-}` — tức
+**đặt thành rỗng**, một trạng thái khác hẳn. Kết quả là một khối site không có tên, và
+Caddy từ chối **nguyên file**: app chết, player chết, vì một biến mà chính `.env.example`
+mời để trống.
+
+Cách hỏng này mất hàng giờ để tìm, và mọi thứ nhìn được đều chỉ sai hướng:
+
+- `docker compose config` xanh — YAML không sai gì;
+- bốn service kia `Up` và `healthy`, chỉ mình `caddy` crash loop;
+- lỗi in ra là `server block without any key is global configuration`, **không hề nhắc
+  tên biến nào**;
+- dòng ACME đi kèm nhìn y hệt lúc DNS chưa trỏ, nên người ta đi kiểm DNS.
+
+Không bộ kiểm nào khác trong repo thấy được: `e2e-prod-*` cần stack đang chạy, mà ở đây
+stack không lên nổi để mà kiểm.
+
+Bộ này chạy hai lớp. Lớp **tĩnh** đọc `Caddyfile` + `docker-compose.yml` rồi đòi mọi biến
+được dùng làm tên site phải bị chặn không cho ra rỗng — nó quét bằng regex chứ không liệt
+kê ba tên đã biết, nên **khối site thứ tư** ai đó thêm sau này cũng bị đòi. Lớp **thật**
+gọi `caddy validate` cho từng kịch bản `.env`, cộng một phép **đối chứng** khẳng định tên
+rỗng vẫn còn là lỗi — không có nó thì ngày Caddy đổi hành vi, cả bộ lặng lẽ thành vô
+nghĩa. Không có Docker thì lớp hai **bỏ qua và nói rõ là bỏ qua**, chứ không tính là đạt.
+Mượn Docker máy khác được: `DOCKER_HOST=ssh://kidovps node infra/caddy-config-check.mjs`.
+
+Chỗ tinh nhất nằm ở hướng sửa sai: cùng một biến nuôi **hai** thứ — tên site của Caddy, và
+`ADMIN_ORIGIN` của app. Điền `admin.localhost` vào `.env.example` cho gọn thì Caddy sống,
+nhưng app bật tách origin sau lưng người deploy: `/admin` trên app domain trả 404, còn host
+thay thế thì không ai vào được. Tức là chữa một cái sập bằng một cái sập im lặng hơn. Ba
+phép kiểm khoá đúng chỗ đó. Mặc định nằm ở compose và là `.localhost` chứ không phải tên
+thật, vì Caddy coi đuôi đó là nội bộ nên tự cấp chứng chỉ (`issuer:"local"`, ~200ms) — một
+tên thật ở đây là ACME thất bại lặp lại cho một tính năng đang **tắt**.
 
 ### Test trên điện thoại thật
 

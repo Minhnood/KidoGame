@@ -342,8 +342,9 @@ ADMIN_DOMAIN=admin.1-2-3-4.sslip.io
 
 Lưu và thoát nano: `Ctrl+O` → `Enter` → `Ctrl+X`.
 
-**`ADMIN_DOMAIN` tuyệt đối đừng để trống.** Để rỗng là Caddy chết hẳn và kéo sập cả
-web, mà thông báo lỗi không hề nhắc tới `ADMIN_DOMAIN` — mất hàng giờ để tìm.
+**Cứ điền `ADMIN_DOMAIN`.** Để trống thì khu quản trị không có host riêng, `/admin`
+nằm chung trên app domain — chạy được, nhưng mất một lớp phòng thủ. (Trước đây để
+trống còn làm Caddy chết hẳn và kéo sập cả web; đã sửa trong `docker-compose.yml`.)
 
 `sslip.io` là dịch vụ phân giải `<gì-cũng-được>.<ip>.sslip.io` về đúng IP đó, nên
 không cần mua tên miền. Mua sau thì đổi ba dòng này rồi `docker compose up -d`.
@@ -455,7 +456,7 @@ Xong. Khu quản trị ở `https://admin.1-2-3-4.sslip.io/admin/dang-nhap`.
 | Bước 11 `rsync` báo `command not found` | gõ trên VPS chứ không phải trên Mac | `exit` về Mac rồi chạy lại |
 | Bước 11 `rsync` báo `rsync: not found` phía xa | VPS thiếu rsync | `ssh kidovps sudo apt-get install -y rsync` |
 | Bước 13 chết giữa lúc build | hết RAM | thêm swap ở bước 9 rồi chạy lại |
-| `caddy` `Restarting` | `ADMIN_DOMAIN` để trống | điền vào `.env`, rồi `docker compose up -d` |
+| `caddy` `Restarting`, log có `server block without any key` | một biến domain trong `.env` bị đặt thành RỖNG | điền tên vào, rồi `docker compose up -d`. Kiểm trước bằng `node infra/caddy-config-check.mjs` |
 | Web báo `Authentication failed against database` | đổi `POSTGRES_PASSWORD` sau khi DB đã tạo | xem ghi chú dưới |
 | Caddy không xin được cert | sslip.io chưa trỏ đúng, hoặc cổng 80 bị chặn | `dig +short app.1-2-3-4.sslip.io` phải ra đúng IP |
 | Mail báo `535-5.7.8` | App Password thuộc tài khoản Google KHÁC `SMTP_USER` | tạo lại App Password trên đúng tài khoản đó |

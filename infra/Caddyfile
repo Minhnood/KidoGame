@@ -71,9 +71,15 @@
 # nội dung do trẻ nhập, tức là dựng rào rồi mở cổng.
 #
 # ĐỂ TRỐNG ADMIN_DOMAIN trong infra/.env là TẮT khu quản trị trên bản triển khai:
-# Caddy vẫn nhận site này với tên mặc định nhưng DNS không trỏ tới, còn app thì thấy
-# ADMIN_ORIGIN rỗng và giữ hành vi cũ (/admin nằm trên app domain). Muốn tách thật
-# thì phải khai cả ADMIN_DOMAIN ở đây và trỏ DNS về cùng IP.
+# site này nhận tên `admin.localhost` mà không DNS công cộng nào trỏ tới, còn app thì
+# thấy ADMIN_ORIGIN rỗng và giữ hành vi cũ (/admin nằm trên app domain). Muốn tách
+# thật thì phải khai cả ADMIN_DOMAIN ở đây và trỏ DNS về cùng IP.
+#
+# Cái tên thay thế đó do docker-compose.yml đặt, KHÔNG phải do mặc định sau dấu `:`
+# dưới đây: mặc định của Caddy chỉ áp dụng khi biến CHƯA ĐƯỢC ĐẶT, mà compose thì
+# đặt-thành-rỗng. Đặt-mà-rỗng ra một khối site KHÔNG CÓ TÊN, và Caddy từ chối cả file
+# — tức là để trống một biến "tuỳ chọn" giết luôn app và player. Xem ghi chú dài ở
+# docker-compose.yml trước khi đụng vào một trong hai chỗ.
 # ---------------------------------------------------------------------------
 {$ADMIN_DOMAIN:admin.kidogame.vn} {
 	encode zstd gzip
