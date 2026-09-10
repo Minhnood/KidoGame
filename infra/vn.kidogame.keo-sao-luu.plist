@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lịch chạy `infra/keo-sao-luu.sh` trên máy Mac.
+
+  CÀI:
+    cp infra/vn.kidogame.keo-sao-luu.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/vn.kidogame.keo-sao-luu.plist
+
+  GỠ:
+    launchctl bootout gui/$(id -u)/vn.kidogame.keo-sao-luu
+
+  CHẠY NGAY MỘT LƯỢT (không chờ tới giờ):
+    launchctl kickstart -p gui/$(id -u)/vn.kidogame.keo-sao-luu
+
+  XEM CÓ ĐANG NẠP KHÔNG:
+    launchctl print gui/$(id -u)/vn.kidogame.keo-sao-luu | head -20
+
+  ---------------------------------------------------------------------------
+  VÌ SAO LaunchAgent (gui/) CHỨ KHÔNG PHẢI LaunchDaemon.
+
+  Job này `ssh` bằng khoá riêng trong ~/.ssh và ghi vào thư mục nhà. LaunchDaemon
+  chạy bằng root trước cả khi ai đăng nhập, nên nó không có $HOME của người dùng
+  và không đọc được ~/.ssh/config — đường hỏng ở đó là "Host kidovss unknown",
+  nhìn y như lỗi mạng.
+
+  VÌ SAO KHÔNG DÙNG cron. `crontab` trên macOS vẫn chạy, nhưng từ Catalina nó nằm
+  sau lớp bảo vệ TCC: một lệnh cron đọc file trong thư mục nhà sẽ bị từ chối im
+  lặng cho tới khi `/usr/sbin/cron` được cấp Full Disk Access bằng tay. launchd là
+  đường Apple đang hỗ trợ, và nó có thêm một tính chất cần ở đây: lỡ giờ vì máy
+  ngủ thì nó chạy bù lúc máy thức, còn cron thì bỏ luôn lượt đó.
+
+  VÌ SAO HAI MỐC GIỜ chứ không một. Đây là máy cá nhân, không phải máy chủ — nó
+  tắt và ngủ theo giờ sinh hoạt. Một mốc duy nhất rơi vào quãng máy hay tắt là
+  mất trọn ngày đó. Chín giờ sáng và chín giờ tối phủ được cả hai nhịp, và hai
+  lượt kéo trong ngày không tốn gì: `--ignore-existing` nên lượt thứ hai không
+  chuyển lại file nào đã có.
+
+  Cả hai mốc đều SAU 3 giờ sáng, là giờ BACKUP_HOUR trên VPS. Đổi BACKUP_HOUR mà
+  quên chỗ này thì lượt kéo lấy về bản của hôm qua và mọi con số tuổi lệch đi
+  đúng một ngày.
+  ---------------------------------------------------------------------------
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>vn.kidogame.keo-sao-luu</string>
+
+	<!--
+		ĐƯỜNG DẪN TUYỆT ĐỐI, và phải sửa dòng dưới nếu repo nằm chỗ khác. launchd
+		không có khái niệm "thư mục hiện tại" theo nghĩa người dùng hiểu.
+
+		Gọi qua /bin/bash chứ không dựa vào bit thực thi của file: một lượt `git
+		checkout` hay giải nén trên hệ thống file khác có thể làm mất bit đó, và
+		lỗi khi ấy là "Permission denied" — không hề chỉ vào nguyên nhân.
+	-->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>/Users/MAC/Work/KidoGame/infra/keo-sao-luu.sh</string>
+	</array>
+
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key><integer>9</integer>
+			<key>Minute</key><integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key><integer>21</integer>
+			<key>Minute</key><integer>0</integer>
+		</dict>
+	</array>
+
+	<!--
+		PATH tối thiểu là mặc định của launchd, và script đã tự dò đường dẫn tuyệt
+		đối cho rsync/pg_restore vì lý do đó. Khai lại ở đây cho các lệnh hệ thống
+		(ssh, tar, du) khỏi phụ thuộc vào việc launchd đang cho gì.
+	-->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<!--
+		GHI LOG RA FILE, và đây không phải chuyện tiện tay: không có hai dòng này
+		thì mọi thứ script in ra biến mất, và một lượt kéo thất bại trông giống hệt
+		một lượt chưa tới giờ. Thư mục ~/Library/Logs là chỗ macOS dành cho việc
+		này (Console.app đọc được).
+	-->
+	<key>StandardOutPath</key>
+	<string>/Users/macbook/Library/Logs/kidogame-keo-sao-luu.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/macbook/Library/Logs/kidogame-keo-sao-luu.log</string>
+
+	<!--
+		Chạy một lượt ngay khi nạp (khởi động máy, đăng nhập). Máy tắt qua đêm thì
+		mốc 9 giờ có thể đã trôi qua lúc bật máy lúc 10 giờ; dòng này bù vào đó.
+	-->
+	<key>RunAtLoad</key>
+	<true/>
+
+	<!--
+		KHÔNG đặt KeepAlive. Script chạy một lượt rồi thoát — KeepAlive sẽ hiểu mỗi
+		lần thoát là một lần chết và khởi động lại ngay, thành một vòng lặp rsync
+		liên tục về phía VPS.
+	-->
+</dict>
+</plist>
