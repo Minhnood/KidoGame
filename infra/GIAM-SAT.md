@@ -37,7 +37,7 @@ ai biết** cho tới khi có người mở web và thấy trắng.
 | Analytics | **không có gì** |
 | Error tracking | tự host, xem mục 6 — lỗi phía client vào bảng `ErrorLog`, admin đọc ở `/admin/loi` |
 | Canh máy chủ hằng đêm | **đã có**, xem mục 8 — đĩa, chứng chỉ, tuổi bản sao lưu, đợt lỗi mới |
-| Uptime monitoring | **vẫn không có gì** — phần duy nhất còn thiếu, cần tài khoản của fen, xem mục 4 tầng 1 |
+| Uptime monitoring | **đã có từ 10/9/2026** — UptimeRobot gói Free, hai monitor `app` và `play`, ping 5 phút, báo qua email |
 | Error boundary của Next | **không có** `error.tsx`, `global-error.tsx`, `not-found.tsx` → đã bổ sung, xem mục 5 |
 | Lỗi phía server | 8 chỗ `console.error` → log Docker → **không ai đọc**; nhưng lỗi làm vỡ trang thì đi qua boundary nên vẫn vào bảng, kèm `digest` để dò ngược log |
 | Lỗi phía client | đã vào DB của chính mình, xem mục 6 |
@@ -98,7 +98,15 @@ byte dữ liệu người dùng nào.
 Error boundary + giới hạn log. Đây là **điều kiện cần** của mọi tầng sau: chưa có
 chỗ để lỗi đi qua thì không cắm được gì vào.
 
-### Tầng 1 — uptime, ~10 phút, và là VIỆC DUY NHẤT CÒN LẠI
+### Tầng 1 — uptime — ĐÃ LÀM 10/9/2026
+
+> **Trạng thái:** xong. UptimeRobot gói Free, hai monitor theo đúng bảng bên dưới,
+> báo về `mail-chinh@example.com`. Monitor `app` đo được 645ms, 100% trong 24h
+> đầu. **Telegram nằm sau gói trả phí** nên không dùng — cách đi vòng miễn phí
+> (bot Telegram của mình + webhook) ghi ở cuối mục này.
+>
+> Tài khoản đứng tên fen, nên **không phép kiểm nào trong repo nhìn thấy nó**.
+> Chuyển tên miền, đổi email, hay lỡ xoá monitor thì chỉ mục này biết.
 
 Một dịch vụ ping miễn phí. Trỏ vào `https://<APP_DOMAIN>/` mỗi 5 phút, báo qua
 email hoặc Telegram.
@@ -145,6 +153,24 @@ không trả lời được câu hỏi nào mà `app` chưa trả lời.
 
 > **Đổi tên miền thì phải sửa hai URL này.** Chúng nằm ngoài repo, nên không có
 > phép kiểm nào bắt được lệch — đây là chỗ duy nhất ghi lại rằng chúng tồn tại.
+
+#### Muốn báo động vào Telegram mà không trả tiền
+
+UptimeRobot khoá Telegram sau gói trả phí (đã thử 10/9/2026). Không cần trả:
+Telegram Bot API miễn phí, và một con bot tự tạo phục vụ được **cả hai** tầng.
+
+1. Nhắn `@BotFather` trong Telegram → `/newbot` → nhận **token**.
+2. Nhắn một câu cho bot vừa tạo, rồi mở
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` để lấy **chat id**.
+3. **Tầng 8 (canh gác hằng đêm)** — code của mình, thêm thẳng vào `canh-gac.ts`,
+   không ai khoá được.
+4. **Tầng 1 (UptimeRobot)** — nếu gói Free có **Webhook** làm alert contact thì
+   trỏ nó vào `https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>&text=...`
+   với biến của UptimeRobot chèn vào `text`. **Chưa kiểm** webhook có miễn phí
+   không — phải mở Integrations ra xem, đừng tin dòng này.
+
+Token bot là bí mật: ai có nó thì gửi tin giả danh bot được. Để trong `.env`,
+không viết vào file nào git theo dõi.
 
 ### Tầng 2 — lỗi vào DB + trang cho admin xem (ĐÃ LÀM, mục 6)
 
@@ -319,12 +345,14 @@ trong phần đầu `infra/e2e-errorlog.mjs`.
 
 ## 7. Việc tiếp theo cần fen quyết
 
-1. **Tầng 1 (uptime)** — **việc duy nhất còn lại**, và là việc duy nhất trong cả
-   file này mà tôi không làm thay được: nó cần một tài khoản đứng tên fen. Từng
-   bước ở mục 4, mất khoảng 10 phút. Nó bắt loại hỏng mà **cả** tầng 2 **lẫn** mục
-   8 đều không bắt được — máy chết hẳn thì không có trình duyệt nào chạy
-   `sendBeacon`, và cũng không có ai gửi thư.
-2. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
+1. ~~**Tầng 1 (uptime)**~~ — **XONG 10/9/2026.** Cả bốn tầng giờ đều có mặt.
+2. **Báo động vào Telegram** — tuỳ chọn, $0, xem cuối mục 4. Đáng làm vì email
+   báo động nằm chung hòm thư với mọi thứ khác và bị đọc muộn.
+3. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
+
+> **Một điều KHÔNG tầng nào bắt được, và nên biết:** cả bốn tầng đều báo về
+> **cùng một hòm thư Gmail**. Mất quyền vào hòm thư đó là mù hoàn toàn, trong khi
+> mọi bảng điều khiển vẫn nói là đang theo dõi bình thường.
 
 ---
 
