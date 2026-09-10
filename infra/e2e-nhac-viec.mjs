@@ -142,12 +142,61 @@ check(
   `sắp tới hạn: ${mocs.sapToiHan}`
 );
 
+/*
+ * Còn bao nhiêu việc có hạn, HỎI ĐÚNG HÀM MÀ APP HỎI.
+ *
+ * Trước đây dòng này là `select count(*) from "TakedownRequest" where status = 'OPEN'`,
+ * và nó SAI theo đúng cái kiểu đắt nhất: sai lặng lẽ, xanh từ ngày viết cho tới ngày
+ * dữ liệu dev trôi qua một ranh giới.
+ *
+ * "Việc có hạn" có BỐN nguồn — gỡ quá hạn, gỡ sắp tới hạn, game sắp bị xoá hẳn, game
+ * đã quá hạn giữ — còn phép đếm kia chỉ nhìn MỘT. Ngày 10/9/2026 nó đỏ lần đầu và tố
+ * rằng bước nhắc "gửi thư khi không có việc gì", tức tố hỏng đúng cái quyết định
+ * "im lặng là tín hiệu" mà khối này sinh ra để bảo vệ. Sự thật: hàng đợi bản quyền
+ * rỗng THẬT (OPEN = 0), nhưng DB có hai game gỡ ngày 4/9 và tới 10/9 thì chúng bước
+ * vào cửa sổ `SAP_XOA_NGAY`. Script làm đúng nghĩa vụ; phép kiểm dựng sai vai.
+ *
+ * Đây là lần thứ tư cùng một bài học trong repo này (xem `e2e-an-vs-xoa`,
+ * `e2e-bieu-do`, và nhóm `@vidu.test`): một phép kiểm chỉ mạnh bằng vai mà nó dựng,
+ * và hai chỗ tự trả lời cùng một câu hỏi là hai câu trả lời khác nhau.
+ *
+ * KHÔNG tính lại cửa sổ bằng SQL với số 5 gõ tay: `NGAY_GIU_GAME_DA_GO` đọc từ
+ * `REMOVED_KEEP_DAYS`, tức người vận hành đổi được. Gõ cứng ở đây là dựng lại đúng cái
+ * lệch mà `viec-co-han.ts` đã cẩn thận tránh. Khối `mocs` ngay trên đã dùng cách này
+ * rồi — hỏi app, đừng đoán.
+ */
+const soViecCoHan = Number(
+  execFileSync(
+    'pnpm',
+    [
+      '--filter',
+      '@kidogame/web',
+      'exec',
+      'tsx',
+      '-e',
+      `
+      import { docViecCoHan } from './src/lib/viec-co-han';
+      docViecCoHan().then((v) => {
+        console.log(
+          v.goQuaHan.length + v.goSapToiHan.length + v.gameSapXoa.length + v.gameQuaHanXoa.length
+        );
+        process.exit(0);
+      });
+      `,
+    ],
+    { cwd: WEB }
+  )
+    .toString()
+    .trim()
+    .split('\n')
+    .pop()
+);
+
 // ---------- Hàng đợi rỗng: KHÔNG được gửi gì ----------
 {
-  const moOban = dem(`select count(*) from "TakedownRequest" where status = 'OPEN'`);
   const { ma, out } = chayNhac();
   check('Chạy được khi hàng đợi rỗng', ma === 0, `mã ${ma}`);
-  if (moOban === 0) {
+  if (soViecCoHan === 0) {
     /*
      * Đây là phép kiểm cho quyết định "im lặng là tín hiệu". Hỏng theo hướng ngược —
      * gửi một lá thư "0 việc" mỗi đêm — không làm đỏ bất cứ thứ gì khác trong repo,
@@ -156,8 +205,15 @@ check(
     check('Không có việc có hạn thì KHÔNG gửi thư', /KHÔNG gửi thư/.test(out));
     check('… và không soạn thư nào cả', !/┌─ MAIL/.test(out));
   } else {
-    check('Không có việc có hạn thì KHÔNG gửi thư', true, 'bỏ qua: DB đang có việc thật');
-    check('… và không soạn thư nào cả', true, 'bỏ qua');
+    // BỎ QUA, không tính là đạt bằng cách giả vờ — và nói ra CON SỐ, vì "bỏ qua" mà
+    // không kèm số thì lần sau không ai biết nó bỏ qua vì lý do chính đáng hay vì
+    // chốt đã hỏng và luôn rơi vào nhánh này.
+    check(
+      'Không có việc có hạn thì KHÔNG gửi thư',
+      true,
+      `BỎ QUA: DB đang có ${soViecCoHan} việc có hạn thật`
+    );
+    check('… và không soạn thư nào cả', true, `BỎ QUA: cùng lý do`);
   }
 }
 
