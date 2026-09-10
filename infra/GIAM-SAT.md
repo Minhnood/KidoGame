@@ -364,10 +364,19 @@ trong phần đầu `infra/e2e-errorlog.mjs`.
 ## 7. Việc tiếp theo cần fen quyết
 
 1. ~~**Tầng 1 (uptime)**~~ — **XONG 10/9/2026.** Cả bốn tầng giờ đều có mặt.
-2. **Báo động vào Telegram** — code đã xong và đã lên VPS; còn lại đúng việc tạo
-   bot và điền hai biến vào `infra/.env`. Từng bước ở [`TELEGRAM.md`](TELEGRAM.md),
-   khoảng 5 phút, $0. Chưa điền thì lượt canh in một dòng "bỏ qua kênh này" và mail
-   vẫn đi như cũ.
+2. ~~**Báo động vào Telegram**~~ — **FEN CHỐT 10/9: BỎ, không bật.** Đừng đề xuất lại
+   trừ khi fen mở ra.
+
+   Code vẫn nằm nguyên trong repo và trên VPS, **đang ngủ**: thiếu
+   `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` thì `canh-gac.ts` in một dòng "bỏ qua kênh
+   này" rồi gửi mail như cũ. Không có gì phải dọn, không có gì đang hỏng.
+
+   Muốn bật sau này thì chỉ là điền hai biến — từng bước ở [`TELEGRAM.md`](TELEGRAM.md),
+   khoảng 5 phút. Giữ code lại thay vì gỡ đi vì gỡ một đường đang chạy đúng để rồi viết
+   lại từ đầu là mất công hai lần.
+
+   **Hệ quả phải biết:** báo động giờ chỉ có MỘT kênh — email, vào cùng một hòm thư
+   Gmail với mọi thứ khác. Mất quyền vào hòm thư đó là mù hoàn toàn.
 3. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
 
 > **Một điều KHÔNG tầng nào bắt được, và nên biết:** cả bốn tầng đều báo về
