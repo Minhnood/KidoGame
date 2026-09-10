@@ -336,11 +336,18 @@ const mailTs = doc('apps/web/src/lib/mail.ts');
   }
 
   /*
-   * Ba nơi còn lại phải HỎI hàm đó chứ không tự kiểm lấy. Đếm nơi gọi, không đọc
+   * Bốn nơi còn lại phải HỎI hàm đó chứ không tự kiểm lấy. Đếm nơi gọi, không đọc
    * nội dung: cái cần giữ là "một luật, một chỗ".
+   *
+   * `canh-gac.ts` là nơi thứ tư, thêm ngày 10/9/2026. Nó thuộc đúng nhóm rủi ro mà
+   * bảng ở `10e522c` đã liệt kê — một đường gửi thư tự động, không ai đứng nhìn —
+   * và ở đây hậu quả nặng hơn cả ba nơi kia: nó là cơ chế BÁO ĐỘNG. Gửi báo động
+   * vào một địa chỉ chết thì log in ra "đã gửi", không có dòng đỏ nào, và cái mất
+   * đi là chính tin báo rằng máy chủ đang hỏng.
    */
   for (const p of [
     'apps/web/prisma/nhac-viec-co-han.ts',
+    'apps/web/prisma/canh-gac.ts',
     'apps/web/src/app/dieu-khoan/page.tsx',
     'apps/web/src/lib/mail.ts',
   ]) {

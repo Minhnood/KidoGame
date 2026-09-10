@@ -236,7 +236,9 @@ services:
     entrypoint: ['/bin/bash', '/backup.sh', 'loop']
 
   # ---------------------------------------------------------------------------
-  # DỌN ĐỊNH KỲ: xoá hẳn game đã gỡ quá 7 ngày, rồi xoá file thành rác.
+  # VIỆC HẰNG ĐÊM: nhắc việc có hạn, xoá hẳn game đã gỡ quá 7 ngày, xoá file thành
+  # rác, rồi CANH xem máy chủ còn chạy được bao lâu nữa (đĩa, chứng chỉ, tuổi của
+  # bản sao lưu, đợt lỗi mới) và gửi thư nếu có vấn đề.
   #
   # Là một service chứ không phải cron trên host, cùng lý do như `backup`: việc phải
   # có người nhớ chạy thì đúng bằng không có. "Game đã gỡ thì một tuần sau xoá luôn"
@@ -290,6 +292,23 @@ services:
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
       # Để link trong thư nhắc bấm được. Rỗng thì thư in đường dẫn trần, không đoán.
       ADMIN_ORIGIN: ${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}
+      # HAI BIẾN DƯỚI ĐÂY LÀ CỦA BƯỚC CANH (bước 4), không phải của ba bước dọn.
+      #
+      # Lặp lại `:?` dù cả `web` lẫn `caddy` đã có — cùng lập luận đã ghi ở service
+      # `caddy`, và ở đây hệ quả của việc để rỗng còn im hơn: `canh-gac.ts` bỏ qua
+      # phép canh nào thiếu origin, nên rỗng ở dòng này KHÔNG làm gì đỏ lên cả. Nó
+      # chỉ lặng lẽ gỡ mất phép canh "web có trả lời từ ngoài Internet không" và
+      # phép canh chứng chỉ, rồi mỗi đêm báo cáo rằng mọi thứ đều ổn. Một cơ chế
+      # giám sát hỏng theo kiểu vẫn nói "ổn" thì tệ hơn hẳn không có cơ chế nào.
+      APP_ORIGIN: https://${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
+      PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # Bước canh đọc thư mục này để biết bản sao lưu mới nhất bao nhiêu tuổi.
+      BACKUP_DIR: /backups
+      # Ngưỡng báo động, để trống là dùng mặc định trong canh-gac.ts (85 / 26 / 21 / 5).
+      CANH_DIA_PHAN_TRAM: ${CANH_DIA_PHAN_TRAM:-}
+      CANH_SAO_LUU_GIO: ${CANH_SAO_LUU_GIO:-}
+      CANH_CHUNG_CHI_NGAY: ${CANH_CHUNG_CHI_NGAY:-}
+      CANH_LOI_MOI: ${CANH_LOI_MOI:-}
       # Cùng lý do như service backup: thiếu dòng này thì container chạy UTC và
       # PRUNE_HOUR=4 nghĩa là 11 giờ trưa giờ Việt Nam. Ở đây còn một hệ quả nữa:
       # hạn SLA đếm theo ngày làm việc, nên lệch múi giờ đổi cả kết quả đếm.
@@ -298,6 +317,16 @@ services:
       - ./prune.sh:/prune.sh:ro
       # ĐỌC-GHI, khác service backup: việc của nó là xoá file, không phải sao chép.
       - storage:/srv/storage
+      # CHỈ ĐỌC, cho bước canh (bước 4): nó chỉ hỏi bản sao lưu mới nhất bao nhiêu
+      # tuổi và nặng bao nhiêu. Cùng thư mục host mà service `backup` ghi vào, nên
+      # `BACKUP_HOST_DIR` phải khớp giữa hai chỗ — lệch thì bước canh nhìn vào một
+      # thư mục rỗng và báo "chưa từng sao lưu thành công" mỗi đêm, trong khi việc
+      # sao lưu vẫn đang chạy đúng ở thư mục kia.
+      #
+      # Mount ĐỌC-GHI thì service này xoá được bản sao lưu, mà nó là service duy
+      # nhất trong stack có công việc chính là xoá thứ gì đó. Không cho nó cầm cả
+      # hai quyền cùng lúc.
+      - ${BACKUP_HOST_DIR:-./backups}:/backups:ro
     entrypoint: ['/bin/bash', '/prune.sh', 'loop']
 
 volumes:
