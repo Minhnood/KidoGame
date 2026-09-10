@@ -110,7 +110,16 @@ run_once() {
 # ---------------------------------------------------------------------------
 push_offsite() {
 	if [ -z "$REMOTE" ]; then
-		log "BACKUP_REMOTE chưa đặt -> bản sao lưu chỉ nằm trên máy này, KHÔNG chống được ổ chết"
+		# KHÔNG nói "bản sao lưu chỉ nằm trên máy này" nữa, dù đó là câu đúng cho tới
+		# ngày 10/9/2026. Từ hôm đó máy Mac tự KÉO bản sao lưu về mỗi ngày hai lần
+		# (`infra/keo-sao-luu.sh`), nên bản sao lưu CÓ rời khỏi máy này — chỉ là đi
+		# bằng đường khác, và cố ý đi bằng đường khác: đẩy thì VPS phải cầm khoá mở
+		# vào máy đích, tức ai chiếm được VPS cũng xoá được luôn bản sao lưu.
+		#
+		# Một dòng log nói "KHÔNG chống được ổ chết" trong khi thực tế đã chống được
+		# sẽ làm người đọc sau đi dựng lại một cơ chế đang chạy — hoặc tệ hơn, dựng
+		# đúng cái cơ chế đẩy đã bị loại bỏ có lý do.
+		log "BACKUP_REMOTE chưa đặt -> không ĐẨY đi đâu (đúng thiết kế: máy Mac tự KÉO về, xem infra/SAO-LUU.md)"
 		return 0
 	fi
 
