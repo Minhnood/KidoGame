@@ -309,6 +309,14 @@ services:
       CANH_SAO_LUU_GIO: ${CANH_SAO_LUU_GIO:-}
       CANH_CHUNG_CHI_NGAY: ${CANH_CHUNG_CHI_NGAY:-}
       CANH_LOI_MOI: ${CANH_LOI_MOI:-}
+      # Kênh báo động THỨ HAI, đứng cạnh mail chứ không thay nó. Rỗng cả hai = tắt.
+      #
+      # KHÔNG dùng `:?` ở đây, khác hẳn hai biến origin ngay trên. Origin rỗng làm
+      # một phép canh biến mất trong im lặng — đó là lý do phải chặn. Telegram rỗng
+      # thì `canh-gac.ts` in hẳn một dòng "chưa cấu hình, bỏ qua kênh này" và mail
+      # vẫn đi; nó suy giảm chứ không biến mất, nên chặn cả stack vì nó là quá tay.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       # Cùng lý do như service backup: thiếu dòng này thì container chạy UTC và
       # PRUNE_HOUR=4 nghĩa là 11 giờ trưa giờ Việt Nam. Ở đây còn một hệ quả nữa:
       # hạn SLA đếm theo ngày làm việc, nên lệch múi giờ đổi cả kết quả đếm.

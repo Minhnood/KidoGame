@@ -154,23 +154,41 @@ không trả lời được câu hỏi nào mà `app` chưa trả lời.
 > **Đổi tên miền thì phải sửa hai URL này.** Chúng nằm ngoài repo, nên không có
 > phép kiểm nào bắt được lệch — đây là chỗ duy nhất ghi lại rằng chúng tồn tại.
 
+#### MỖI LẦN DEPLOY SẼ SINH RA MỘT BÁO ĐỘNG GIẢ
+
+Đo được 10/9/2026, ngay lượt deploy đầu tiên sau khi bật monitor: `docker compose
+up -d --build` đổi container `web`, và trong vài giây giữa lúc container cũ dừng và
+container mới lành, **Caddy trả 502**. Bắt được đúng một lượt `curl` rơi vào cửa sổ
+đó; ba lượt ngay sau đều 200.
+
+UptimeRobot ping mỗi 5 phút, nên phần lớn lượt deploy sẽ **lọt qua** và không ai
+thấy gì. Nhưng thỉnh thoảng một lượt ping rơi trúng cửa sổ ấy và fen nhận thư "site
+is DOWN" cho một lần deploy hoàn toàn bình thường.
+
+Biết trước thì không sao. **Nguy hiểm là không biết**: vài lần báo động trùng với
+những lúc "tôi vừa deploy xong" là đủ để người ta bắt đầu bỏ qua thư của
+UptimeRobot — và đó là cách tầng này chết mà không ai tắt nó cả.
+
+Việc cần làm khi thấy thư báo down: hỏi *"vừa nãy có ai deploy không"* trước, rồi
+mới đi tìm lỗi. Bảng của UptimeRobot ghi rõ giờ sự cố, đối chiếu được.
+
 #### Muốn báo động vào Telegram mà không trả tiền
 
-UptimeRobot khoá Telegram sau gói trả phí (đã thử 10/9/2026). Không cần trả:
-Telegram Bot API miễn phí, và một con bot tự tạo phục vụ được **cả hai** tầng.
+UptimeRobot khoá Telegram sau gói trả phí (đã thử 10/9/2026). Không cần trả: Bot
+API miễn phí, và bot do mình tạo thì không nhà cung cấp nào khoá được.
 
-1. Nhắn `@BotFather` trong Telegram → `/newbot` → nhận **token**.
-2. Nhắn một câu cho bot vừa tạo, rồi mở
-   `https://api.telegram.org/bot<TOKEN>/getUpdates` để lấy **chat id**.
-3. **Tầng 8 (canh gác hằng đêm)** — code của mình, thêm thẳng vào `canh-gac.ts`,
-   không ai khoá được.
-4. **Tầng 1 (UptimeRobot)** — nếu gói Free có **Webhook** làm alert contact thì
-   trỏ nó vào `https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>&text=...`
-   với biến của UptimeRobot chèn vào `text`. **Chưa kiểm** webhook có miễn phí
-   không — phải mở Integrations ra xem, đừng tin dòng này.
+**Từng bước ở [`TELEGRAM.md`](TELEGRAM.md)** — cố ý để ở một file riêng chứ không
+chép vào đây, vì các bước bấm tay chép ra hai chỗ thì một chỗ sẽ lạc hậu, và người
+đọc không có cách nào biết mình đang theo chỗ nào.
 
-Token bot là bí mật: ai có nó thì gửi tin giả danh bot được. Để trong `.env`,
-không viết vào file nào git theo dõi.
+Phần **mục 8 (canh gác hằng đêm)** đã dùng đường này rồi — code trong
+`apps/web/src/lib/telegram.ts`, bật bằng `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`.
+
+Phần **tầng 1 (UptimeRobot)** thì vẫn chưa: nếu gói Free có **Webhook** làm alert
+contact thì trỏ nó vào
+`https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>&text=...` với biến
+của UptimeRobot chèn vào `text`. **CHƯA KIỂM** webhook có miễn phí không — phải mở
+Integrations ra xem, đừng tin dòng này.
 
 ### Tầng 2 — lỗi vào DB + trang cho admin xem (ĐÃ LÀM, mục 6)
 
@@ -346,8 +364,10 @@ trong phần đầu `infra/e2e-errorlog.mjs`.
 ## 7. Việc tiếp theo cần fen quyết
 
 1. ~~**Tầng 1 (uptime)**~~ — **XONG 10/9/2026.** Cả bốn tầng giờ đều có mặt.
-2. **Báo động vào Telegram** — tuỳ chọn, $0, xem cuối mục 4. Đáng làm vì email
-   báo động nằm chung hòm thư với mọi thứ khác và bị đọc muộn.
+2. **Báo động vào Telegram** — code đã xong và đã lên VPS; còn lại đúng việc tạo
+   bot và điền hai biến vào `infra/.env`. Từng bước ở [`TELEGRAM.md`](TELEGRAM.md),
+   khoảng 5 phút, $0. Chưa điền thì lượt canh in một dòng "bỏ qua kênh này" và mail
+   vẫn đi như cũ.
 3. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
 
 > **Một điều KHÔNG tầng nào bắt được, và nên biết:** cả bốn tầng đều báo về

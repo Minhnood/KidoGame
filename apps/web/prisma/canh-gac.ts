@@ -49,6 +49,7 @@ import { connect as tlsConnect } from 'node:tls';
 import { prisma } from '../src/lib/db';
 import { sendMail } from '../src/lib/mail';
 import { isOperatorConfigured, operator } from '../src/lib/operator';
+import { coTelegram, guiTelegram } from '../src/lib/telegram';
 
 const guiThat = process.argv.includes('--gui');
 
@@ -438,6 +439,24 @@ function thanThu(tatCa: KetQua[], xau: KetQua[]): string {
   return d.join('\n');
 }
 
+/**
+ * Bản cho Telegram: NGẮN, và chỉ những gì hỏng.
+ *
+ * Cố ý khác thân thư. Thư đọc trên màn hình lớn nên liệt kê cả bảy phép canh là
+ * có ích — thấy được cái gì vẫn ổn. Telegram đọc trên điện thoại, thường là lúc
+ * đang làm việc khác, và toàn bộ giá trị nằm ở việc trả lời trong hai giây câu
+ * "có phải chạy đi sửa ngay không". Dán cả danh sách phép đạt vào đó chỉ đẩy
+ * những dòng đáng đọc xuống dưới màn hình.
+ *
+ * Không nhắc lại phần "im lặng nghĩa là gì" như thân thư: câu đó dành cho người
+ * đang đọc một lá thư và có thời gian, không dành cho một thông báo đẩy.
+ */
+function thanTelegram(tieuDe: string, xau: KetQua[]): string {
+  const d = [tieuDe, ''];
+  for (const k of xau) d.push(`${k.muc === 'hỏng' ? '🔴' : '🟡'} ${k.ten}: ${k.noi}`);
+  return d.join('\n');
+}
+
 async function main() {
   const ketQua = await chay();
 
@@ -454,8 +473,33 @@ async function main() {
   }
 
   if (!guiThat) {
-    console.log(`[canh-gac] ${xau.length} vấn đề — thêm --gui để gửi thư`);
+    console.log(`[canh-gac] ${xau.length} vấn đề — thêm --gui để gửi`);
     return;
+  }
+
+  /*
+   * HAI KÊNH, ĐỘC LẬP NHAU, và đây là toàn bộ ý nghĩa của đoạn dưới.
+   *
+   * Mọi tầng giám sát của hệ thống đổ về cùng một hòm thư Gmail, nên hòm thư đó là
+   * một điểm hỏng đơn lẻ mà không bảng điều khiển nào bày ra. Telegram đứng cạnh
+   * chứ không thay thế: hai đường khác nhà cung cấp, khác giao thức, khác thiết bị.
+   *
+   * Thử CẢ HAI dù cái đầu đã thành công. Cách viết quen tay là "gửi Telegram, trượt
+   * thì mới gửi mail" — nhưng như thế thì đúng vào ngày Telegram trả `ok:true` cho
+   * một chat đã bị xoá, người vận hành mất luôn lá thư mà tưởng mình được báo hai
+   * lần. Một báo động không phải thứ để tiết kiệm.
+   *
+   * Telegram đi TRƯỚC vì nó nhanh hơn hẳn (một lệnh POST, không bắt tay SMTP) và
+   * vì nó là kênh đọc-ngay; nếu tiến trình bị giết giữa chừng thì cái tới được là
+   * cái đáng tới nhất.
+   */
+  const tieuDe = chuDe(xau);
+  let daGui = 0;
+
+  if (coTelegram()) {
+    if (await guiTelegram(thanTelegram(tieuDe, xau))) daGui++;
+  } else {
+    console.log('[canh-gac] chưa cấu hình TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID, bỏ qua kênh này');
   }
 
   // Cùng chốt với `nhac-viec-co-han.ts`: "liên hệ được", không phải "có gõ gì đó
@@ -463,20 +507,38 @@ async function main() {
   // đúng cách một cơ chế báo động tự tắt mình mà vẫn trông như đang chạy.
   if (!isOperatorConfigured()) {
     console.error(
-      '[canh-gac] LỖI: chưa cấu hình OPERATOR_EMAIL (hoặc đang là địa chỉ không nhận được thư).' +
-        ' Có vấn đề cần báo nhưng KHÔNG gửi được cho ai.'
+      '[canh-gac] chưa cấu hình OPERATOR_EMAIL (hoặc đang là địa chỉ không nhận được thư) — bỏ qua kênh mail'
+    );
+  } else {
+    const nguoiNhan = operator();
+    try {
+      await sendMail({ to: nguoiNhan.email, subject: tieuDe, text: thanThu(ketQua, xau) });
+      console.log(`[canh-gac] đã gửi thư tới ${nguoiNhan.email}`);
+      daGui++;
+    } catch (err) {
+      // Bắt chứ không để ném: tới đây Telegram có thể đã gửi được, và một tiến
+      // trình chết vì SMTP trượt sẽ nuốt mất thông tin đó khỏi log.
+      console.error(`[canh-gac] gửi thư trượt: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /*
+   * ĐỎ KHI KHÔNG KÊNH NÀO ĐI ĐƯỢC — đây là dòng quan trọng nhất trong hàm.
+   *
+   * Có vấn đề cần báo mà không báo được cho ai là hỏng nặng hơn chính cái vấn đề
+   * đó, vì nó lấy đi luôn khả năng biết. Mã thoát khác 0 làm `prune.sh` in ra
+   * "LỖI: bước canh máy chủ thất bại", và dòng đó nằm trong log Docker — nơi cuối
+   * cùng còn lại khi cả hai đường ra ngoài đều tắc.
+   */
+  if (daGui === 0) {
+    console.error(
+      `[canh-gac] LỖI: có ${xau.length} vấn đề cần báo nhưng KHÔNG kênh nào gửi được`
     );
     process.exitCode = 1;
     return;
   }
 
-  const nguoiNhan = operator();
-  await sendMail({
-    to: nguoiNhan.email,
-    subject: chuDe(xau),
-    text: thanThu(ketQua, xau),
-  });
-  console.log(`[canh-gac] đã gửi thư báo ${xau.length} vấn đề tới ${nguoiNhan.email}`);
+  console.log(`[canh-gac] đã báo ${xau.length} vấn đề qua ${daGui}/2 kênh`);
 }
 
 main()
