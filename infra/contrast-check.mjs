@@ -178,6 +178,21 @@ const CAP = [
    * trang thành một mảng phẳng không thấy đâu là một thẻ.
    */
   { ten: 'Viền thẻ trang trí trên nền trang', fg: 'border', bg: 'bg', min: 1.3 },
+  /* NĂM MÀU BIỂU ĐỒ trên tab Tổng quan. Ngưỡng ở đây là 3:1, KHÔNG phải 4.5 hay 7:
+     đây là màu của một HÌNH (múi donut, cột), không phải màu chữ. WCAG đòi 3:1 cho
+     thành phần đồ hoạ mang thông tin, và một múi donut dày 22px không phải nét chữ.
+     Đo trên `surface` vì cả hai biểu đồ nằm trong thẻ.
+
+     Năm phép này chỉ canh TƯƠNG PHẢN. Việc bốn màu trạng thái có phân biệt được với
+     nhau dưới mù màu hay không thì script này KHÔNG đo được — đó là việc của
+     `validate_palette.js` trong skill dataviz, đã chạy ở chế độ `--pairs all` cho cả
+     hai giao diện; số đo ghi trong chú thích của nhóm `--color-bd-*` ở `globals.css`.
+     Đổi màu thì phải chạy CẢ HAI. */
+  { ten: 'Múi donut "đang hiện" trên thẻ', fg: 'bd-hien', bg: 'surface', min: 3 },
+  { ten: 'Múi donut "bị siết" trên thẻ', fg: 'bd-siet', bg: 'surface', min: 3 },
+  { ten: 'Múi donut "đã ẩn" trên thẻ', fg: 'bd-an', bg: 'surface', min: 3 },
+  { ten: 'Múi donut "đã gỡ" trên thẻ', fg: 'bd-go', bg: 'surface', min: 3 },
+  { ten: 'Cột biểu đồ theo ngày trên thẻ', fg: 'bd-cot', bg: 'surface', min: 3 },
 ];
 
 /** Chữ mờ trên thanh nav (`text-chrome-ink/80`) — phải trộn alpha mới đo được. */

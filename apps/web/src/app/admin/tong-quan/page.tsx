@@ -5,15 +5,14 @@ import { appOrigin } from '@/lib/mail';
 import { getAdmin } from '@/lib/session';
 import { actionLabel, hanXoaHan, NGAY_GIU_GAME_DA_GO, ngayVi } from '@/lib/moderation';
 import { slaDueAt, TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
+import { coViecGap, docViecCoHan, SAP_XOA_NGAY } from '@/lib/viec-co-han';
 import { MAX_UNRESOLVED_GROUPS } from '@/lib/error-log';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
+import { CotTheoNgay, DonutTrangThai } from '../bieu-do';
 
 export const dynamic = 'force-dynamic';
-
-/** Số ngày trước hạn xoá hẳn thì coi là "cửa sổ cứu sắp đóng". */
-const SAP_XOA_NGAY = 2;
 
 /**
  * "12 phút trước" thay cho "13:41:07 5/9/2026".
@@ -177,23 +176,27 @@ export default async function AdminTongQuanPage() {
   const bayGio = new Date();
   const truoc24h = new Date(bayGio.getTime() - 86400_000);
   const truoc7ngay = new Date(bayGio.getTime() - 7 * 86400_000);
+  /* Mốc của biểu đồ cột: 00:00 của ngày cách đây 13 ngày, để cột đầu tiên là một ngày
+     TRỌN chứ không phải một ngày bị cắt ở giữa — cột thấp hơn thực tế thì người đọc
+     kết luận sai về xu hướng, và không có gì trên hình nói rằng nó bị cắt. */
+  const truoc14ngay = new Date(bayGio.getFullYear(), bayGio.getMonth(), bayGio.getDate() - 13);
 
   /*
-   * Mốc so cho hạn xoá hẳn, tính NGƯỢC từ `removedAt` chứ không xuôi từ hôm nay:
-   * game quá hạn là game có `removedAt` cũ hơn N ngày. Cùng phép so mà
-   * `prisma/prune-removed.ts` dùng, nên hai chỗ không thể lệch nhau.
+   * Việc CÓ HẠN đọc từ `lib/viec-co-han.ts`, không tính tại chỗ.
+   *
+   * Thư nhắc hằng đêm đọc đúng hàm này. Hai chỗ tự tính "cái nào sắp muộn" là hai câu
+   * trả lời khác nhau cho cùng một câu hỏi, và lệch ở đây nghĩa là bảng này nói không
+   * có việc gấp trong khi lá thư nói có ba.
    */
-  const mocQuaHan = new Date(bayGio.getTime() - NGAY_GIU_GAME_DA_GO * 86400_000);
-  const mocSapXoa = new Date(
-    bayGio.getTime() - (NGAY_GIU_GAME_DA_GO - SAP_XOA_NGAY) * 86400_000
-  );
+  const viec = await docViecCoHan(bayGio);
 
   const [
-    goDangMo,
     canXem,
     heThongTuSiet,
-    sapXoa,
-    quaHanXoa,
+    theoTrangThai,
+    gameGanDay,
+    loiGanDay,
+    baoLoiChuaXuLy,
     chuaBamDongHo,
     nhomLoiChuaXuLy,
     loiMoi24h,
@@ -204,22 +207,33 @@ export default async function AdminTongQuanPage() {
     phuHuynhChuaXacMinh,
     baoCaoMoi24h,
   ] = await Promise.all([
-    /* Lấy cả `createdAt` chứ không chỉ đếm: hạn SLA tính theo ngày làm việc nên phải
-       tính từng dòng, không có phép so nào trong SQL làm được việc đó. Hàng đợi này
-       cố ý không phân trang và luôn nhỏ — nếu nó lớn thì bản thân điều đó đã là sự cố. */
-    prisma.takedownRequest.findMany({
-      where: { status: 'OPEN' },
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    }),
     prisma.game.count({
       where: { OR: [{ reportCount: { gt: 0 } }, { status: { not: 'PUBLISHED' } }] },
     }),
     prisma.game.count({ where: { status: { in: ['LIMITED', 'HIDDEN'] } } }),
-    prisma.game.count({
-      where: { status: 'REMOVED', removedAt: { not: null, lte: mocSapXoa, gt: mocQuaHan } },
+    /* Bốn số cho biểu đồ tròn. `groupBy` một lượt thay vì bốn phép `count`: bốn
+       trạng thái là một PHÂN HOẠCH, nên hỏi bằng bốn truy vấn rời là mở đường cho
+       bốn con số đọc ở bốn thời điểm khác nhau — cộng lại không bằng tổng, và biểu
+       đồ phần-trên-tổng nói sai tỉ lệ mà không có gì báo. */
+    prisma.game.groupBy({ by: ['status'], _count: { _all: true } }),
+    /* Game 14 ngày qua, lấy về `createdAt` rồi đếm theo ngày ở JS.
+       KHÔNG dùng `date_trunc` trong SQL thô: gom theo ngày phải theo múi giờ của
+       người xem (container khai `TZ=Asia/Ho_Chi_Minh`), và Postgres gom theo múi giờ
+       của phiên — hai cái lệch nhau thì mọi game đăng sau 17:00 rơi sang ngày hôm
+       sau, im lặng. Số hàng ở đây là số game 14 ngày, tức nhỏ theo định nghĩa. */
+    prisma.game.findMany({
+      where: { createdAt: { gte: truoc14ngay } },
+      select: { createdAt: true },
     }),
-    prisma.game.count({ where: { status: 'REMOVED', removedAt: { lte: mocQuaHan } } }),
+    /* Lỗi cho biểu đồ thứ ba. Đọc `firstSeenAt` chứ KHÔNG `lastSeenAt`: câu hỏi là
+       "hôm đó có lỗi MỚI nào xuất hiện không", còn `lastSeenAt` nhảy sang hôm nay mỗi
+       lần một lỗi cũ lặp lại — dùng nó thì mọi lỗi cũ dồn hết vào cột cuối và biểu đồ
+       nói rằng hôm nay vừa sinh ra hai chục lỗi mới. */
+    prisma.errorLog.findMany({
+      where: { firstSeenAt: { gte: truoc14ngay } },
+      select: { firstSeenAt: true, count: true },
+    }),
+    prisma.bugReport.count({ where: { resolvedAt: null } }),
     /* Game đã gỡ mà `removedAt` còn null: gỡ từ TRƯỚC khi có cột này. Job dọn không
        xoá chúng, nó bấm đồng hồ ở lượt chạy kế tiếp — nên đây không phải việc của
        người trực, chỉ là một con số để không ai hoảng khi thấy nó ở bộ lọc "Đã gỡ". */
@@ -234,13 +248,101 @@ export default async function AdminTongQuanPage() {
     prisma.report.count({ where: { createdAt: { gte: truoc24h } } }),
   ]);
 
-  const goQuaHan = goDangMo.filter((r) => slaDueAt(r.createdAt) < bayGio).length;
+  const goQuaHan = viec.goQuaHan.length;
+  const sapXoa = viec.gameSapXoa.length;
+  const quaHanXoa = viec.gameQuaHanXoa.length;
+  const soGoDangMo = viec.goQuaHan.length + viec.goSapToiHan.length + viec.goConHan.length;
   /* "Gấp" = đúng ba ô có vạch đỏ ở nhóm đầu. Cố ý KHÔNG gồm "cần xem" hay "báo cáo
      mới": hai cái đó gần như luôn khác 0 ở một trang đang sống, nên gộp vào là dòng
      yên tĩnh dưới đây không bao giờ hiện, mà một câu không bao giờ hiện thì bằng
      không có. */
-  const khongCoViecGap = goQuaHan === 0 && sapXoa + quaHanXoa === 0 && nhomLoiChuaXuLy === 0;
-  const cuNhat = goDangMo[0]?.createdAt ?? null;
+  const khongCoViecGap = !coViecGap(viec) && nhomLoiChuaXuLy === 0;
+  const cuNhat = viec.cuNhat;
+
+  /* --- Dữ liệu hai biểu đồ ------------------------------------------------- */
+
+  const soTheoTrangThai = (st: string) =>
+    theoTrangThai.find((t) => t.status === st)?._count._all ?? 0;
+  const tongGame = theoTrangThai.reduce((t, x) => t + x._count._all, 0);
+
+  /* Thứ tự bốn múi là thứ tự MỨC SIẾT tăng dần, không phải thứ tự số lớn đến nhỏ:
+     người đọc lần theo vành để thấy "càng đi càng nặng", và sắp theo số thì cùng một
+     trạng thái nhảy chỗ mỗi lần dữ liệu đổi — màu phải đi theo trạng thái, không đi
+     theo hạng. */
+  const mucDonut = [
+    {
+      nhan: 'Đang hiện',
+      so: soTheoTrangThai('PUBLISHED'),
+      mau: 'fill-bd-hien',
+      mauO: 'bg-bd-hien',
+      href: '/admin?loc=dang-hien',
+    },
+    {
+      nhan: 'Ẩn khỏi danh sách',
+      so: soTheoTrangThai('LIMITED'),
+      mau: 'fill-bd-siet',
+      mauO: 'bg-bd-siet',
+      href: '/admin?loc=an-mem',
+    },
+    {
+      nhan: 'Đã ẩn hẳn',
+      so: soTheoTrangThai('HIDDEN'),
+      mau: 'fill-bd-an',
+      mauO: 'bg-bd-an',
+      href: '/admin?loc=da-an',
+    },
+    {
+      nhan: 'Đã gỡ',
+      so: soTheoTrangThai('REMOVED'),
+      mau: 'fill-bd-go',
+      mauO: 'bg-bd-go',
+      href: '/admin?loc=da-go',
+    },
+  ];
+
+  /*
+   * Mười bốn ngày, dựng từ MẢNG NGÀY chứ không từ dữ liệu.
+   *
+   * Gom theo `createdAt` rồi vẽ những khoá gom được thì ngày không có game nào sẽ
+   * không có cột — và một chuỗi 14 ngày mất ba ngày ở giữa đọc như một chuỗi 11 ngày
+   * liên tục, tức hình nói sai về nhịp đăng game. Ngày trống phải có mặt và bằng 0.
+   */
+  const khoaNgay = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const demTheoNgay = new Map<string, number>();
+  for (const g of gameGanDay) {
+    const k = khoaNgay(g.createdAt);
+    demTheoNgay.set(k, (demTheoNgay.get(k) ?? 0) + 1);
+  }
+  /*
+   * Cột lỗi đếm SỐ LẦN (`count`), không đếm số nhóm.
+   *
+   * Một nhóm là một loại lỗi; số lần là số người thật đã gặp nó. Đếm nhóm thì một lỗi
+   * nổ vào mặt hai trăm người trông y như một lỗi xảy ra đúng một lần — mà khoảng cách
+   * giữa hai điều đó là toàn bộ lý do biểu đồ này tồn tại.
+   */
+  const demLoiTheoNgay = new Map<string, number>();
+  for (const l of loiGanDay) {
+    const k = khoaNgay(l.firstSeenAt);
+    demLoiTheoNgay.set(k, (demLoiTheoNgay.get(k) ?? 0) + l.count);
+  }
+
+  const ngayCot = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(bayGio.getFullYear(), bayGio.getMonth(), bayGio.getDate() - (13 - i));
+    return {
+      nhan: `${d.getDate()}/${d.getMonth() + 1}`,
+      nhanDay: d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' }),
+      so: demTheoNgay.get(khoaNgay(d)) ?? 0,
+    };
+  });
+
+  const ngayCotLoi = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(bayGio.getFullYear(), bayGio.getMonth(), bayGio.getDate() - (13 - i));
+    return {
+      nhan: `${d.getDate()}/${d.getMonth() + 1}`,
+      nhanDay: d.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' }),
+      so: demLoiTheoNgay.get(khoaNgay(d)) ?? 0,
+    };
+  });
 
   /*
    * Vết kiểm duyệt gần nhất. Truy vấn RIÊNG, không nhét vào `Promise.all` ở trên:
@@ -334,7 +436,7 @@ export default async function AdminTongQuanPage() {
           so={goQuaHan}
           nhan="Yêu cầu gỡ quá hạn"
           phu={
-            goDangMo.length === 0
+            soGoDangMo === 0
               ? 'Hàng đợi bản quyền đang rỗng'
               : cuNhat
                 ? `Cũ nhất nhận ngày ${ngayVi(cuNhat)}, hạn ${ngayVi(slaDueAt(cuNhat))}`
@@ -345,7 +447,7 @@ export default async function AdminTongQuanPage() {
         />
         <O
           testId="o-go-dang-mo"
-          so={goDangMo.length}
+          so={soGoDangMo}
           nhan="Yêu cầu gỡ đang mở"
           phu={`Hạn trả lời ${TAKEDOWN_SLA_WORKING_DAYS} ngày làm việc mỗi yêu cầu`}
           href="/admin"
@@ -370,6 +472,88 @@ export default async function AdminTongQuanPage() {
           href="/admin/loi"
         />
       </Nhom>
+
+      {/*
+        HAI BIỂU ĐỒ, và chúng trả lời câu khác hẳn lưới ô số bên trên.
+        Ô số trả lời "còn bao nhiêu việc"; hai hình này trả lời "hệ thống đang ở hình
+        dạng nào" — phần lớn game nằm ở trạng thái nào, và nhịp đăng game mấy tuần qua
+        có gì lạ không. Cả hai là câu hỏi về TỈ LỆ và về NHỊP, hai thứ mà một con số
+        đơn lẻ không trả lời được, nên chúng là hình chứ không phải thêm hai ô nữa.
+
+        Đặt ngay SAU nhóm "Việc có hạn" và TRƯỚC hai nhóm ô số còn lại. Ranh giới đó
+        không phải tuỳ ý: nhóm đầu là bốn ô có đồng hồ chạy — bỏ lỡ là muộn hạn đã hứa
+        hoặc mất vĩnh viễn — nên nó phải nằm trên màn hình đầu tiên, trước cả một hình
+        đẹp. Hai nhóm sau ("Nội dung chờ người xem", "Số nền") thì không có hạn nào, và
+        chúng đọc dễ hơn khi đã biết hệ thống đang ở hình dạng nào.
+      */}
+      {/*
+        HAI cột, và thẻ thứ ba chiếm CẢ hàng dưới. Đã thử hai cách kia và đo cả hai:
+
+        · ba cột (443px mỗi thẻ) — vành donut không còn chỗ nằm cạnh chú giải nên nó
+          xuống dòng, thẻ cao 553px, và grid kéo hai thẻ bên cạnh cao theo, để lại hai
+          khoảng trắng lớn;
+        · hai cột mà thẻ thứ ba không span — nó nằm một mình bên trái và bỏ trống hẳn
+          một ô bên phải, đọc như thiếu mất một hình.
+
+        Cách này thì hàng trên có vành nằm cạnh chú giải (thẻ ~320px), hàng dưới là
+        biểu đồ lỗi rộng cả trang với hình canh giữa. Không thẻ nào trống rỗng.
+      */}
+      <section className="mb-9 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className={`p-5 ${MAT_THE}`} data-testid="tq-donut">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game đang ở đâu</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Bốn trạng thái, cộng lại bằng tổng số game. Bấm một dòng để mở hàng đợi đã lọc.
+          </p>
+          {tongGame === 0 ? (
+            <p className="text-ink-soft">Chưa có game nào.</p>
+          ) : (
+            <DonutTrangThai muc={mucDonut} tong={tongGame} nhanTong="game" />
+          )}
+        </div>
+
+        <div className={`p-5 ${MAT_THE}`} data-testid="tq-cot">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Game mới mỗi ngày</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Mười bốn ngày gần nhất, kể cả ngày không có game nào.
+          </p>
+          <CotTheoNgay ngay={ngayCot} nhanBang="Số game đăng mỗi ngày, 14 ngày gần nhất" />
+        </div>
+
+        {/*
+          Thẻ thứ ba: LỖI. Dùng lại đúng component cột của thẻ bên trên chứ không vẽ
+          hình thứ ba — hai chuỗi đếm theo ngày thì cùng một hình, và người trực học
+          cách đọc nó một lần.
+
+          CỐ Ý KHÔNG gộp hai chuỗi vào một biểu đồ. Chúng cùng đơn vị ("mỗi ngày bao
+          nhiêu cái") nhưng khác bậc độ lớn hoàn toàn — vài game một ngày so với có thể
+          hàng trăm lượt lỗi — nên chung một trục thì chuỗi nhỏ dán bẹt xuống đáy, còn
+          hai trục là thứ không bao giờ được làm: tỉ lệ giữa hai thang là tuỳ ý, nên
+          biểu đồ tự bịa ra một mối tương quan không có trong dữ liệu.
+        */}
+        <div className={`p-5 xl:col-span-2 ${MAT_THE}`} data-testid="tq-cot-loi">
+          <h2 className="mb-1 text-lg font-extrabold tracking-tight">Lỗi mỗi ngày</h2>
+          <p className="mb-4 text-sm text-ink-soft">
+            Số LẦN người dùng gặp lỗi, tính theo ngày lỗi xuất hiện lần đầu.{' '}
+            <Link href="/admin/loi">Mở tab Lỗi</Link>
+            {baoLoiChuaXuLy > 0 && (
+              <>
+                {' — '}
+                <strong className="text-danger">
+                  {baoLoiChuaXuLy} báo lỗi của người dùng đang chờ
+                </strong>
+              </>
+            )}
+          </p>
+          {/* Mười bốn ngày không lỗi thì nói THẲNG đó là tin tốt, không vẽ một khung
+              trắng cao ba trăm pixel: một biểu đồ rỗng và một biểu đồ chưa tải xong
+              trông giống nhau. Cùng luật đã dùng cho donut khi chưa có game nào. */}
+          {ngayCotLoi.every((d) => d.so === 0) ? (
+            <p className="text-ink-soft">Không có lỗi nào trong 14 ngày qua. Đây là tin tốt.</p>
+          ) : (
+            <CotTheoNgay ngay={ngayCotLoi} nhanBang="Số lần gặp lỗi mỗi ngày, 14 ngày gần nhất" />
+          )}
+        </div>
+      </section>
 
       <Nhom title="Nội dung chờ người xem" phu="chưa có hạn, nhưng có trẻ con ở đầu bên kia">
         <O

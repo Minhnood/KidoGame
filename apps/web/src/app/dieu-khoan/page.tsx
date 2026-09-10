@@ -54,10 +54,18 @@ export default function TermsPage() {
         lead="Viết để phụ huynh đọc hết trong năm phút. Có chỗ nào chưa rõ thì email cho chúng tôi."
       />
 
+      {/*
+        Cảnh báo này giờ hiện thêm một trường hợp nữa: `OPERATOR_EMAIL` ĐÃ khai
+        nhưng nằm dưới một TLD không bao giờ nhận được thư (`.local`, `.test`…).
+        Trước đây chỗ đó lặng thinh và trang in địa chỉ chết ra công khai làm nơi
+        nhận khiếu nại bản quyền — tức là mặt hứa vẫn đứng nguyên trong khi đường
+        thư đằng sau đã đứt. Xem `isOperatorConfigured()` trong lib/operator.ts.
+      */}
       {!isOperatorConfigured() && (
         <Notice tone="warn">
-          Bản cài đặt này chưa khai <code>OPERATOR_NAME</code> và <code>OPERATOR_EMAIL</code> trong{' '}
-          <code>infra/.env</code>, nên phần liên hệ bên dưới chưa dùng được.
+          Bản cài đặt này chưa có địa chỉ liên hệ dùng được: <code>OPERATOR_NAME</code> và{' '}
+          <code>OPERATOR_EMAIL</code> trong <code>infra/.env</code> còn trống, hoặc email đang khai
+          nằm dưới một tên miền không nhận được thư. Phần liên hệ bên dưới chưa dùng được.
         </Notice>
       )}
 
@@ -122,6 +130,37 @@ export default function TermsPage() {
           duyệt — chỉ không tự động thay đổi trạng thái game. Đây là cách chúng tôi tránh việc một
           người đổi mạng vài lần là ẩn được game của bất kỳ ai.
         </p>
+        {/*
+          RANH GIỚI GIỮA "ẨN" VÀ "XOÁ", nói ra vì nó không hiển nhiên và vì nó quyết
+          định người ta bấm nút nào.
+
+          File game được phục vụ theo địa chỉ nội dung, ở một origin không tra database
+          — nên ẩn một game KHÔNG thu hồi file của nó, và với game chỉ bị ẩn thì tình
+          trạng đó là vĩnh viễn (cơ chế dọn đĩa chỉ xoá file không game nào còn trỏ tới).
+          Đo được: trang của một game đã gỡ trả 404 trong khi hai file của nó vẫn trả 200.
+
+          Người cần thu hồi nội dung thật thường là phụ huynh phát hiện game để lộ gì đó
+          về con mình. Họ phải biết ranh giới này trước khi bấm, không phải sau.
+
+          MỆNH ĐỀ "nếu không còn game nào khác dùng đúng file đó" KHÔNG phải rào chữ:
+          storage địa chỉ hoá theo nội dung, nên hai game dựng từ cùng một .sb3 dùng
+          CHUNG cả file gốc lẫn ảnh bìa — đo trên dữ liệu thật: tám game cho ra tám mã
+          HTML khác nhau (HTML mang tên game) nhưng chỉ sáu mã .sb3, hai cặp trùng. Bản
+          đã đóng gói thì luôn mất, vì mã của nó là riêng. Bỏ mệnh đề ấy đi là hứa một
+          việc mà cơ chế không làm — và không làm ĐÚNG, vì xoá file theo mã nội dung là
+          xoá mất bản gốc của game khác.
+        */}
+        <p>
+          <strong>“Ẩn” và “xoá hẳn” không giống nhau, và đây là chỗ nên đọc kỹ.</strong> Ẩn là
+          rút game khỏi trang: không ai tìm thấy nó nữa, và mở trang game thì báo không tồn tại.
+          Nhưng file game đã đóng gói được phục vụ theo mã nội dung, nên{' '}
+          <em>ai đang giữ sẵn link tới đúng file đó vẫn mở được</em>. Muốn nội dung không còn
+          trên mạng nữa thì bố mẹ bấm <strong>Xoá hẳn</strong> ở trang của bố mẹ: game rời trang
+          ngay, và sau {NGAY_GIU_GAME_DA_GO} ngày chúng tôi xoá thật bản đã đóng gói — không ai
+          mở được nữa, kể cả bằng link cũ — cùng ảnh bìa và file <code>.sb3</code> gốc, nếu
+          không còn game nào khác dùng đúng file đó. Ngay lúc bấm, bố mẹ nhận một email kèm link
+          tải bản gốc để kịp giữ lại công của bé.
+        </p>
       </Section>
 
       <Section id="ban-quyen" title="Bản quyền">
@@ -132,9 +171,33 @@ export default function TermsPage() {
         </p>
         <p>
           Game bé đăng vẫn là của bé. Bằng việc đăng lên đây, bé cho phép KidoGame lưu trữ game và
-          hiển thị cho người khác chơi. Người chơi khác tải được file <code>.sb3</code> gốc để mở
-          ra học — đây là chủ ý, giống hệt cách Scratch hoạt động. Bé không muốn vậy thì đừng đăng
+          hiển thị cho người khác chơi. Người chơi khác tải được file <code>.sb3</code> để mở ra
+          học — đây là chủ ý, giống hệt cách Scratch hoạt động. Bé không muốn vậy thì đừng đăng
           game đó lên.
+        </p>
+        {/*
+          KHÔNG dùng chữ "gốc" cho file tải về, và nói ra vì sao.
+
+          `validateAndNormalize` trong packages/sb3 RE-ZIP file upload, chỉ giữ
+          project.json và những asset thực sự được tham chiếu — mọi thứ khác trong zip
+          bị bỏ, vì đó là chỗ payload ẩn hay nằm và re-zip chắc chắn hơn hẳn việc cố
+          phát hiện từng loại. File lưu trên đĩa được đánh địa chỉ theo hash của BẢN ĐÃ
+          RE-ZIP, nên không nơi nào trong hệ thống còn giữ byte gốc người dùng gửi lên.
+          Đo được: một file 10,02MB upload lên, tải về ra 10,04MB — bỏ bớt entry nhưng
+          mức nén khác nên còn phình ra.
+
+          Vì sao phải nói: có hai lá thư đưa link tải này kèm câu "để kịp giữ lại công
+          của bé" — thư gỡ game theo kiểm duyệt, và chạy khô của lệnh xoá tài khoản gia
+          đình. Một đứa trẻ để dành sprite hay đoạn nhạc CHƯA DÙNG trong project, chuyện
+          rất thường khi đang làm dở, thì tải về sẽ không còn. Gọi đó là "bản gốc" là
+          hứa nhiều hơn cơ chế, đúng vào lúc hệ thống nói sẽ trả lại công của nó.
+        */}
+        <p>
+          Một lưu ý về file tải về, cho cả người chơi lẫn bố mẹ: đó <strong>không phải</strong>
+          đúng file bé đã tải lên. Khi nhận game, hệ thống đóng gói lại file{' '}
+          <code>.sb3</code> để loại những thứ có thể giấu trong đó — bản lưu chỉ gồm project và{' '}
+          <strong>những asset game đang dùng</strong>. Mở bằng Scratch thì không khác gì, nhưng
+          hình hay âm thanh bé để dành mà chưa dùng tới sẽ không có trong file tải về.
         </p>
         <p>
           Nếu bạn là người làm ra một game và thấy nó bị đăng lại ở đây mà không được phép, hãy{' '}
@@ -197,8 +260,20 @@ export default function TermsPage() {
           và nếu nó biến mất cùng game thì càng làm đúng, hồ sơ càng trống.
         </p>
         <p>
-          Muốn xoá tài khoản của gia đình bạn và toàn bộ game của các bé, email cho chúng tôi ở
-          địa chỉ bên dưới.
+          <strong>Muốn xoá tài khoản của gia đình bạn</strong> và toàn bộ game của các bé, email
+          cho chúng tôi ở địa chỉ bên dưới. Chúng tôi xoá tài khoản phụ huynh, tài khoản của các
+          bé, mọi game đã đăng, và cả dấu vết đăng nhập — rồi gửi bạn một thư xác nhận.
+        </p>
+        {/*
+          Nói trước rằng file gốc sẽ mất, và nói ở ĐÂY chứ không đợi thư xác nhận.
+          Việc xoá không đảo lại được, nên lúc duy nhất câu này còn giúp được gì là
+          lúc người ta chưa gửi yêu cầu. Một phụ huynh xin xoá tài khoản đang xin bỏ
+          đi dữ liệu của mình, không nhất thiết đang xin bỏ đi thứ con họ tự làm ra.
+        */}
+        <p>
+          Việc này <strong>không đảo lại được</strong>, và file <code>.sb3</code> gốc của các bé
+          cũng đi theo. Nếu bé muốn giữ lại công của mình, tải các file đó về máy trước khi bạn
+          gửi yêu cầu — hoặc nói trong thư, chúng tôi sẽ gửi bạn link tải trước khi xoá.
         </p>
       </Section>
 
@@ -222,7 +297,12 @@ export default function TermsPage() {
       <Section id="lien-he" title="Liên hệ">
         <p>KidoGame do {op.name} vận hành.</p>
         <p data-testid="terms-operator-email">
-          Mọi việc — khiếu nại, xoá dữ liệu, báo lỗi, hỏi về điều khoản:{' '}
+          Riêng <strong>lỗi kỹ thuật</strong> thì nhanh nhất là{' '}
+          <Link href="/bao-loi" className="font-semibold underline">
+            trang báo lỗi
+          </Link>{' '}
+          — nó vào thẳng hàng đợi của người trực, không phải hòm thư. Còn mọi việc khác —
+          khiếu nại, xoá dữ liệu, hỏi về điều khoản:{' '}
           <a href={`mailto:${op.email}`} className="font-semibold underline">
             {op.email}
           </a>

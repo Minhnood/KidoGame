@@ -27,10 +27,13 @@ import {
   adminRestoreGame,
   adminSetChildLocked,
   communityStatus,
+  parentRemoveGame,
   reportGame,
 } from './moderation';
 import { adminResolveTakedown, gameDangBiKhieuNai, submitTakedownRequest } from './takedown';
 import { resolveAllErrors, setErrorResolved } from './error-log';
+import { BaoLoiError, datBaoLoiDaXuLy, guiBaoLoi } from './bao-loi';
+import { xoaGiaDinh } from './xoa-gia-dinh';
 import { rateKey, tooMany } from './rate-limit';
 import { xoaHopThuDev } from './mail';
 import {
@@ -314,9 +317,16 @@ export async function setChildLockedAction(_prev: FormState, form: FormData): Pr
  * phụ huynh phải gỡ được ngay mà không cần chờ admin.
  */
 export async function setGameHiddenAction(_prev: FormState, form: FormData): Promise<FormState> {
+  /*
+   * Đọc `gameId` NGOÀI `run` để dòng `revalidatePath` cuối hàm dùng lại được. Nó
+   * không phải là chỗ kiểm quyền — quyền vẫn kiểm bên trong, bằng truy vấn đòi
+   * `child: { parentId }` — nên một id bịa ra ở đây chỉ làm mới lại một trang mà
+   * người bịa vốn đã xem được.
+   */
+  const gameId = String(form.get('gameId') ?? '');
+
   const state = await run(async () => {
     const parentId = await requireParent();
-    const gameId = String(form.get('gameId') ?? '');
     const hidden = String(form.get('hidden')) === 'true';
 
     // Chỉ cho phép tác động lên game của con MÌNH.
@@ -376,6 +386,48 @@ export async function setGameHiddenAction(_prev: FormState, form: FormData): Pro
         note: 'Phụ huynh thao tác từ trang quản lý',
       },
     });
+  });
+  revalidatePath('/phu-huynh');
+  /*
+   * Và cả trang của chính game đó, vì nút "Ẩn game" giờ cũng nằm ở đấy.
+   *
+   * Thiếu dòng này thì bấm xong không có gì đổi trên màn hình — nhãn vẫn là "Ẩn
+   * game", dải cảnh báo không hiện — trong khi DB đã đổi thật. Người dùng sẽ bấm
+   * lần nữa. Ba trang liên quan đều `force-dynamic`, nhưng đó chỉ nói về lượt điều
+   * hướng mới; sau một server action thì đây mới là thứ bảo router vẽ lại trang
+   * đang đứng.
+   */
+  if (gameId) revalidatePath(`/game/${gameId}`);
+  return state;
+}
+
+/**
+ * Phụ huynh xoá hẳn một game của con mình.
+ *
+ * Đường thu hồi thật, khác nút "Ẩn game": ẩn chỉ rút game khỏi trang, còn file HTML và
+ * `.sb3` vẫn được player origin phục vụ theo hash cho bất cứ ai có URL — vĩnh viễn, vì
+ * `storage:prune` chỉ xoá file mồ côi. Xoá thì `removedAt` bắt đầu chạy và job dọn hằng
+ * đêm xoá thật cả hàng DB lẫn file.
+ *
+ * Chốt "đang có khiếu nại bản quyền" đặt ở đây chứ không trong `parentRemoveGame`, vì
+ * `gameDangBiKhieuNai` sống ở `takedown.ts` và file đó đã import `moderation.ts` — gọi
+ * ngược lại là một vòng import. Cùng tầng, cùng điều kiện với `setGameHiddenAction`.
+ */
+export async function parentRemoveGameAction(
+  _prev: FormState,
+  form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    const parentId = await requireParent();
+    const gameId = String(form.get('gameId') ?? '');
+
+    if ((await gameDangBiKhieuNai([gameId])).has(gameId)) {
+      throw new AuthError(
+        'Game này đang tạm ẩn vì có yêu cầu gỡ bản quyền chờ xử lý, nên chưa xoá được. Đội kiểm duyệt sẽ trả lời trước, sau đó bạn xoá được.'
+      );
+    }
+
+    await parentRemoveGame(parentId, gameId);
   });
   revalidatePath('/phu-huynh');
   return state;
@@ -555,6 +607,81 @@ export async function adminSetChildLockedAction(
     );
   });
   revalidatePath('/admin');
+  return state;
+}
+
+/**
+ * Xoá hẳn tài khoản của cả một gia đình, theo yêu cầu của phụ huynh.
+ *
+ * ĐÒI GÕ LẠI EMAIL, và việc so chuỗi ấy nằm Ở ĐÂY chứ không chỉ ở giao diện. Nút bên
+ * kia có chặn thì cũng chỉ chặn được người bấm nút; một server action là một điểm
+ * vào riêng, gọi thẳng được mà không đi qua màn hình nào. Với thao tác phá huỷ nhất
+ * hệ thống có, cái chốt phải nằm ở phía không bỏ qua được.
+ *
+ * `revalidatePath` cả `/admin/tong-quan`: bảng số đếm ở đó vừa mất mấy game của nhà
+ * này, và một bảng "hôm nay có việc gì gấp" mà còn đếm game đã biến mất thì người
+ * trực sẽ đi tìm chúng.
+ */
+export async function adminXoaGiaDinhAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const state = await run(async () => {
+    const adminId = await requireAdmin();
+    const email = String(form.get('email') ?? '').trim();
+    const goLai = String(form.get('xacNhanEmail') ?? '').trim();
+    if (!email || goLai.toLowerCase() !== email.toLowerCase()) {
+      throw new AuthError('Email gõ lại không khớp. Không xoá gì cả.');
+    }
+    await xoaGiaDinh(adminId, email, String(form.get('note') ?? '').trim());
+  });
+  revalidatePath('/admin/tai-khoan');
+  revalidatePath('/admin/tong-quan');
+  return state;
+}
+
+/**
+ * Người dùng gửi một báo lỗi. KHÔNG đòi đăng nhập, cố ý.
+ *
+ * Cùng lý lẽ với `reportGameAction`: người gặp lỗi thường đang gặp nó ở ĐÚNG luồng
+ * đăng nhập hoặc đăng ký, nên bắt đăng nhập trước khi báo là đóng cửa với đúng nhóm
+ * báo cáo giá trị nhất. Chống lạm dụng bằng trần theo IP và trần tổng, xem
+ * `lib/bao-loi.ts`.
+ *
+ * Đọc IP và user agent Ở ĐÂY chứ không nhận từ form: hai thứ đó phải do server tự
+ * thấy, không thì chúng chỉ là hai ô chữ nữa mà người gửi tự điền.
+ */
+export async function guiBaoLoiAction(_prev: FormState, form: FormData): Promise<FormState> {
+  return run(async () => {
+    const h = await headers();
+    try {
+      await guiBaoLoi({
+        moTa: String(form.get('moTa') ?? ''),
+        maLoi: String(form.get('maLoi') ?? ''),
+        duongDan: String(form.get('duongDan') ?? ''),
+        emailLienHe: String(form.get('emailLienHe') ?? ''),
+        ip: await clientIp(),
+        userAgent: h.get('user-agent'),
+      });
+    } catch (e) {
+      /* `BaoLoiError` mang câu chữ viết cho người gửi đọc, nên nó phải hiện nguyên
+         văn trên form. `run` chỉ chuyển `AuthError` như vậy, nên bọc lại — không thì
+         "hộp báo lỗi đang đầy" rơi xuống câu chung "Có lỗi xảy ra, thử lại sau nhé",
+         đúng lúc người dùng cần biết vì sao. */
+      if (e instanceof BaoLoiError) throw new AuthError(e.message);
+      throw e;
+    }
+  });
+}
+
+/** Admin đánh dấu một báo lỗi của người dùng đã xử lý, hoặc mở lại. */
+export async function adminDatBaoLoiDaXuLyAction(
+  _prev: FormState,
+  form: FormData
+): Promise<FormState> {
+  const state = await run(async () => {
+    await requireAdmin();
+    await datBaoLoiDaXuLy(String(form.get('id') ?? ''), String(form.get('daXuLy')) === 'true');
+  });
+  revalidatePath('/admin/loi');
+  revalidatePath('/admin/tong-quan');
   return state;
 }
 

@@ -96,6 +96,10 @@ export const ACTION_LABEL: Record<string, string> = {
   TAKEDOWN_HIDE: 'Tạm ẩn vì có yêu cầu gỡ bản quyền',
   TAKEDOWN_ACCEPT: 'Admin chấp nhận yêu cầu gỡ bản quyền',
   TAKEDOWN_REJECT: 'Admin bác bỏ yêu cầu gỡ bản quyền',
+  /* Dòng vết DUY NHẤT không kèm được game hay bé: cả hai đã bị xoá cùng lúc với nó
+     được ghi ra. Nhãn phải tự đứng một mình mà vẫn đọc được — xem `xoa-gia-dinh.ts`. */
+  ADMIN_DELETE_FAMILY: 'Admin xoá tài khoản cả gia đình',
+  PARENT_DELETE: 'Phụ huynh xoá hẳn game',
 };
 
 export function actionLabel(action: string): string {
@@ -440,11 +444,153 @@ export async function adminRemoveGame(adminId: string, gameId: string, note: str
       'File tải về mang tên là một chuỗi dài — đó là mã nội dung của chính file. Đổi tên',
       'lại cho dễ nhớ rồi mở bằng Scratch như bình thường, nội dung không đổi.',
       '',
+      /*
+       * PHẢI nói ra chuyện này, ở ĐÂY.
+       *
+       * `validateAndNormalize` re-zip file lúc nhận, chỉ giữ project.json và asset
+       * ĐƯỢC THAM CHIẾU — mọi thứ khác bị bỏ, vì đó là chỗ payload ẩn hay nằm. Storage
+       * đánh địa chỉ theo hash của bản đã re-zip, nên byte gốc người dùng gửi lên không
+       * còn ở đâu trong hệ thống. Đo được: upload 10,02MB, tải về 10,04MB.
+       *
+       * Lá thư này là lần DUY NHẤT phụ huynh còn kịp lấy lại công của con trước ngày
+       * xoá hẳn. Để họ tin đây là đúng file bé đã gửi, rồi mở ra thấy thiếu mấy con
+       * sprite bé để dành, là làm họ mất niềm tin đúng lúc không còn cách nào kiểm lại.
+       */
+      'Một lưu ý: lúc nhận game, hệ thống đã đóng gói lại file .sb3 để loại những thứ có',
+      'thể giấu trong đó. File này gồm project và mọi asset game đang dùng — mở ra chơi và',
+      'sửa được như thường. Nhưng hình hay âm thanh bé để dành mà chưa dùng tới thì không',
+      'có trong đây.',
+      '',
       'Nếu bạn cho rằng đây là nhầm lẫn, trả lời thư này giúp chúng tôi.',
       '',
       'KidoGame',
     ].join('\n'),
   }).catch((e) => console.error('[moderation] không gửi được thư báo gỡ game:', e));
+}
+
+/**
+ * Phụ huynh tự xoá hẳn một game của con mình.
+ *
+ * VÌ SAO CẦN, và đây là một lỗ hổng quyền riêng tư thật chứ không phải tiện tay: nút
+ * "Ẩn game" KHÔNG thu hồi nội dung. Player origin phục vụ thuần theo hash và không
+ * tra database — đo được: trang `/game/<id>` của một game đã gỡ trả 404, còn file HTML
+ * và `.sb3` của chính nó vẫn trả 200, không cần đăng nhập, `cache-control: immutable`.
+ * Với `HIDDEN` thì tình trạng đó là VĨNH VIỄN, vì `storage:prune` chỉ xoá file mồ côi
+ * và game đang ẩn vẫn trỏ tới file nên file không bao giờ thành mồ côi.
+ *
+ * Lý do thường nhất để một phụ huynh bấm ẩn là game để lộ gì đó về con họ. Trước hàm
+ * này, thao tác duy nhất họ làm được không hề lấy nội dung ấy khỏi mạng, và không có
+ * đường nào khác — trang phụ huynh và `/dieu-khoan` cũng không nói ra điều đó.
+ *
+ * DÙNG LẠI ĐÚNG CƠ CHẾ CỦA `adminRemoveGame`: `REMOVED` + `removedAt`, rồi job dọn
+ * hằng đêm xoá thật hàng DB và file sau `NGAY_GIU_GAME_DA_GO` ngày. Không thêm trạng
+ * thái thứ năm, và không xoá file tại chỗ: storage địa chỉ hoá theo nội dung nên hai
+ * game cùng hash dùng chung một file, xoá theo hash là xoá mất bản gốc của game khác.
+ *
+ * Phụ huynh KHÔNG tự bật lại được, giống hệt game bị admin gỡ — `setGameHiddenAction`
+ * đã chặn `REMOVED` từ trước. Đó là đánh đổi có chủ ý: cái đổi lấy là file thật sự
+ * biến mất, và một hành động có hệ quả ấy phải nặng hơn một cú bấm bật/tắt.
+ */
+export async function parentRemoveGame(parentId: string, gameId: string): Promise<void> {
+  const game = await prisma.game.findFirst({
+    where: { id: gameId, child: { parentId } },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      sb3Sha256: true,
+      child: { select: { displayName: true, parent: { select: { email: true } } } },
+    },
+  });
+  if (!game) throw new AuthError('Không tìm thấy game này.');
+
+  if (game.status === 'REMOVED') {
+    throw new AuthError('Game này đã được gỡ khỏi trang rồi.');
+  }
+
+  /*
+   * Phép kiểm "đang có khiếu nại bản quyền chờ xử lý" nằm ở SERVER ACTION, không ở
+   * đây, và đó là chuyện kỹ thuật chứ không phải chọn lựa: `gameDangBiKhieuNai` ở
+   * `takedown.ts`, mà `takedown.ts` đã import file này — gọi ngược lại là một vòng
+   * import. `setGameHiddenAction` kiểm cùng điều kiện ở cùng tầng, nên hai đường của
+   * phụ huynh vẫn nhất quán với nhau.
+   */
+
+  /* Một mốc thời gian duy nhất cho cả hàng DB lẫn lá thư — cùng lý do đã ghi ở
+     `adminRemoveGame`: gọi `new Date()` hai lần là hai thời điểm khác nhau trong hai
+     chỗ nói về cùng một cái hạn, và đó là loại lệch không ai đi kiểm. */
+  const goLuc = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.game.update({
+      where: { id: gameId },
+      data: { status: 'REMOVED', removedAt: goLuc },
+    });
+    /* Đóng báo cáo đang mở: game không còn trên trang thì một hàng đợi "cần xem" trỏ
+       vào nó chỉ làm người trực mở ra rồi thấy 404. */
+    await tx.report.updateMany({
+      where: { gameId, status: 'OPEN' },
+      data: { status: 'RESOLVED' },
+    });
+    await tx.moderationLog.create({
+      data: {
+        gameId,
+        actorId: parentId,
+        action: 'PARENT_DELETE',
+        note: 'Phụ huynh tự xoá từ trang quản lý',
+      },
+    });
+  });
+
+  /*
+   * Thư kèm link tải, gửi NGOÀI transaction và nuốt lỗi — cùng khuôn `adminRemoveGame`.
+   *
+   * Vẫn gửi dù chính họ vừa bấm: thứ lá thư này mang không phải tin "đã xoá" mà là
+   * NGÀY file gốc biến mất và địa chỉ tải nó về trước ngày đó. Một phụ huynh xoá game
+   * vì nó để lộ gì đó về con mình vẫn có thể muốn giữ bản gốc công của con.
+   */
+  await sendMail({
+    to: game.child.parent.email,
+    subject: `Đã xoá game "${game.title}" của bé ${game.child.displayName}`,
+    text: [
+      'Chào bạn,',
+      '',
+      `Bạn vừa xoá game "${game.title}" của bé ${game.child.displayName} khỏi KidoGame.`,
+      'Game không còn xem được nữa, kể cả bằng link trực tiếp.',
+      '',
+      `FILE GỐC CỦA BÉ SẼ BỊ XOÁ HẲN NGÀY ${ngayVi(hanXoaHan(goLuc))}.`,
+      `Chúng tôi giữ lại ${NGAY_GIU_GAME_DA_GO} ngày để bạn kịp lấy. Sau ngày đó thì không lấy lại được,`,
+      'và bản đã đóng gói cũng không còn ai tải được nữa.',
+      '',
+      'Nếu bé chưa giữ bản .sb3 trên máy, tải lại tại đây trước ngày trên:',
+      `  ${objectUrl('sb3', game.sb3Sha256)}`,
+      '',
+      'File tải về mang tên là một chuỗi dài — đó là mã nội dung của chính file. Đổi tên',
+      'lại cho dễ nhớ rồi mở bằng Scratch như bình thường, nội dung không đổi.',
+      '',
+      /*
+       * PHẢI nói ra chuyện này, ở ĐÂY.
+       *
+       * `validateAndNormalize` re-zip file lúc nhận, chỉ giữ project.json và asset
+       * ĐƯỢC THAM CHIẾU — mọi thứ khác bị bỏ, vì đó là chỗ payload ẩn hay nằm. Storage
+       * đánh địa chỉ theo hash của bản đã re-zip, nên byte gốc người dùng gửi lên không
+       * còn ở đâu trong hệ thống. Đo được: upload 10,02MB, tải về 10,04MB.
+       *
+       * Lá thư này là lần DUY NHẤT phụ huynh còn kịp lấy lại công của con trước ngày
+       * xoá hẳn. Để họ tin đây là đúng file bé đã gửi, rồi mở ra thấy thiếu mấy con
+       * sprite bé để dành, là làm họ mất niềm tin đúng lúc không còn cách nào kiểm lại.
+       */
+      'Một lưu ý: lúc nhận game, hệ thống đã đóng gói lại file .sb3 để loại những thứ có',
+      'thể giấu trong đó. File này gồm project và mọi asset game đang dùng — mở ra chơi và',
+      'sửa được như thường. Nhưng hình hay âm thanh bé để dành mà chưa dùng tới thì không',
+      'có trong đây.',
+      '',
+      'Bạn không tự bật lại game này được. Nếu bấm nhầm, trả lời thư này trước ngày trên',
+      'thì chúng tôi còn kịp giúp.',
+      '',
+      'KidoGame',
+    ].join('\n'),
+  }).catch((e) => console.error('[moderation] không gửi được thư báo phụ huynh xoá game:', e));
 }
 
 /**

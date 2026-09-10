@@ -15,7 +15,7 @@ pnpm install
 createdb kidogame
 
 cd apps/web
-cp .env.example .env          # sửa DATABASE_URL cho đúng user của bạn
+cp -n .env.example .env          # sửa DATABASE_URL cho đúng user của bạn
 pnpm db:push                  # tạo bảng + áp dụng constraints.sql
 pnpm db:seed                  # tạo tài khoản demo
 ```
@@ -36,12 +36,18 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 
 ## Kiểm thử
 
-Hai bộ không cần server:
+Bốn bộ không cần server:
 
 ```bash
-pnpm --filter @kidogame/sb3 test           # 50 unit test, gồm fixture độc hại
-node infra/contrast-check.mjs              # 38 cặp màu, cả hai giao diện
+pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
+node infra/contrast-check.mjs              # 108 cặp màu, cả hai giao diện
+node infra/caddy-config-check.mjs          # 15 phép, +4 nữa nếu có Docker
+cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 46
 ```
+
+Hai bộ cuối canh cùng một loại lỗi: thứ **chỉ hỏng sau khi deploy**. Cấu hình Caddy chỉ
+sai khi `infra/.env` có mặt, và `Reply-To` chỉ rỗng khi `MAIL_FROM` không còn là hòm thư
+thật của người phát triển. Chạy chúng **trước** mỗi lần đưa code lên máy thật.
 
 Còn lại cần **cả hai server đang chạy + Chrome**, và server phải được khởi động với
 **stdout đổ vào file** vì bốn bộ phải đọc link xác minh email từ log:
@@ -53,13 +59,18 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 63 kiểm tra
+SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 66 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 76
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 28, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 24, DỌN THẬT
+node infra/e2e-bieu-do.mjs                                         # 21, không cần gì thêm
+node infra/e2e-bao-loi.mjs                                         # 29, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
@@ -71,6 +82,18 @@ một hàng — nó sẽ đỏ ở phép kiểm "gửi trùng không tạo thêm
 mode violation`, một triệu chứng không chỉ về đâu cả. Dọn bằng:
 `delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';`
 
+**`e2e-an-vs-xoa.mjs` chạy `db:prune-removed --xoa` và `storage:prune --xoa` THẬT** trên
+máy đang chạy nó — không có cách nào khác để kiểm rằng "xoá hẳn" thu hồi được file. Hệ quả
+ngoài phạm vi bài: mọi file mồ côi khác trên đĩa cũng bị dọn, và mọi game `REMOVED` đã quá
+hạn giữ cũng bị xoá thật. Trên máy dev đó đúng là việc nên làm; **đừng** chạy nó với
+`DATABASE_URL` trỏ vào production.
+
+**`e2e-xoa-gia-dinh.mjs`, `e2e-nhac-viec.mjs` và `e2e-an-vs-xoa.mjs` cũng phải chạy SAU
+`e2e-takedown.mjs`**,
+cùng lý do: cả hai dựng yêu cầu gỡ bản quyền trong hàng đợi. Bài đầu kiểm rằng hồ sơ ấy
+sống sót qua việc xoá cả gia đình; bài sau dựng ba yêu cầu rồi kéo `createdAt` về quá khứ
+để có đủ cả ba nhóm hạn. Cả hai tự dọn ở cuối.
+
 **`e2e-admin-origin.mjs` cần `ADMIN_ORIGIN` được đặt cho CẢ server dev**, không chỉ cho
 bộ kiểm. Không đặt thì middleware giữ hành vi cũ — `/admin` nằm trên app origin — và bộ
 này báo đỏ đúng. Trong `apps/web/.env` đã có sẵn `ADMIN_ORIGIN="http://admin.localhost:3000"`.
@@ -78,6 +101,12 @@ này báo đỏ đúng. Trong `apps/web/.env` đã có sẵn `ADMIN_ORIGIN="http
 `admin.localhost` phân giải về 127.0.0.1 giống `localhost` nhưng là một **host khác**, nên
 cách ly cookie ở dev là thật chứ không phải mô phỏng: cookie phiên quản trị host-only trên
 `admin.localhost` không đi tới `localhost`, và ngược lại.
+
+**`e2e-errorlog.mjs` cần bảng `ErrorLog` KHÔNG rỗng.** Bước cuối của nó phải tạo được
+hơn 30 nhóm để có trang thứ hai, nhưng trần chống lụt là 30 báo cáo/phút — nên chạy nó
+trên một bảng vừa bị dọn sạch thì chỉ ghi được ~27 nhóm và hai phép kiểm phân trang đỏ,
+với thông điệp `27 nhóm` không chỉ về phía nguyên nhân. Chạy lại lượt thứ hai là xanh,
+vì lúc đó bảng đã có sẵn nhóm của lượt trước.
 
 **`e2e-errorlog.mjs` phải đặt CUỐI, và cách nhau ít nhất một phút giữa hai lượt.** Bước
 cuối của nó bắn hơn 40 báo cáo để kiểm trần 30 báo cáo/phút; chạy hai lượt liền nhau thì
@@ -172,6 +201,41 @@ không có cách nào thấy được điều đó.
 
 Vì vậy bộ này kiểm cả **chuỗi `Set-Cookie` thô**, không chỉ trạng thái cookie cuối cùng.
 Đúng chỗ lỗi đã nấp.
+
+### Một biến rỗng giết cả stack — `caddy-config-check.mjs`
+
+`Caddyfile` lấy tên site từ `{$ADMIN_DOMAIN:admin.kidogame.vn}`, và **mặc định sau dấu
+`:` chỉ áp dụng khi biến CHƯA ĐƯỢC ĐẶT**. Compose thì truyền `${ADMIN_DOMAIN:-}` — tức
+**đặt thành rỗng**, một trạng thái khác hẳn. Kết quả là một khối site không có tên, và
+Caddy từ chối **nguyên file**: app chết, player chết, vì một biến mà chính `.env.example`
+mời để trống.
+
+Cách hỏng này mất hàng giờ để tìm, và mọi thứ nhìn được đều chỉ sai hướng:
+
+- `docker compose config` xanh — YAML không sai gì;
+- bốn service kia `Up` và `healthy`, chỉ mình `caddy` crash loop;
+- lỗi in ra là `server block without any key is global configuration`, **không hề nhắc
+  tên biến nào**;
+- dòng ACME đi kèm nhìn y hệt lúc DNS chưa trỏ, nên người ta đi kiểm DNS.
+
+Không bộ kiểm nào khác trong repo thấy được: `e2e-prod-*` cần stack đang chạy, mà ở đây
+stack không lên nổi để mà kiểm.
+
+Bộ này chạy hai lớp. Lớp **tĩnh** đọc `Caddyfile` + `docker-compose.yml` rồi đòi mọi biến
+được dùng làm tên site phải bị chặn không cho ra rỗng — nó quét bằng regex chứ không liệt
+kê ba tên đã biết, nên **khối site thứ tư** ai đó thêm sau này cũng bị đòi. Lớp **thật**
+gọi `caddy validate` cho từng kịch bản `.env`, cộng một phép **đối chứng** khẳng định tên
+rỗng vẫn còn là lỗi — không có nó thì ngày Caddy đổi hành vi, cả bộ lặng lẽ thành vô
+nghĩa. Không có Docker thì lớp hai **bỏ qua và nói rõ là bỏ qua**, chứ không tính là đạt.
+Mượn Docker máy khác được: `DOCKER_HOST=ssh://kidovps node infra/caddy-config-check.mjs`.
+
+Chỗ tinh nhất nằm ở hướng sửa sai: cùng một biến nuôi **hai** thứ — tên site của Caddy, và
+`ADMIN_ORIGIN` của app. Điền `admin.localhost` vào `.env.example` cho gọn thì Caddy sống,
+nhưng app bật tách origin sau lưng người deploy: `/admin` trên app domain trả 404, còn host
+thay thế thì không ai vào được. Tức là chữa một cái sập bằng một cái sập im lặng hơn. Ba
+phép kiểm khoá đúng chỗ đó. Mặc định nằm ở compose và là `.localhost` chứ không phải tên
+thật, vì Caddy coi đuôi đó là nội bộ nên tự cấp chứng chỉ (`issuer:"local"`, ~200ms) — một
+tên thật ở đây là ACME thất bại lặp lại cho một tính năng đang **tắt**.
 
 ### Test trên điện thoại thật
 
@@ -579,9 +643,14 @@ máy local. Ở production chính Caddy serve thư mục `storage`, đúng như
 Trước khi bắt đầu: trỏ A/AAAA của **cả hai** domain về IP của VPS. Caddy xin
 chứng chỉ ngay lúc khởi động, DNS chưa trỏ là thất bại.
 
+> Chưa có VPS lẫn domain? **[`infra/ORACLE-FREE.md`](infra/ORACLE-FREE.md)** đi từ
+> chỗ chưa có gì tới đúng điểm này: một VPS ARM miễn phí ở Singapore, mở cổng (Oracle
+> chặn 80/443 ở **hai** tầng), Docker arm64, và một domain với ba subdomain. Kèm cả
+> chỗ bảo mật bị yếu đi khi dùng một domain thay vì hai.
+
 ```bash
 cd infra
-cp .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY,
+cp -n .env.example .env      # sửa POSTGRES_PASSWORD, hai domain, RESEND_API_KEY,
                           # OPERATOR_NAME, OPERATOR_EMAIL
 docker compose up -d --build
 
@@ -621,12 +690,19 @@ bằng `.localhost` — Caddy coi chúng là nội bộ nên cấp chứng chỉ
 
 ```bash
 cd infra
-cp .env.example .env
+cp -n .env.example .env
 # rồi sửa trong .env:
 #   APP_DOMAIN=app.localhost
 #   PLAYER_DOMAIN=play.localhost
 #   POSTGRES_PASSWORD=$(openssl rand -hex 24)
-#   RESEND_API_KEY=re_dummy_local   # BẮT BUỘC có giá trị, compose khai dạng `:?`
+#   RESEND_API_KEY=re_dummy_local   # KHÔNG còn bắt buộc để `up` — xem
+#                                   # docker-compose.yml:99. Nhưng image đặt
+#                                   # NODE_ENV=production (Dockerfile:78), nên giá
+#                                   # trị giữ chỗ kiểu `re_xxx` KHÔNG rơi về
+#                                   # transport console như trên máy dev: lá thư đầu
+#                                   # tiên sẽ NÉM LỖI. Muốn thử luồng mail trên stack
+#                                   # local thì khai SMTP_* thật, và hỏi trước bằng
+#                                   # `node infra/mail-check.mjs`.
 
 docker compose up -d --build
 docker compose run --rm web pnpm --filter @kidogame/web db:deploy
@@ -922,8 +998,9 @@ devDependencies mà lệnh migrate lại cần. Đổi lại image nặng khoả
 
 ### Dọn định kỳ — game đã gỡ thì một tuần sau xoá hẳn
 
-Service thứ năm, `prune`. Game bị admin gỡ (`REMOVED`) nằm lại **7 ngày** rồi mới bị
-xoá thật: hàng trong DB, HTML đã đóng gói, ảnh bìa, và cả `.sb3` gốc của bé.
+Service thứ năm, `prune`. Ba bước mỗi đêm: **nhắc việc có hạn** (mục *Nhắc việc có hạn* bên dưới), rồi xoá
+hẳn game đã gỡ quá hạn, rồi dọn file. Game bị admin gỡ (`REMOVED`) nằm lại **7 ngày** rồi
+mới bị xoá thật: hàng trong DB, HTML đã đóng gói, ảnh bìa, và cả `.sb3` gốc của bé.
 
 Là một service trong stack chứ không phải cron trên host, **cùng lý do như `backup`**:
 một việc phải có người nhớ chạy thì đúng bằng không có. "Xoá sau 7 ngày" mà không ai
@@ -937,13 +1014,16 @@ tồn tại**: bản sao lưu của chính ngày xoá vẫn còn chứa game, n�
 Dùng lại image của `web`, không build image thứ sáu: hai script dọn là `tsx` + Prisma
 CLI, mà image `web` cố ý giữ devDependencies.
 
-Chạy tay một lượt (mặc định của cả hai script là **chạy khô**, phải thêm `--xoa`):
+Chạy tay một lượt (mặc định của cả ba script là **xem trước**, phải thêm `--xoa` /
+`--gui`):
 
 ```bash
 cd infra
 docker compose run --rm --entrypoint bash prune -c \
   "pnpm --filter @kidogame/web db:prune-removed"      # xem trước, không xoá gì
-docker compose run --rm --entrypoint bash prune -c "bash /prune.sh once"   # xoá thật
+docker compose run --rm --entrypoint bash prune -c \
+  "pnpm --filter @kidogame/web db:nhac-viec-co-han"   # xem thư nhắc, không gửi
+docker compose run --rm --entrypoint bash prune -c "bash /prune.sh once"   # làm thật
 docker compose logs prune --tail 20                   # xem nó hẹn giờ lúc mấy giờ
 ```
 
@@ -984,6 +1064,303 @@ nó bấm đồng hồ: coi null là quá hạn thì lần chạy đầu tiên x
 Hồ sơ pháp lý thì **ở lại**. `TakedownRequest.gameId` là `SetNull` chứ không phải
 `Cascade`, kèm cột `gameTitle` chụp lại lúc nhận đơn — nếu không, việc dọn sẽ xoá luôn
 bằng chứng đã xử lý đúng một khiếu nại, tức càng làm đúng thì hồ sơ càng mất.
+
+### Xoá tài khoản cả gia đình — quyền `/dieu-khoan` đã hứa
+
+Trang điều khoản nói công khai rằng gửi thư là xoá được tài khoản gia đình và toàn bộ
+game của các bé. Trước bản này, **lời hứa đó không có đường thực hiện nào**: không
+action, không script, không nút. Người trực nhận thư xong chỉ còn cách gõ SQL tay vào
+database production — tức trên thực tế là một lời hứa không thực hiện.
+
+Hai đường vào, **một lõi** (`src/lib/xoa-gia-dinh.ts`), nên không đường nào xoá sót hơn
+đường kia:
+
+```bash
+pnpm --filter @kidogame/web db:xoa-gia-dinh me@vidu.com                    # chỉ ĐO
+pnpm ... db:xoa-gia-dinh me@vidu.com --xoa --admin toi@vidu.com            # xoá thật
+```
+
+và nút **Xoá tài khoản gia đình** trong tab Tài khoản của khu quản trị.
+
+**Chạy khô là mặc định**, giống `db:prune-removed`. Đây là thao tác phá huỷ nhất hệ
+thống có và là thao tác *duy nhất* không có cửa sổ sửa sai: gỡ game còn bảy ngày với một
+nút "Cho hiện lại" nằm ngay cạnh, còn cái này thì hàng DB đi trong một transaction.
+
+Lần chạy khô in cả **link tải `.sb3` gốc của từng game**, và đó là điểm chính của nó chứ
+không phải trang trí — sau khi xoá, file thành mồ côi và `storage:prune --xoa` dọn mất,
+nên đây là cửa sổ duy nhất còn gửi cho phụ huynh bản gốc công của con họ được. Một phụ
+huynh xin xoá tài khoản đang xin bỏ đi dữ liệu của mình, không nhất thiết đang xin bỏ đi
+thứ con họ tự làm ra. `/dieu-khoan` giờ cũng nói trước điều này.
+
+Bốn thứ dễ làm sai nếu xoá tay, và là lý do việc này phải là code chứ không phải một câu SQL:
+
+1. **`LoginAttempt` không có khoá ngoại.** Cột `identity` giữ `parent:<email>` và
+   `child:<username>` ở dạng **thô**, cascade không chạm tới. `delete from "Parent"` để
+   lại đúng thứ mà việc xoá nhằm bỏ đi, trong một bảng không ai nghĩ tới khi kiểm "đã
+   xoá hết chưa" — nhìn từ ngoài thì tài khoản đã biến mất.
+2. **File trên đĩa KHÔNG được xoá ở đây**, và đó là cố ý. Storage địa chỉ hoá theo nội
+   dung: hai game cùng `sb3Sha256` dùng **chung** một file. Đo trên DB dev: gia đình
+   demo có 8 game nhưng chỉ 6 hash khác nhau — hai cặp trùng. Xoá file theo hash của
+   game vừa xoá là xoá mất bản gốc của game khác, im lặng. Sau khi hàng DB đi thì file
+   thành mồ côi và `storage:prune --xoa` dọn an toàn, vì nó quét ngược từ DB.
+3. **Chụp `TakedownRequest.gameTitle` trước khi xoá**, cùng lý do và cùng thứ tự với
+   `prune-removed.ts`.
+4. **Dòng vết của việc xoá không được trỏ vào gia đình vừa xoá.** `ModerationLog` cascade
+   theo cả `gameId` lẫn `childId`, nên vết trỏ vào bé sẽ tự bốc hơi trong chính
+   transaction ghi ra nó. Vết ở đây để **cả hai** cột null — và `constraints.sql` được
+   nới đúng bằng một ngoại lệ có tên (`ADMIN_DELETE_FAMILY` thì *buộc* null cả hai), chứ
+   không nới lỏng chung. Ràng buộc ấy **chỉ nằm trong `constraints.sql`**, không có trong
+   `schema.prisma`, nên đọc schema sẽ không thấy nó — nó nổ lúc ghi thật, và đó đúng là
+   cách nó được phát hiện.
+
+Vết **không ghi email**. Đây là một yêu cầu xoá dữ liệu; giữ lại chính cái định danh vừa
+được yêu cầu xoá, trong một bảng không bao giờ dọn, là làm hỏng việc mình vừa làm. Muốn
+đối chiếu "đã xoá theo yêu cầu nào" thì ghép lá thư yêu cầu với mốc thời gian trong vết.
+
+**Tài khoản đang có quyền quản trị thì từ chối xoá**, bắt gỡ `isAdmin` trước.
+`ModerationLog.actorId` là chuỗi thường chứ không phải khoá ngoại, nên xoá một admin
+không cascade gì — nó chỉ làm mọi vết người đó từng ghi trên game của **nhà khác** mất
+chỗ tra ngược ra email và hiện thành cuid trần. Tức xoá một tài khoản lại làm hỏng lịch
+sử của những gia đình không liên quan. Chốt nằm trong lõi chứ không ở giao diện, vì
+script chạy được mà không đi qua giao diện; nút thì đơn giản không hiện cho admin, để
+người trực không gõ xong cả email rồi mới biết là không được.
+
+Nút đòi **gõ lại email**, và chuỗi ấy được so **lần thứ hai trong server action**. Hai
+nhịp là đủ cho mọi nút khác vì tất cả đều đảo lại được; nút này lại nằm trong một *danh
+sách*, nơi người trực bấm nhanh qua nhiều dòng giống hệt nhau — nhịp thứ hai rơi đúng
+chỗ ngón tay đang sẵn đà. Một nút chỉ chặn được người bấm nút, nên chốt thật phải ở phía
+không bỏ qua được; `e2e-xoa-gia-dinh` có một phép kiểm đổi lén input hidden để canh đúng
+chỗ đó.
+
+Bộ kiểm: `node infra/e2e-xoa-gia-dinh.mjs` (44).
+
+### Nhắc việc có hạn — bước 1/3 của service `prune`
+
+Hạn trả lời một yêu cầu gỡ bản quyền là `TAKEDOWN_SLA_WORKING_DAYS` ngày làm việc, và nó
+được hứa **công khai** ở cả `/dieu-khoan` lẫn `/bao-cao-ban-quyen`. Trước bản này, cơ chế
+duy nhất để giữ được hạn đó là **có người tự mở tab Tổng quan mỗi ngày**: ô đếm "quá hạn"
+nằm sẵn trên bảng, nhưng không có gì đẩy tin ra ngoài. Một nghĩa vụ có hạn phụ thuộc vào
+việc ai đó nhớ mở một trang web — cùng loại lỗ hổng với "quyền xoá tài khoản chỉ thực
+hiện được bằng psql".
+
+```bash
+pnpm --filter @kidogame/web db:nhac-viec-co-han          # chỉ IN
+pnpm --filter @kidogame/web db:nhac-viec-co-han --gui    # gửi thật
+```
+
+Số liệu đọc từ **`src/lib/viec-co-han.ts`**, đúng hàm mà tab Tổng quan gọi. Trước khi
+tách, trang tự tính `goQuaHan` bằng một dòng filter riêng — hai chỗ tự tính cùng một cái
+hạn là hai câu trả lời, và cách hỏng của nó không đỏ ở đâu cả: bảng nói không có việc
+gấp, thư nói có ba, cả hai đều tự tin. `e2e-nhac-viec` có một phép kiểm so trực tiếp hai
+con số đó, và nó đã được chứng minh bắt được lỗi (cho trang đếm lệch một → đỏ).
+
+Bốn điều cố ý:
+
+1. **Không gửi gì khi không có việc.** Một lá thư "0 việc quá hạn" mỗi đêm là lá thư
+   người ta học cách lọc đi trong hai tuần, rồi lọc luôn cái đêm nó khác. Im lặng là tín
+   hiệu, không phải thiếu sót.
+2. **Nhắc trước khi muộn**, không chỉ khi đã muộn (`NHAC_TRUOC_NGAY_LAM_VIEC = 1`). Một
+   lá thư nói "đã quá hạn" là thư báo tin đã mất; hạn hứa công khai thì giá trị nằm ở
+   chỗ giữ được nó.
+3. **Từ chối gửi khi chưa khai `OPERATOR_*`** — mặc định là `chua-cau-hinh@kidogame.local`
+   và gửi vào đó trông như đã gửi xong trong log. Chốt đứng **sau** phần in, nên danh
+   sách việc đang chờ vẫn ra log: chặn cái không làm được, không chặn cái làm được.
+4. **Mặc định chỉ in**, `--gui` mới gửi. Cùng khuôn hai script dọn.
+
+Thư chỉ mang việc **có đồng hồ chạy**: yêu cầu gỡ quá hạn / sắp tới hạn, và game đã gỡ
+sắp bị xoá hẳn. "Game bị hệ thống tự siết mà chưa ai xem" cố ý **không** có trong thư dù
+cũng là việc đang chờ — nó không có hạn nào, và thêm việc thường vào là biến lá thư thành
+bản tin hằng ngày.
+
+**Bước nhắc đi TRƯỚC hai bước dọn trong `prune.sh`**, và thứ tự đó là nội dung: lá thư
+nói ra cả nhóm "đã quá hạn giữ, sẽ bị xoá trong lượt dọn ngay sau thư này". Dọn trước thì
+nhóm ấy đã bằng 0 lúc thư được soạn, và cái duy nhất còn nói được là "đêm nay không có
+gì" — đúng vào đêm vừa xoá vĩnh viễn công của một đứa trẻ.
+
+Service `prune` **chưa từng có đường gửi mail** cho tới bước này, nên `docker-compose.yml`
+được thêm cả nhóm `SMTP_*`/`RESEND_API_KEY`/`MAIL_FROM`/`OPERATOR_*`/`ADMIN_ORIGIN` — giữ
+khớp với service `web`, vì hai chỗ khai lệch nhau thì app gửi được mail còn thư nhắc thì
+không, mà cả hai đều báo là ổn. Thiếu nhóm đó ở production thì `sendMail` **ném lỗi** và
+bước nhắc đỏ trong log, đúng hướng hỏng cần; ở dev nó chỉ in ra stdout rồi coi như xong.
+
+Bộ kiểm: `node infra/e2e-nhac-viec.mjs` (28).
+
+### "Ẩn" không thu hồi nội dung — và phụ huynh xoá hẳn được
+
+**Đo được, không phải suy luận.** Với một game admin đã gỡ:
+
+| | Trang `/game/<id>` | File HTML trên player | File `.sb3` |
+|---|---|---|---|
+| người thường | **404** | **200** | **200** |
+
+Player origin phục vụ **thuần theo mã nội dung và không tra database** (xem
+`infra/player-server.mjs`). Nên nút "Ẩn game" của phụ huynh chỉ rút game khỏi trang: ai
+còn giữ URL của file vẫn mở được, `cache-control: immutable`. Với game chỉ bị **ẩn** thì
+tình trạng đó là **vĩnh viễn**, vì `storage:prune` chỉ xoá file *mồ côi* và game đang ẩn
+vẫn trỏ tới file nên file không bao giờ thành mồ côi.
+
+Lý do thường nhất để một phụ huynh bấm ẩn lại chính là game để lộ gì đó về con họ — nên
+trước bản này, thao tác duy nhất họ làm được không hề lấy nội dung ấy khỏi mạng, không có
+đường nào khác, và cả trang phụ huynh lẫn `/dieu-khoan` đều không nói ra.
+
+Hai việc đã làm:
+
+1. **Nút "Xoá hẳn" cho phụ huynh**, ngay cạnh "Ẩn game" — cố ý cạnh nhau, vì người dùng
+   đang tưởng chúng là hai mức của một việc; để xa nhau thì người cần cái thứ hai sẽ dừng
+   ở cái thứ nhất và tưởng đã xong. Nó dùng lại **đúng cơ chế của `adminRemoveGame`**:
+   `REMOVED` + `removedAt`, rồi job dọn hằng đêm xoá thật. Không thêm trạng thái thứ năm,
+   không xoá file tại chỗ. Thư gửi ngay kèm link tải `.sb3` và ngày file mất.
+2. **Nói thật** ở trang phụ huynh và `/dieu-khoan`: ẩn là gì, xoá là gì, và ranh giới.
+
+Ba chốt: game `REMOVED` không có nút; game **đang có khiếu nại bản quyền** cũng không —
+nhất quán với `setGameHiddenAction`, và cần thiết vì `/dieu-khoan` hứa với người khiếu nại
+rằng đội kiểm duyệt *xem* nội dung rồi trả lời trong hạn, mà một hàng DB đã xoá thì không
+còn gì để xem; và phụ huynh **không tự bật lại được**, giống game bị admin gỡ.
+
+**Mệnh đề "nếu không còn game nào khác dùng đúng file đó" trên `/dieu-khoan` không phải
+rào chữ.** Đo trên dữ liệu thật: tám game cho ra **tám** mã HTML khác nhau (HTML mang tên
+game) nhưng chỉ **sáu** mã `.sb3` — hai cặp trùng. Nên bản đã đóng gói thì luôn mất khi
+xoá, còn `.sb3` gốc và ảnh bìa chỉ mất khi không game nào khác dùng chúng. Bỏ mệnh đề ấy
+là hứa một việc mà cơ chế không làm — và không nên làm, vì xoá theo mã nội dung là xoá mất
+bản gốc của game khác.
+
+Hộp xác nhận trên nút nói **gọn hơn** `/dieu-khoan` và cố ý không "sửa cho khớp": trang
+điều khoản mô tả cơ chế, hộp xác nhận thì cảnh báo, và nó lệch về phía *mạnh hơn* thực tế
+— hướng đúng để lệch. Việc phụ huynh cần làm cũng không đổi: tải bản gốc về trước ngày đó.
+
+Bộ kiểm: `node infra/e2e-an-vs-xoa.mjs` (24). Nó canh cả ba sự thật ở trên, kể cả sự thật
+số ba — chạy prune thật rồi khẳng định HTML trả 404 trong khi `.sb3` dùng chung vẫn trả 200.
+
+## Hai biểu đồ trên tab Tổng quan
+
+**SVG viết tay, không thư viện.** CSP không có `script-src 'unsafe-inline'` và không cho
+host ngoài, nên một thư viện chart phải vào qua bundle — vài trăm KB JS cho một trang nội
+bộ mà cả hai hình là ba mươi dòng hình học. Cả hai component là **server component**:
+chúng không gửi một byte JS nào xuống trình duyệt. Tooltip là `<title>` của SVG (trình
+duyệt hiện khi trỏ chuột, trình đọc màn hình đọc) — không cần script.
+
+| Hình | Trả lời | Vì sao hình này |
+|---|---|---|
+| **Donut** — trạng thái game | phần lớn game đang ở đâu | bốn trạng thái là một **phân hoạch** thật: mỗi game nằm đúng một ô và bốn số cộng lại bằng tổng. Part-to-whole ≤ 6 múi là chỗ donut đúng |
+| **Cột** — game mới mỗi ngày | nhịp đăng game 14 ngày qua | một chuỗi đếm theo bin thời gian; **một** series nên không có chú giải, tiêu đề đã nói đang đếm gì |
+
+**Màu đã ĐO, không chọn bằng mắt.** Bốn màu trạng thái nằm kề nhau trên vòng donut, và
+vòng tròn đóng nên cặp đầu–cuối cũng kề — nên chúng được kiểm bằng
+`validate_palette.js` (skill dataviz) ở chế độ `--pairs all`, trên đúng `surface` của
+từng giao diện:
+
+| | tách biệt CVD | sàn mắt thường | tương phản |
+|---|---|---|---|
+| Bản sáng | ΔE **8.7** (ngưỡng 8) | 15.5 (sàn 15) | tất cả ≥ 3:1 |
+| Bản tối | ΔE **6.7** (dải 6–8) | 15.5 | tất cả ≥ 3:1 |
+
+Bản tối nằm trong dải 6–8, **chỉ hợp lệ vì có mã hoá thứ hai**: chú giải mang nhãn chữ,
+số và phần trăm, cộng khe 2px giữa các múi. Xoá chú giải đi là bảng màu tối không còn hợp
+lệ — đó là lý do nó là một bảng số chứ không phải bốn ô màu để đối chiếu bằng mắt.
+
+Màu của cột **cố ý không nằm trong bốn màu trạng thái**: "game mới mỗi ngày" không mang
+nghĩa trạng thái, và dùng màu trạng thái cho một chuỗi không phải trạng thái là làm mất
+nghĩa của cả bốn. `contrast-check` thêm 5 cặp (10 phép, ngưỡng **3:1** — đây là màu của
+một *hình*, không phải màu chữ) nhưng nó **không** đo được tách biệt mù màu; đổi màu thì
+phải chạy cả hai công cụ.
+
+Bốn cái bẫy đã trả giá để biết, cả bốn đều im lặng khi hỏng:
+
+1. **Cung 360 độ vẽ ra không gì cả.** Điểm đầu trùng điểm cuối nên `A` không biết đi
+   đường nào và vành biến mất hoàn toàn — đúng vào trạng thái *thường gặp nhất* (một
+   trang mới thì mọi game đều đang hiện). Một trạng thái chiếm 100% thì vẽ `<circle>`.
+2. **`viewBox` scale cả CHỮ**, và nó cắn ở CẢ HAI đầu. Bản đầu dùng `viewBox` rộng 560
+   rồi `w-full`: ở thẻ 350px trên điện thoại, tỉ lệ tụt về 0.62 và nhãn ngày hiển thị ra
+   **~8px** — đo bằng ảnh chụp thật. Rồi khi làm hình to lên, đầu kia cắn: `max-w` để ở
+   700px thì nhãn trục ra **~20px**, *to hơn cả tiêu đề thẻ*, tức thứ bậc đọc bị đảo —
+   cái phụ hét lớn hơn cái chính. Chốt lại ở viewBox 440 + `max-w-[560px]` + `mx-auto`:
+   tỉ lệ chỉ chạy 0.70–1.27, chữ ra 13px ở 390px và ~18px ở thẻ rộng. Phép kiểm ghim
+   ngưỡng dưới (≥11px ở 390px); ngưỡng trên thì canh bằng mắt trên ảnh chụp.
+3. **Vạch "ngày bằng 0" làm đường đáy trông ĐỨT KHÚC.** Bản đầu vẽ cho ngày trống một
+   vạch mỏng màu viền sát đáy; ảnh chụp cho thấy trục dày ở chỗ có ngày trống và mảnh ở
+   giữa, đọc thành nét đứt — mà nét đứt thì đọc như "ngưỡng" hoặc "dự báo". Bỏ vạch,
+   thay bằng một `<rect>` **trong suốt** phủ cả khoảng: vừa cho ngày 0 có tooltip, vừa
+   làm đích trỏ chuột rộng bằng cả khoảng thay vì bằng bề ngang cột.
+4. **Đếm theo ngày phải gom ở JS, không `date_trunc`.** Gom theo ngày phụ thuộc múi giờ
+   người xem (container khai `TZ`), còn Postgres gom theo múi giờ của phiên — lệch nhau
+   thì mọi game đăng sau 17:00 rơi sang ngày hôm sau, im lặng. Và mảng ngày dựng từ
+   *lịch* chứ không từ dữ liệu: 14 ngày mất ba ngày ở giữa đọc như 11 ngày liên tục.
+
+Chú giải donut chịu **cùng luật với mười hai ô số**: mỗi dòng là một link và con số phải
+bằng đúng danh sách nó dẫn tới. Bộ kiểm canh cả luật đó, cả phép cộng bốn múi bằng số ở
+giữa vành — và đã chứng minh cả hai bắt được lỗi (cho một trạng thái đếm 0 → hai phép đỏ).
+
+Bộ kiểm: `node infra/e2e-bieu-do.mjs` (21). Nó **không dựng dữ liệu** — chỉ đọc những gì
+đang có và tự so các con số với nhau, nên không cần dọn và đúng ở mọi trạng thái DB.
+
+Thẻ thứ ba là **Lỗi mỗi ngày**, dùng lại đúng component cột của thẻ bên trên chứ không vẽ
+hình thứ ba: hai chuỗi đếm theo ngày thì cùng một hình, và người trực học cách đọc nó một
+lần. Nó đếm **số LẦN** (`ErrorLog.count`), không đếm số nhóm — một lỗi nổ vào mặt hai
+trăm người phải khác hẳn một lỗi xảy ra đúng một lần, và khoảng cách đó là lý do biểu đồ
+này tồn tại. Đọc `firstSeenAt` chứ không `lastSeenAt`: `lastSeenAt` nhảy sang hôm nay mỗi
+lần một lỗi cũ lặp lại, nên dùng nó thì mọi lỗi cũ dồn vào cột cuối và hình nói rằng hôm
+nay vừa sinh ra hai chục lỗi mới.
+
+**Hai chuỗi cố ý KHÔNG gộp vào một biểu đồ.** Cùng đơn vị ("mỗi ngày bao nhiêu cái")
+nhưng khác bậc độ lớn hoàn toàn — vài game một ngày so với có thể hàng trăm lượt lỗi —
+nên chung một trục thì chuỗi nhỏ dán bẹt xuống đáy, còn hai trục là thứ không bao giờ
+được làm: tỉ lệ giữa hai thang là tuỳ ý, nên biểu đồ tự bịa ra một tương quan không có
+trong dữ liệu.
+
+Bố cục: **hai cột, thẻ lỗi chiếm cả hàng dưới.** Đã thử và đo hai cách kia — ba cột
+(443px mỗi thẻ) thì vành donut không còn chỗ nằm cạnh chú giải nên nó xuống dòng, thẻ cao
+553px và grid kéo hai thẻ bên cạnh cao theo, để lại hai khoảng trắng lớn; hai cột mà thẻ
+thứ ba không span thì nó nằm một mình bên trái và bỏ trống hẳn một ô bên phải.
+
+## Người dùng tự báo lỗi — `/bao-loi`
+
+`app/error.tsx` từ trước đã nói với người gặp lỗi *"gửi kèm mã này giúp tìm ra nguyên nhân
+nhanh hơn nhiều"* — mà **không nói gửi ở đâu**, và không có chỗ nào để gửi. `/admin/loi`
+thì viết như thể luồng ấy tồn tại: *"Phụ huynh báo lỗi kèm mã thì tìm bằng…"*. Đường duy
+nhất là email đơn vị vận hành, còn là một địa chỉ `.local`. Cùng loại lỗ hổng với quyền
+xoá tài khoản: một câu hứa trên trang mà không có cơ chế đằng sau.
+
+**Và lỗi tự động không thay được đường này.** `ErrorLog` chỉ thấy những gì làm React ném
+exception; nó không bao giờ thấy "game của con tôi mở ra màn hình đen", "bấm gửi mà không
+có gì xảy ra", hay "thư xác minh không tới" — đúng những chỗ hỏng người dùng gặp nhiều
+nhất và máy không phát hiện được.
+
+**Bảng riêng `BugReport`, không dùng chung `ErrorLog`.** Hai thứ khác bản chất: `ErrorLog`
+gom nhóm theo `fingerprint` với cột `count` cho câu hỏi "lỗi nào xảy ra nhiều nhất"; bảng
+này là lời một người viết một lần — không gom được (hai người viết hai câu khác nhau về
+cùng một chỗ hỏng), `count` vô nghĩa, và nó có một thứ lỗi tự động không bao giờ có: một
+người đang chờ được trả lời.
+
+Đây là hộp nhận chữ do người ngoài gõ, ghi thẳng vào DB, **không cần đăng nhập** — cùng
+loại rủi ro với `error-log.ts` nên cùng bốn lớp chặn: cắt độ dài mọi trường; trần
+**5 báo cáo/IP/giờ** (theo GIỜ chứ không theo phút — người gõ tay không gửi ba mươi báo
+cáo một phút, nên một trần kiểu ấy chỉ mở cửa cho script); trần tổng **200** báo cáo chưa
+xử lý; và cắt query string khỏi đường dẫn, không lưu IP thô, không lưu user agent đầy đủ.
+
+Chạm trần tổng thì báo cáo mới bị từ chối **và người gửi được báo** — ngược hướng với lỗi
+tự động, nơi bỏ im lặng là đúng vì không có ai đứng chờ. Ở đây có một người vừa gõ xong
+một đoạn văn; để họ tưởng đã gửi được là tệ hơn nói thật rằng hộp thư đang đầy.
+
+Ô email **tuỳ chọn**, và rỗng là một câu trả lời hợp lệ: bắt điền email mới được báo lỗi
+thì người gặp lỗi ở đúng luồng đăng nhập sẽ bỏ đi. Kiểm email rất lỏng, cũng cố ý — từ
+chối một báo cáo vì địa chỉ gõ thiếu dấu chấm là đánh mất nội dung báo cáo để giữ một
+trường mà chính người gửi có thể bỏ trống.
+
+Đường vào: chân trang (mọi trang), trang lỗi (kèm `?ma=` và `?tu=` điền sẵn), và
+`/dieu-khoan`. **Chân trang là đường vào quan trọng nhất** — trang lỗi chỉ hiện khi React
+ném exception, nên nếu đường vào chỉ nằm ở đó thì đúng những báo cáo giá trị nhất không
+có cửa nào.
+
+Trong khu quản trị, phần **Người dùng báo** đứng TRÊN lỗi tự động ở tab Lỗi, và thứ tự đó
+là nội dung: đặt xuống dưới ba mươi nhóm lỗi tự động thì nó rơi khỏi màn hình đầu tiên
+đúng vào ngày có nhiều lỗi — tức đúng ngày người ta báo nhiều nhất. Phần này **không chịu
+ba bộ lọc** của trang (chúng nói về `ErrorLog`); cho chúng lọc cả hai danh sách thì "Đã
+xử lý" hiện một hàng đợi trống rỗng cạnh một danh sách lỗi cũ.
+
+Bộ kiểm: `node infra/e2e-bao-loi.mjs` (29). Nó đi hết đường — gửi ở site rồi mở khu quản
+trị tìm đúng chữ vừa gõ — và canh chốt email ở **hai tầng**: trình duyệt chặn trước
+(`type="email"`), rồi tắt `noValidate` để chứng minh server tự từ chối, vì một request
+nặn tay không đi qua trình duyệt nào cả.
 
 ## Cấu trúc
 

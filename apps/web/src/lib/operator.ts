@@ -39,8 +39,57 @@ export function operator(): Operator {
   };
 }
 
+/**
+ * Tên miền cấp cao KHÔNG BAO GIỜ nhận được thư từ Internet.
+ *
+ * `.test`, `.example`, `.invalid`, `.localhost` do RFC 6761 giữ lại và cấm uỷ
+ * quyền cho ai; `.local` thì RFC 6762 dành cho mDNS trong mạng nội bộ. Thư gửi
+ * tới bất kỳ địa chỉ nào dưới các đuôi này đều bị trả về — không có ngoại lệ nào
+ * mà một bản cài đặt KidoGame có thể tạo ra.
+ *
+ * CHỈ chặn theo TLD, không chặn `example.com` và họ hàng: đó là tên cấp HAI, và
+ * một khi bắt đầu liệt kê tên cấp hai thì danh sách phải nuôi mãi. Luật ở đây gói
+ * gọn trong một câu kiểm được: đuôi này thì bưu điện Internet không giao.
+ */
+const TLD_KHONG_NHAN_THU = ['.local', '.localhost', '.test', '.example', '.invalid'];
+
+/** Địa chỉ có nằm dưới một TLD không bao giờ nhận được thư không. */
+export function laDiaChiChet(email: string): boolean {
+  const at = email.lastIndexOf('@');
+  if (at < 0) return true; // không có @ thì không phải địa chỉ thư
+  const mien = email.slice(at + 1).trim().toLowerCase().replace(/\.$/, '');
+  if (!mien) return true;
+  return TLD_KHONG_NHAN_THU.some((tld) => mien === tld.slice(1) || mien.endsWith(tld));
+}
+
+/**
+ * Đã có một đơn vị vận hành LIÊN HỆ ĐƯỢC hay chưa.
+ *
+ * "Liên hệ được" chứ không phải "có gõ gì đó vào biến môi trường", và khác biệt
+ * đó không phải chuyện chữ nghĩa — bốn chỗ trong dự án hỏi hàm này, và mỗi chỗ
+ * hỏng một kiểu khi địa chỉ có mặt nhưng chết:
+ *
+ *   - `mail.ts` đặt `Reply-To` trỏ vào hư không, trong khi sáu lá thư bảo người
+ *     nhận hãy trả lời, và một trong số đó là đường DUY NHẤT để phụ huynh lấy lại
+ *     `.sb3` của con trước ngày xoá vĩnh viễn;
+ *   - `prisma/nhac-viec-co-han.ts` gửi thư nhắc mỗi đêm rồi in `✓ Đã gửi tới …`
+ *     — một dòng báo thành công cho việc không xảy ra;
+ *   - `takedown.ts` gửi thông báo khiếu nại bản quyền cho đội vận hành, và nó nằm
+ *     trong `Promise.allSettled` nên gửi trượt không để lại dấu vết nào;
+ *   - `/dieu-khoan` in địa chỉ ấy ra CÔNG KHAI làm nơi nhận khiếu nại, và không
+ *     hiện cảnh báo, vì theo phép kiểm cũ thì đã cấu hình rồi.
+ *
+ * Bốn chỗ đó đều đã làm đúng cho trường hợp CHƯA KHAI. Coi địa chỉ chết là chưa
+ * khai thì cả bốn tự đúng, thay vì vá bốn lần ở bốn nơi và bỏ sót chỗ thứ năm khi
+ * có người thêm.
+ *
+ * Không tự đoán xa hơn: một tên miền thật mà gõ sai chính tả thì hàm này vẫn nói
+ * đã cấu hình. Kiểm địa chỉ có người đọc hay không là việc của `mail-check.mjs
+ * --send`, và không có luật cú pháp nào thay được một lá thư gửi thật.
+ */
 export function isOperatorConfigured(): boolean {
-  return Boolean(process.env.OPERATOR_NAME?.trim() && process.env.OPERATOR_EMAIL?.trim());
+  const email = process.env.OPERATOR_EMAIL?.trim();
+  return Boolean(process.env.OPERATOR_NAME?.trim() && email && !laDiaChiChet(email));
 }
 
 /**

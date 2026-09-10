@@ -147,9 +147,34 @@ services:
       - '443:443'
       - '443:443/udp' # HTTP/3
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
-      PLAYER_DOMAIN: ${PLAYER_DOMAIN}
-      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
+      # Lặp lại `:?` của service `web` chứ không viết `${APP_DOMAIN}` trần, dù rỗng ở
+      # đây đã bị chặn từ trên: mọi biến làm TÊN SITE phải tự đỡ lấy mình. Rỗng ở
+      # dòng này là Caddy từ chối cả file — xem ghi chú dài ở ADMIN_DOMAIN bên dưới —
+      # nên để nó dựa vào một `:?` nằm ở service khác là đặt cược rằng không ai gỡ
+      # `:?` đó. Cược đó đã thua một lần: cả nhóm mail từng có `:?` và đã bị bỏ.
+      APP_DOMAIN: ${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
+      PLAYER_DOMAIN: ${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # KHÔNG truyền rỗng xuống Caddy, dù `.env.example` mời để trống biến này.
+      #
+      # `Caddyfile` viết `{$ADMIN_DOMAIN:admin.kidogame.vn}`, mà mặc định sau dấu `:`
+      # chỉ áp dụng khi biến CHƯA ĐƯỢC ĐẶT. Truyền `${ADMIN_DOMAIN:-}` là ĐẶT THÀNH
+      # RỖNG — khác hẳn — nên ra một khối site không có tên và Caddy TỪ CHỐI CẢ FILE,
+      # kéo sập luôn app và player. Lỗi in ra là `server block without any key is
+      # global configuration` và không hề nhắc tới `ADMIN_DOMAIN`; compose vẫn xanh,
+      # bốn service kia vẫn healthy, chỉ mình caddy crash loop và dòng ACME nhìn y
+      # như DNS chưa trỏ. Đã mất hàng giờ ở đây một lần.
+      #
+      # Mặc định là `.localhost` chứ không phải tên thật: Caddy coi `.localhost` là
+      # nội bộ nên tự cấp chứng chỉ bằng CA riêng (`issuer:"local"`, ~200ms) — không
+      # ACME thất bại lặp lại, không đốt hạn mức Let's Encrypt, và không DNS công
+      # cộng nào trỏ tới nên không ai ngoài Internet vào được. Đúng bằng ý định đã
+      # ghi trong `Caddyfile`: để trống là TẮT khu quản trị tách riêng.
+      #
+      # Service `web` ở trên vẫn đọc `${ADMIN_DOMAIN:+...}` từ .env, nên nó vẫn thấy
+      # ADMIN_ORIGIN RỖNG và giữ `/admin` trên app domain. Đừng "dọn cho gọn" bằng
+      # cách đặt mặc định này vào `.env.example` — làm thế là bật tách origin sau
+      # lưng người deploy, và triệu chứng khi đó là `/admin` trả 404 trên app domain.
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.localhost}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kidogame.vn}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -211,7 +236,9 @@ services:
     entrypoint: ['/bin/bash', '/backup.sh', 'loop']
 
   # ---------------------------------------------------------------------------
-  # DỌN ĐỊNH KỲ: xoá hẳn game đã gỡ quá 7 ngày, rồi xoá file thành rác.
+  # VIỆC HẰNG ĐÊM: nhắc việc có hạn, xoá hẳn game đã gỡ quá 7 ngày, xoá file thành
+  # rác, rồi CANH xem máy chủ còn chạy được bao lâu nữa (đĩa, chứng chỉ, tuổi của
+  # bản sao lưu, đợt lỗi mới) và gửi thư nếu có vấn đề.
   #
   # Là một service chứ không phải cron trên host, cùng lý do như `backup`: việc phải
   # có người nhớ chạy thì đúng bằng không có. "Game đã gỡ thì một tuần sau xoá luôn"
@@ -242,13 +269,72 @@ services:
       # Hạn giữ game đã gỡ, tính bằng ngày. Rỗng = dùng mặc định 7 trong
       # `NGAY_GIU_GAME_DA_GO`. Đặt 0 hoặc chữ thì script TỪ CHỐI chạy, không xoá gì.
       REMOVED_KEEP_DAYS: ${REMOVED_KEEP_DAYS:-}
+      # ĐƯỜNG GỬI MAIL, và service này chưa từng có nó cho tới khi bước nhắc việc
+      # được thêm vào prune.sh.
+      #
+      # Không có nhóm biến này thì `sendMail` ở production NÉM LỖI, nên bước nhắc
+      # đỏ trong log mỗi đêm — đó là hướng hỏng đúng. Hướng sai là im lặng: ở dev
+      # (NODE_ENV khác production) `sendMail` chỉ in lá thư ra stdout rồi coi như
+      # xong, tức thư nhắc "đã gửi" vào log của container và không ai nhận.
+      #
+      # Cùng danh sách với service `web`, và phải giữ khớp: hai chỗ khai lệch nhau
+      # thì app gửi được mail còn thư nhắc thì không, mà cả hai đều báo là ổn.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
+      # Địa chỉ NHẬN thư nhắc. Chưa khai thì bước nhắc từ chối gửi và nói rõ lý do,
+      # thay vì gửi vào `chua-cau-hinh@kidogame.local`.
+      OPERATOR_NAME: ${OPERATOR_NAME:-}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      # Để link trong thư nhắc bấm được. Rỗng thì thư in đường dẫn trần, không đoán.
+      ADMIN_ORIGIN: ${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}
+      # HAI BIẾN DƯỚI ĐÂY LÀ CỦA BƯỚC CANH (bước 4), không phải của ba bước dọn.
+      #
+      # Lặp lại `:?` dù cả `web` lẫn `caddy` đã có — cùng lập luận đã ghi ở service
+      # `caddy`, và ở đây hệ quả của việc để rỗng còn im hơn: `canh-gac.ts` bỏ qua
+      # phép canh nào thiếu origin, nên rỗng ở dòng này KHÔNG làm gì đỏ lên cả. Nó
+      # chỉ lặng lẽ gỡ mất phép canh "web có trả lời từ ngoài Internet không" và
+      # phép canh chứng chỉ, rồi mỗi đêm báo cáo rằng mọi thứ đều ổn. Một cơ chế
+      # giám sát hỏng theo kiểu vẫn nói "ổn" thì tệ hơn hẳn không có cơ chế nào.
+      APP_ORIGIN: https://${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
+      PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # Bước canh đọc thư mục này để biết bản sao lưu mới nhất bao nhiêu tuổi.
+      BACKUP_DIR: /backups
+      # Ngưỡng báo động, để trống là dùng mặc định trong canh-gac.ts (85 / 26 / 21 / 5).
+      CANH_DIA_PHAN_TRAM: ${CANH_DIA_PHAN_TRAM:-}
+      CANH_SAO_LUU_GIO: ${CANH_SAO_LUU_GIO:-}
+      CANH_CHUNG_CHI_NGAY: ${CANH_CHUNG_CHI_NGAY:-}
+      CANH_LOI_MOI: ${CANH_LOI_MOI:-}
+      # Kênh báo động THỨ HAI, đứng cạnh mail chứ không thay nó. Rỗng cả hai = tắt.
+      #
+      # KHÔNG dùng `:?` ở đây, khác hẳn hai biến origin ngay trên. Origin rỗng làm
+      # một phép canh biến mất trong im lặng — đó là lý do phải chặn. Telegram rỗng
+      # thì `canh-gac.ts` in hẳn một dòng "chưa cấu hình, bỏ qua kênh này" và mail
+      # vẫn đi; nó suy giảm chứ không biến mất, nên chặn cả stack vì nó là quá tay.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       # Cùng lý do như service backup: thiếu dòng này thì container chạy UTC và
-      # PRUNE_HOUR=4 nghĩa là 11 giờ trưa giờ Việt Nam.
+      # PRUNE_HOUR=4 nghĩa là 11 giờ trưa giờ Việt Nam. Ở đây còn một hệ quả nữa:
+      # hạn SLA đếm theo ngày làm việc, nên lệch múi giờ đổi cả kết quả đếm.
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     volumes:
       - ./prune.sh:/prune.sh:ro
       # ĐỌC-GHI, khác service backup: việc của nó là xoá file, không phải sao chép.
       - storage:/srv/storage
+      # CHỈ ĐỌC, cho bước canh (bước 4): nó chỉ hỏi bản sao lưu mới nhất bao nhiêu
+      # tuổi và nặng bao nhiêu. Cùng thư mục host mà service `backup` ghi vào, nên
+      # `BACKUP_HOST_DIR` phải khớp giữa hai chỗ — lệch thì bước canh nhìn vào một
+      # thư mục rỗng và báo "chưa từng sao lưu thành công" mỗi đêm, trong khi việc
+      # sao lưu vẫn đang chạy đúng ở thư mục kia.
+      #
+      # Mount ĐỌC-GHI thì service này xoá được bản sao lưu, mà nó là service duy
+      # nhất trong stack có công việc chính là xoá thứ gì đó. Không cho nó cầm cả
+      # hai quyền cùng lúc.
+      - ${BACKUP_HOST_DIR:-./backups}:/backups:ro
     entrypoint: ['/bin/bash', '/prune.sh', 'loop']
 
 volumes:

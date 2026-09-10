@@ -643,10 +643,40 @@ if (FIXTURE) {
         dat: co('dat'),
         le: co('le'),
         vien: co('vien'),
-        /* Điểm tab: tranh trang trí không được thêm cái nào, ở khổ nào cũng vậy. */
-        tab: document.querySelectorAll(
+        /*
+         * Điểm tab: tranh trang trí không được thêm cái nào, ở khổ nào cũng vậy.
+         *
+         * ĐO TRỰC TIẾP TRONG TRANH, KHÔNG GHIM SỐ LINK CHÂN TRANG — và đây là chỗ bản
+         * trước sai. Nó chốt `tab === 2`, đúng bằng số link chân trang lúc viết. Rồi
+         * commit thêm link "Báo lỗi" vào chân trang (một thay đổi hoàn toàn lành, và có
+         * lý do riêng ghi trong `site-footer.tsx`) làm con số thành 3, và ba phép kiểm
+         * này đỏ với thông điệp "tranh không thêm điểm tab" — tức chỉ thẳng vào tranh
+         * trong khi tranh không hề đụng tới. Đó là loại đỏ tốn nhất: nó gửi người đọc
+         * đi sai hướng.
+         *
+         * `tabTranh` đếm phần tử bắt được tab NẰM BÊN TRONG các khối `[data-kg-decor]`.
+         * Đó đúng là điều câu trên nói, và thêm link chân trang thứ tư cũng không đụng.
+         *
+         * Riêng phép này đếm TRONG DOM, cố ý ngược với luật "đếm cái đang vẽ" ghi ở
+         * đầu khối. Lý do: con của một khối `display: none` thì không bắt được tab, nên
+         * đếm theo cái đang vẽ sẽ bỏ qua một nút nằm trong bức tranh đang tắt ở khổ này
+         * — rồi nó thành điểm tab thật ở khổ khác. Đặt phần tử tương tác vào trong khối
+         * trang trí là sai bất kể mốc màn hình, nên ở đây chặt hơn là đúng.
+         */
+        tabTranh: [...document.querySelectorAll('[data-kg-decor]')].reduce(
+          (n, e) =>
+            n + e.querySelectorAll('a, button, [tabindex]:not([tabindex="-1"])').length,
+          0
+        ),
+        /*
+         * Và chốt thêm: mọi điểm tab trong chân trang đều phải là link có `href`. Bắt
+         * được một `button` hay một `tabindex` lạ lọt vào chân trang — thứ mà phép kiểm
+         * trên không thấy nếu nó nằm ngoài khối trang trí.
+         */
+        tabChan: document.querySelectorAll(
           'footer a, footer button, footer [tabindex]:not([tabindex="-1"])'
         ).length,
+        linkChan: document.querySelectorAll('footer a[href]').length,
         /*
          * Nền: có dải chuyển sắc hay không, VÀ màu đặc lót dưới còn không.
          *
@@ -677,7 +707,16 @@ if (FIXTURE) {
       d.dat === hep && d.vien === hep && d.le === !hep,
       `đất ${d.dat}, viền ${d.vien}, lề ${d.le} (khổ ${hep ? 'hẹp' : 'rộng'})`
     );
-    check(`Chân trang ${ten}: tranh không thêm điểm tab`, d.tab === 2, `${d.tab} điểm tab`);
+    check(
+      `Chân trang ${ten}: tranh không thêm điểm tab`,
+      d.tabTranh === 0,
+      `${d.tabTranh} điểm tab trong khối trang trí`
+    );
+    check(
+      `Chân trang ${ten}: mọi điểm tab đều là link có href`,
+      d.tabChan === d.linkChan && d.linkChan >= 2,
+      `${d.tabChan} điểm tab / ${d.linkChan} link`
+    );
     /* Dải nền bật đúng ở khổ nào có dải đất, tắt đúng ở khổ nào có tranh bên lề. */
     check(
       `Dải nền chuyển sắc — ${ten}`,

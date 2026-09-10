@@ -25,11 +25,61 @@
  * Đặt cả hai thì SMTP thắng: xem `sendMail`.
  */
 
+import { isOperatorConfigured, operator } from './operator';
+
 export interface MailMessage {
   to: string;
   subject: string;
   /** Bản chữ thuần. Luôn phải có — nhiều hòm thư và bộ lọc rác đọc bản này. */
   text: string;
+}
+
+/** Một lá thư đã dựng xong chân thư và đã quyết định địa chỉ nhận thư trả lời. */
+export interface ThuGui extends MailMessage {
+  /** Địa chỉ cho header `Reply-To`, hoặc `null` khi chưa khai `OPERATOR_EMAIL`. */
+  replyTo: string | null;
+}
+
+/**
+ * Địa chỉ nhận thư TRẢ LỜI, hoặc `null` khi chưa khai `OPERATOR_EMAIL`.
+ *
+ * VÌ SAO PHẢI CÓ. Sáu lá thư trong dự án này bảo người nhận "trả lời thư này", và
+ * một trong số đó là đường DUY NHẤT để lấy lại file `.sb3` gốc của một đứa trẻ
+ * trước ngày nó bị xoá vĩnh viễn (`takedown.ts`, thư báo gỡ vì khiếu nại bản
+ * quyền). `/dieu-khoan` hứa đúng đường ấy. Mà trước đây `MailMessage` không có
+ * `replyTo` và không transport nào đặt header đó, nên thư trả lời rơi về địa chỉ
+ * `MAIL_FROM` — mặc định lúc deploy là `no-reply@kidogame.vn` (`docker-compose.yml`).
+ *
+ * VÌ SAO KHÔNG AI THẤY: trên máy dev `MAIL_FROM` là hòm thư thật của người phát
+ * triển, nên ở dev trả lời thư TỚI NƠI. Cách hỏng chỉ hiện ra đúng lúc deploy.
+ *
+ * `null` khi chưa cấu hình chứ KHÔNG rơi về `chua-cau-hinh@kidogame.local`: đặt
+ * `Reply-To` trỏ vào một TLD dành riêng cho thử nghiệm là bảo đảm mọi thư trả lời
+ * bị trả về, tệ hơn hẳn việc không đặt header nào và để thư về `MAIL_FROM`.
+ */
+function diaChiTraLoi(): string | null {
+  return isOperatorConfigured() ? operator().email : null;
+}
+
+/**
+ * Chân thư, dùng chung cho CẢ bản chữ lẫn bản HTML.
+ *
+ * Câu cũ ở đây là "Bạn không cần trả lời thư." — sai với sáu trong tám lá thư, và
+ * nó nằm cách chỗ thư vừa bảo "trả lời thư này trước ngày đó" đúng hai dòng. Phụ
+ * huynh đọc lá thư báo game của con sắp bị xoá hẳn sẽ thấy hai câu ngược nhau, gửi
+ * từ một địa chỉ tên là `no-reply`.
+ *
+ * Nêu thẳng địa chỉ chứ không chỉ dựa vào header: một số hòm thư không bày
+ * `Reply-To` ra, và người đang muốn giữ lại công của con thì cần thấy chỗ để gửi.
+ *
+ * Chưa cấu hình `OPERATOR_*` thì BỎ HẲN câu về việc trả lời, không thay bằng câu
+ * phủ định. Lúc đó không ai biết thư trả lời đi đâu, nên cả hai hướng đều là nói
+ * bừa; im về chuyện đó là câu duy nhất còn đúng.
+ */
+function chanThu(): string {
+  const traLoi = diaChiTraLoi();
+  const gioiThieu = 'Thư này gửi tự động từ KidoGame, nơi các bé đăng game Scratch tự làm.';
+  return traLoi ? `${gioiThieu} Trả lời thư này thì thư về ${traLoi}.` : gioiThieu;
 }
 
 /** Origin của app, dùng để dựng link tuyệt đối trong mail. */
@@ -97,10 +147,26 @@ function laUrlDungRieng(doan: string): boolean {
  *    án là không có traffic ra bên thứ ba.
  */
 export function dungHtmlTuText(text: string, subject: string): string {
+  const chan = chanThu();
+
+  /*
+   * Gỡ chân thư ra khỏi phần thân nếu bản chữ đã mang sẵn.
+   *
+   * `sendMail` gắn chân vào `text` để bản chữ và bản HTML không bao giờ lệch nhau —
+   * đó là cùng lý do đã viết ở đầu mục này. Nhưng chân thư trong HTML là một ô
+   * riêng có đường kẻ ngăn và cỡ chữ nhỏ, nên nếu cứ để nguyên thì nó vừa ra một
+   * đoạn thường trong thân, vừa ra ô chân bên dưới — in hai lần.
+   *
+   * Gỡ bằng cách SO ĐÚNG chuỗi chân thư chứ không phải "bỏ đoạn cuối": hàm này còn
+   * được `/dev/thu/[chiSo]/html` gọi trên thư đã lưu, và một ngày nào đó có thể
+   * được gọi trên một đoạn chữ trần. So khớp thì đoạn chữ trần giữ nguyên mọi đoạn
+   * của nó, chỉ được thêm ô chân — thay vì âm thầm mất đoạn cuối.
+   */
   const doanVan = text
     .split(/\n\s*\n/)
     .map((d) => d.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((d) => d !== chan);
 
   const than = doanVan
     .map((doan) => {
@@ -139,7 +205,7 @@ export function dungHtmlTuText(text: string, subject: string): string {
       <tr><td style="padding:0 0 18px;font-size:19px;font-weight:700;color:${MAU.nut}">KidoGame</td></tr>
       ${than}
       <tr><td style="padding:16px 0 0;border-top:1px solid ${MAU.vien};font-size:13px;line-height:1.55;color:${MAU.chuMo}">
-        Thư này gửi tự động từ KidoGame, nơi các bé đăng game Scratch tự làm. Bạn không cần trả lời thư.
+        ${esc(chan)}
       </td></tr>
     </table>
   </td></tr>
@@ -152,7 +218,7 @@ function mailFrom(): string {
 }
 
 /** Một lá thư đã "gửi" ở môi trường dev, giữ để xem lại ở `/dev/thu`. */
-export interface ThuDaGui extends MailMessage {
+export interface ThuDaGui extends ThuGui {
   /** Thời điểm gửi, để hộp thư xếp mới nhất trước. */
   luc: Date;
 }
@@ -215,17 +281,36 @@ export function xoaHopThuDev(): number {
  * gửi khi nó chưa đi đâu cả — hoặc ngược lại. Tiền tố `┌─ MAIL` phải giữ nguyên:
  * `infra/e2e-email.mjs` cắt log theo đúng chuỗi đó.
  */
-function ghiLaiChoDev(message: MailMessage, nhan: string): void {
+function ghiLaiChoDev(message: ThuGui, nhan: string): void {
   const hop = (g.kidogameHopThuDev ??= []);
   hop.push({ ...message, luc: new Date() });
   // Mảng vòng: một buổi thử có thể sinh hàng trăm thư, mà chẳng ai xem lại thư thứ 51.
   if (hop.length > MAX_THU) hop.splice(0, hop.length - MAX_THU);
+
+  /*
+   * In cả `Reply-To`, kể cả khi nó trống.
+   *
+   * Header này là thứ vừa vắng mặt suốt mà không ai biết, và cách nó hỏng là im
+   * lặng tuyệt đối: thư vẫn gửi, vẫn tới, vẫn đọc được — chỉ thư TRẢ LỜI mới rơi
+   * mất, ở một thời điểm khác, tại hòm thư của người khác. Không in ra đây thì ở
+   * dev không có chỗ nào nhìn thấy nó, và bộ kiểm cũng không có gì để đọc.
+   *
+   * In cả dòng "chưa khai OPERATOR_EMAIL" thay vì giấu dòng đi khi trống: một dòng
+   * vắng mặt thì không ai nhận ra là nó vắng.
+   */
+  const opEmail = process.env.OPERATOR_EMAIL?.trim();
+  const dongTraLoi = message.replyTo
+    ? `│ trả lời: ${message.replyTo}`
+    : opEmail
+      ? `│ trả lời: (BỎ QUA ${opEmail} — tên miền đó không nhận được thư; rơi về MAIL_FROM)`
+      : '│ trả lời: (chưa khai OPERATOR_EMAIL — thư trả lời rơi về MAIL_FROM)';
 
   console.log(
     [
       '',
       `┌─ MAIL (${nhan}) ─────────────`,
       `│ tới:     ${message.to}`,
+      dongTraLoi,
       `│ tiêu đề: ${message.subject}`,
       '├────────────────────────────────────────────────────────────',
       message.text
@@ -313,18 +398,52 @@ async function layTransporter(cfg: CauHinhSmtp) {
   return transporter;
 }
 
-async function sendViaSmtp(message: MailMessage, cfg: CauHinhSmtp): Promise<void> {
+/**
+ * Một dòng log cho mỗi lá thư đã trao được cho máy chủ mail.
+ *
+ * VÌ SAO CẦN. Trước đây cả hai transport đều VỨT giá trị trả về, nên toàn bộ điều hệ
+ * thống biết về một lá thư đã gửi là "không ném lỗi". Khi có người nói "tôi không
+ * nhận được thư" thì không có gì để đối chiếu: không biết máy chủ mail đã nhận chưa,
+ * không có id nào để tra. Đã đứng đúng vào chỗ đó ngày 9/9 — một lá thư báo là đã
+ * gửi, hòm thư người nhận không thấy, và phải viết một script riêng gọi thẳng
+ * nodemailer mới biết được là Gmail đã trả `250 OK` và thư nằm trong Spam.
+ *
+ * `rejected` là thứ đáng giá nhất ở đây: nodemailer chỉ NÉM khi TOÀN BỘ người nhận bị
+ * từ chối. Gửi cho nhiều người mà rớt một người thì lặng thinh — chính là cách hỏng
+ * không ai thấy được nếu không đọc trường này.
+ *
+ * Log địa chỉ người nhận, KHÔNG log thân thư: mối lo đã ghi ở `sendMail` là token
+ * trong log, mà token nằm trong thân. Địa chỉ thì người vận hành vốn đã có cả bảng
+ * trong DB, và thiếu nó thì dòng log này không trả lời được câu hỏi duy nhất nó sinh
+ * ra để trả lời.
+ */
+function ghiLaiDaTrao(duong: string, to: string, id: string, phanHoi: string, rot: string[] = []) {
+  console.log(`[mail] ${duong} đã trao — tới=${to} id=${id} phản hồi=${phanHoi}`);
+  if (rot.length) console.error(`[mail] ${duong} TỪ CHỐI ${rot.length} người nhận: ${rot.join(', ')}`);
+}
+
+async function sendViaSmtp(message: ThuGui, cfg: CauHinhSmtp): Promise<void> {
   const transporter = await layTransporter(cfg);
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: mailFrom(),
       to: message.to,
+      // `undefined` chứ không phải chuỗi rỗng: nodemailer dựng hẳn một header
+      // `Reply-To:` rỗng cho chuỗi rỗng, và một header dị dạng bị chấm điểm spam.
+      replyTo: message.replyTo ?? undefined,
       subject: message.subject,
       // Gửi cả hai bản. Hòm thư tự chọn, và bộ lọc rác đọc bản chữ — một lá thư
       // chỉ có HTML bị chấm điểm spam cao hơn hẳn.
       text: message.text,
       html: dungHtmlTuText(message.text, message.subject),
     });
+    ghiLaiDaTrao(
+      'SMTP',
+      message.to,
+      String(info.messageId ?? '—'),
+      String(info.response ?? '—').trim(),
+      Array.isArray(info.rejected) ? info.rejected.map(String) : []
+    );
   } catch (err) {
     /*
      * Bọc lại kèm host và user để dòng lỗi tự nói ra chỗ cần sửa. Nguyên nhân hay
@@ -339,7 +458,7 @@ async function sendViaSmtp(message: MailMessage, cfg: CauHinhSmtp): Promise<void
   }
 }
 
-async function sendViaResend(message: MailMessage, apiKey: string): Promise<void> {
+async function sendViaResend(message: ThuGui, apiKey: string): Promise<void> {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -349,6 +468,10 @@ async function sendViaResend(message: MailMessage, apiKey: string): Promise<void
     body: JSON.stringify({
       from: mailFrom(),
       to: [message.to],
+      // Resend gọi trường này là `reply_to` (snake_case) và nhận một MẢNG, khác hẳn
+      // `replyTo` của nodemailer. Gõ theo thói quen camelCase thì Resend BỎ QUA
+      // trường lạ và vẫn trả 200 — thư đi bình thường, chỉ là không có Reply-To.
+      ...(message.replyTo ? { reply_to: [message.replyTo] } : {}),
       subject: message.subject,
       text: message.text,
       html: dungHtmlTuText(message.text, message.subject),
@@ -360,6 +483,13 @@ async function sendViaResend(message: MailMessage, apiKey: string): Promise<void
     const detail = await res.text().catch(() => '');
     throw new Error(`Resend trả về ${res.status}: ${detail.slice(0, 300)}`);
   }
+
+  /*
+   * Cùng một dòng log với đường SMTP, cố ý: người đi tra "thư đã gửi chưa" không nên
+   * phải biết bản cài đặt này đang dùng đường nào. Resend trả id trong body JSON.
+   */
+  const than = (await res.json().catch(() => null)) as { id?: string } | null;
+  ghiLaiDaTrao('Resend', message.to, than?.id ?? '—', `HTTP ${res.status}`);
 }
 
 /**
@@ -415,6 +545,21 @@ export async function sendMail(message: MailMessage): Promise<void> {
   const laDev = process.env.NODE_ENV !== 'production';
 
   /*
+   * Gắn chân thư và chốt địa chỉ trả lời ĐÚNG MỘT LẦN, ngay đây, trước mọi nhánh.
+   *
+   * Làm ở đây chứ không ở từng transport vì có bốn đường một lá thư đi ra —
+   * console, hộp thư `/dev/thu`, SMTP, Resend — và ba trong bốn đường đó là thứ
+   * người ta ĐỌC để tin rằng thư đã gửi đúng. Gắn chân ở transport thì log dev và
+   * `/dev/thu` bày ra một lá thư khác với lá thư người nhận thật sự nhận được, mà
+   * khác đúng ở phần vừa mới được sửa cho hết sai.
+   */
+  const thu: ThuGui = {
+    ...message,
+    text: `${message.text.trimEnd()}\n\n${chanThu()}`,
+    replyTo: diaChiTraLoi(),
+  };
+
+  /*
    * Ở DEV, địa chỉ thuộc TLD thử nghiệm KHÔNG bao giờ đi ra ngoài, dù đã cấu hình
    * đường gửi thật.
    *
@@ -449,7 +594,7 @@ export async function sendMail(message: MailMessage): Promise<void> {
         : coKeyThat
           ? 'gửi thật qua Resend'
           : 'transport console — KHÔNG gửi đi thật';
-    ghiLaiChoDev(message, nhan);
+    ghiLaiChoDev(thu, nhan);
   }
 
   if (boQuaVoiDiaChiThuNghiem) return;
@@ -460,12 +605,12 @@ export async function sendMail(message: MailMessage): Promise<void> {
    * trong .env từ lần cấu hình trước.
    */
   if (smtp) {
-    await sendViaSmtp(message, smtp);
+    await sendViaSmtp(thu, smtp);
     return;
   }
 
   if (coKeyThat) {
-    await sendViaResend(message, apiKey as string);
+    await sendViaResend(thu, apiKey as string);
     return;
   }
 

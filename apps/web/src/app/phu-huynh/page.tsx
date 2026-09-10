@@ -4,13 +4,20 @@ import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
 import { createChildAction } from '@/lib/actions';
 import { gameDangBiKhieuNai } from '@/lib/takedown';
+import { objectUrl } from '@/lib/storage';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { EmptyState, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
-import { GameVisibilityToggle, LockToggle, ResetPasswordForm } from './child-controls';
+import {
+  DeleteGameButton,
+  GameVisibilityToggle,
+  LockToggle,
+  ResetPasswordForm,
+} from './child-controls';
 import { VerifyEmailButton } from './verify-email-button';
+import { NGAY_GIU_GAME_DA_GO } from '@/lib/moderation';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +37,14 @@ export default async function ParentDashboard() {
     include: {
       games: {
         orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, status: true, playCount: true, createdAt: true },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          playCount: true,
+          createdAt: true,
+          thumbSha256: true,
+        },
       },
     },
   });
@@ -52,9 +66,20 @@ export default async function ParentDashboard() {
     <>
       <PageTitle title="Trang của bố mẹ" lead={actor.email} />
 
+      {/*
+        Câu này trước đây dừng ở "ẩn bất kỳ game nào", và nó nói quá đúng cái điều người
+        đọc cần biết chính xác nhất. Ẩn rút game khỏi trang, nhưng file đã đóng gói và
+        file .sb3 vẫn được phục vụ theo địa chỉ nội dung cho ai còn giữ URL — đo được:
+        trang /game/<id> của một game đã gỡ trả 404 trong khi hai file của nó vẫn trả 200.
+        Người bấm ẩn vì game để lộ gì đó về con mình cần biết ranh giới ấy TRƯỚC khi bấm,
+        chứ không phải sau.
+      */}
       <Notice tone="info">
         Game của bé được hiển thị công khai ngay sau khi đăng. Bố mẹ xem lại ở đây và ẩn bất kỳ
-        game nào, bất cứ lúc nào.
+        game nào, bất cứ lúc nào. <strong>Ẩn</strong> là rút game khỏi trang — ai đang giữ sẵn
+        link tới file game thì vẫn mở được. Muốn nội dung không còn trên mạng nữa thì bấm{' '}
+        <strong>Xoá hẳn</strong>: chúng tôi xoá cả file gốc sau {NGAY_GIU_GAME_DA_GO} ngày, và
+        gửi bạn link tải về trước ngày đó.
       </Notice>
 
       {/*
@@ -137,7 +162,37 @@ export default async function ParentDashboard() {
                       key={game.id}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-border px-3.5 py-2.5"
                     >
-                      <span className="min-w-0">
+                      {/*
+                        Ảnh bìa, và nó KHÔNG phải là link.
+
+                        Tên game ngay cạnh đã dẫn tới đúng chỗ đó rồi. Bọc thêm ảnh
+                        thành link nữa là mỗi game có hai điểm dừng bàn phím trỏ về
+                        cùng một trang, và trình đọc màn hình đọc hai lần — với một
+                        nhà bốn game thì thành tám lần. Nên `alt=""`: ảnh ở đây để
+                        nhận ra game bằng mắt, nghĩa thì nằm ở cái tên.
+
+                        `w-20 h-15` giữ đúng khổ 4:3 của sân khấu Scratch (480×360),
+                        và khai cứng để dòng không nhảy khi ảnh vừa tải xong.
+
+                        Mờ đi khi game không còn hiện: trạng thái đang được nói bằng
+                        chữ ngay bên cạnh, thêm một tín hiệu nhìn thấy trước cả khi
+                        đọc thì cả danh sách đọc được trong một cái liếc.
+                      */}
+                      <span className="flex min-w-0 items-center gap-3">
+                        <img
+                          src={objectUrl('thumb', game.thumbSha256)}
+                          alt=""
+                          width={80}
+                          height={60}
+                          loading="lazy"
+                          data-testid="anh-bia-game"
+                          className={`h-15 w-20 shrink-0 rounded-field border border-border bg-surface object-cover ${
+                            game.status === 'PUBLISHED' && !biKhieuNai.has(game.id)
+                              ? ''
+                              : 'opacity-50'
+                          }`}
+                        />
+                        <span className="min-w-0">
                         <Link href={`/game/${game.id}`} className="font-semibold">
                           {game.title}
                         </Link>
@@ -152,6 +207,7 @@ export default async function ParentDashboard() {
                                   {game.status === 'REMOVED' && ' · đã bị gỡ'}
                                 </>
                               )}
+                        </span>
                         </span>
                       </span>
                       {/*
@@ -169,7 +225,34 @@ export default async function ParentDashboard() {
                         làm người ta bực và tưởng web hỏng.
                       */}
                       {game.status !== 'REMOVED' && !biKhieuNai.has(game.id) && (
-                        <GameVisibilityToggle gameId={game.id} hidden={game.status === 'HIDDEN'} />
+                        /* `ml-auto justify-end`: khi hộp xác nhận mở ra nó rộng cả thẻ và
+                           đẩy hai nút lên dòng trên — không có hai class này thì "Ẩn game"
+                           nhảy từ mép phải sang mép trái, tức một nút không liên quan tự
+                           di chuyển vì người dùng bấm nút bên cạnh nó.
+
+                           Chú thích này là comment JS thường, KHÔNG bọc trong ngoặc nhọn:
+                           chỗ này là vị trí BIỂU THỨC (nhánh của `&&`), nơi comment kiểu
+                           JSX không hợp lệ — sai thì dev server trả 500 với
+                           "Expected '</', got 'className'". Bẫy đã trả giá hai lần.
+
+                           Và đừng viết ký tự đóng comment vào giữa phần chữ: nó kết thúc
+                           comment ngay tại đó, phần còn lại thành code rác, lỗi báo ở một
+                           dòng chẳng liên quan. Trả giá lần thứ ba trong cùng phiên. */
+                        <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                          <GameVisibilityToggle gameId={game.id} hidden={game.status === 'HIDDEN'} />
+                          {/*
+                            "Xoá hẳn" đứng CẠNH "Ẩn game" chứ không nằm ở đâu khác, vì hai
+                            nút này là hai việc khác nhau mà người dùng đang tưởng là hai
+                            mức của một việc: ẩn rút game khỏi trang, xoá mới thu hồi được
+                            file. Để chúng xa nhau thì người cần cái thứ hai sẽ dừng ở cái
+                            thứ nhất và tưởng đã xong.
+                          */}
+                          <DeleteGameButton
+                            gameId={game.id}
+                            title={game.title}
+                            soNgayGiu={NGAY_GIU_GAME_DA_GO}
+                          />
+                        </span>
                       )}
                     </li>
                   ))}

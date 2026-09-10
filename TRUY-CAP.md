@@ -16,6 +16,10 @@ hệ điều hành** — không phải sửa `/etc/hosts`. Chrome và Safari đ�
 | Player (file game) | `http://127.0.0.1:3001` | `https://<PLAYER_DOMAIN>` |
 | **Quản trị** | `http://admin.localhost:3000` | `https://<ADMIN_DOMAIN>` |
 
+> **File này THEO REPO, mà repo công khai.** Nên cột production để nguyên tên biến chứ
+> không ghi domain thật của bản đang chạy — địa chỉ thật, IP và lối `ssh` nằm trong
+> `BANGIAO.md`, file bị `.gitignore`. Đừng "cho tiện" mà điền chúng vào đây.
+
 **`http://localhost:3000/admin` trả 404, và đó là cố ý.** Không phải 403, không
 redirect: 403 là xác nhận trang có thật và đáng dò tiếp, còn redirect thì công bố luôn
 khu quản trị nằm ở đâu cho bất cứ ai gõ thử. Gõ đúng host quản trị thì mới có.
@@ -50,10 +54,10 @@ Phiên site sống **30 ngày**, phiên quản trị **24 giờ**.
 
 | Đường dẫn | Tab | Trả lời câu hỏi |
 |---|---|---|
-| `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không |
+| `/admin/tong-quan` | Tổng quan | Hôm nay có việc gì gấp không · 12 ô số + 3 biểu đồ |
 | `/admin` | Kiểm duyệt | Có gì trong hàng đợi nội dung |
-| `/admin/tai-khoan` | Tài khoản | Gia đình này là ai · khoá/mở khoá tài khoản bé |
-| `/admin/loi` | Lỗi | Lỗi xảy ra ở máy người dùng thật |
+| `/admin/tai-khoan` | Tài khoản | Gia đình này là ai · khoá/mở khoá tài khoản bé · xoá cả gia đình |
+| `/admin/loi` | Lỗi | Người dùng tự báo · lỗi máy tự ghi |
 
 ### Tham số lọc — `loc`, KHÔNG phải `filter`
 
@@ -95,6 +99,138 @@ duyệt, vốn là một phân hoạch.
 Cả ba danh sách dùng chung một thanh phân trang có **số trang bấm được**; `&trang=<n>`,
 và số trang luôn mang theo bộ lọc lẫn chuỗi đang tìm.
 
+### Xoá tài khoản một gia đình
+
+Phụ huynh gửi thư xin xoá tài khoản (quyền này `/dieu-khoan` hứa công khai). Hai đường,
+cùng một lõi:
+
+```bash
+# 1. XEM TRƯỚC — mặc định không xoá gì. In ra mấy bé, mấy game, và LINK TẢI .sb3.
+pnpm --filter @kidogame/web db:xoa-gia-dinh phuhuynh@vidu.com
+
+# 2. Xoá thật. `--admin` là email của người chịu trách nhiệm, để ghi vào vết kiểm duyệt.
+pnpm --filter @kidogame/web db:xoa-gia-dinh phuhuynh@vidu.com \
+  --xoa --admin demo@kidogame.local --ghi-chu "Yêu cầu qua mail 6/9"
+
+# 3. Dọn file mồ côi trên đĩa — KHÔNG tự động, phải chạy riêng.
+pnpm --filter @kidogame/web storage:prune --xoa
+```
+
+Hoặc nút **Xoá tài khoản gia đình** trong tab Tài khoản, đòi gõ lại email để xác nhận.
+
+Bốn điều phải biết trước khi bấm:
+
+- **Gửi link tải `.sb3` cho phụ huynh trước khi xoá.** Lần chạy khô in sẵn. Xoá rồi thì
+  file thành mồ côi và `storage:prune --xoa` dọn mất — sau đó không lấy lại được.
+  **Đừng gọi đó là "file gốc" khi viết thư cho phụ huynh:** lúc nhận game, hệ thống
+  re-zip để loại thứ có thể giấu trong đó, nên bản lưu chỉ gồm project và **asset đang
+  dùng**. Hình hay đoạn nhạc bé để dành mà chưa dùng thì không có trong file tải về —
+  chuyện rất thường khi đang làm dở. Cơ chế ở `packages/sb3/src/validate.ts`, giải
+  thích đầy đủ trên `/dieu-khoan`.
+- **Hồ sơ yêu cầu gỡ bản quyền ở lại** (chụp tên game, bỏ liên kết). Cả những yêu cầu do
+  chính email đó gửi đi cũng ở lại; chạy khô có đếm ra, xử lý riêng nếu cần.
+- **Tài khoản có `isAdmin` thì bị từ chối.** Gỡ quyền trước — không thì mọi vết kiểm
+  duyệt người đó từng ghi trên game nhà khác mất chỗ tra ra tên.
+- **Việc này không đảo lại được.** Không có bảy ngày như game bị gỡ. Đường cứu duy nhất
+  là bản sao lưu.
+
+### Người dùng báo lỗi — `/bao-loi`
+
+Người dùng gặp chỗ hỏng thì tự gửi được ở **`/bao-loi`** (không cần đăng nhập). Đường
+vào: chân trang mọi trang, trang lỗi (kèm mã lỗi điền sẵn), và `/dieu-khoan`.
+
+Báo cáo vào **`/admin/loi`, phần "Người dùng báo"** đứng trên danh sách lỗi tự động. Ba
+bộ lọc của trang KHÔNG lọc phần này — chúng nói về lỗi tự động. Nút **Đã trả lời** đưa
+dòng ra khỏi hàng đợi mà không xoá nó.
+
+Trần: **5 báo cáo mỗi IP mỗi giờ**, và tối đa **200** báo cáo chưa xử lý. Chạm trần tổng
+thì người gửi được báo là hộp đang đầy, chứ không bị bỏ im lặng.
+
+Email của người gửi là **tuỳ chọn**. Không có email thì tab Lỗi nói thẳng "không trả lời
+được" chứ không để trống.
+
+Dọn dữ liệu kiểm thử: `delete from "BugReport" where "emailLienHe" like '%@vidu.test';`
+
+### Ba biểu đồ trên tab Tổng quan
+
+- **Donut "Game đang ở đâu"** — bốn trạng thái, cộng lại bằng tổng game. **Mỗi dòng chú
+  giải là một link** tới hàng đợi đã lọc, và con số trên dòng bằng đúng số game trong
+  danh sách đó.
+- **Cột "Game mới mỗi ngày"** — 14 ngày gần nhất, kể cả ngày không có game nào. Bấm
+  *Xem số theo ngày* ra bảng số, không cần trỏ chuột.
+- **Cột "Lỗi mỗi ngày"** — số LẦN người dùng gặp lỗi (không phải số nhóm), tính theo ngày
+  lỗi xuất hiện lần đầu. Thẻ này cũng nói số báo lỗi của người dùng đang chờ.
+
+Trỏ chuột vào một múi hay một khoảng ngày thì hiện số (đó là `<title>` của SVG, không
+phải JS). Cả hai hình vẽ bằng SVG viết tay, **không thư viện chart nào**.
+
+Đổi màu biểu đồ thì phải chạy **hai** công cụ, không phải một: `contrast-check` chỉ đo
+tương phản, còn việc bốn màu có phân biệt được dưới mù màu hay không thì đo bằng
+`validate_palette.js` của skill dataviz với `--pairs all`. Số đo ghi ngay trong chú thích
+nhóm `--color-bd-*` ở `globals.css`.
+
+### Ẩn game và xoá hẳn game — không giống nhau
+
+Trên trang của bố mẹ (`/phu-huynh`) mỗi game có hai nút:
+
+| Nút | Làm gì | Nội dung còn trên mạng? |
+|---|---|---|
+| **Ẩn game** | rút khỏi trang, `/game/<id>` trả 404 | **CÒN** — ai có URL file vẫn mở được, vĩnh viễn |
+| **Xoá hẳn** | `REMOVED` + bắt đầu đếm ngược | file bị dọn sau `REMOVED_KEEP_DAYS` ngày |
+
+Player origin phục vụ theo mã nội dung và **không tra database**, nên ẩn không thu hồi
+file. Đo được: game admin đã gỡ thì trang trả **404** mà file HTML và `.sb3` vẫn trả
+**200**. `storage:prune` chỉ xoá file mồ côi, mà game đang ẩn vẫn trỏ tới file.
+
+Ba chốt của nút Xoá hẳn: game đã `REMOVED` không có nút; game **đang có khiếu nại bản
+quyền** cũng không (đội kiểm duyệt cần xem nội dung để trả lời trong hạn); phụ huynh
+**không tự bật lại được**. Thư gửi ngay lúc xoá, kèm link tải `.sb3` và ngày file mất.
+
+File `.sb3` đã lưu và ảnh bìa **có thể dùng chung** giữa hai game dựng từ cùng một file — khi
+đó xoá một game không xoá file. Bản đã đóng gói thì luôn mất, vì mã của nó là riêng.
+
+### Xem thư nhắc việc có hạn
+
+```bash
+pnpm --filter @kidogame/web db:nhac-viec-co-han          # chỉ IN, không gửi
+pnpm --filter @kidogame/web db:nhac-viec-co-han --gui    # gửi tới OPERATOR_EMAIL
+```
+
+Service `prune` chạy lệnh này với `--gui` mỗi đêm, **trước** hai bước dọn. Nó chỉ gửi
+khi có việc có hạn — yêu cầu gỡ quá hạn hoặc sắp tới hạn, game đã gỡ sắp bị xoá hẳn.
+**Đêm nào im lặng là đêm không có gì**, đó là thiết kế chứ không phải hỏng.
+
+Chưa khai `OPERATOR_NAME`/`OPERATOR_EMAIL` thì nó **từ chối gửi** và thoát khác 0 —
+vẫn in đầy đủ danh sách việc ra log trước khi từ chối.
+
+### `OPERATOR_EMAIL` là địa chỉ CÔNG KHAI, cân nhắc trước khi điền
+
+Nó không chỉ là nơi nhận thư nhắc việc. Hai chỗ nữa dùng nó, và cả hai đều hướng ra
+người ngoài:
+
+- **`Reply-To` của mọi thư hệ thống gửi đi** (`mail.ts:518`). Sáu lá thư bảo người nhận
+  trả lời, nặng nhất là thư báo gỡ game vì khiếu nại bản quyền — trả lời thư là đường
+  **duy nhất** để phụ huynh lấy lại `.sb3` trước ngày xoá vĩnh viễn.
+- **In thẳng trên `/dieu-khoan`** làm đơn vị vận hành.
+
+Chưa khai thì `Reply-To` là **`null`** chứ không rơi về `chua-cau-hinh@kidogame.local`
+— `.local` là TLD dành riêng cho thử nghiệm, tức mọi thư trả lời bảo đảm bị trả về.
+Log dev in dòng `│ trả lời:` **kể cả khi trống**, để chỗ vắng mặt nhìn thấy được.
+
+**Địa chỉ dưới TLD dành riêng bị coi là CHƯA KHAI.** `.local` · `.localhost` · `.test` ·
+`.example` · `.invalid` — RFC giữ lại và cấm uỷ quyền cho ai, nên thư gửi tới đó bảo đảm
+bị trả về. Điền một địa chỉ như vậy thì `isOperatorConfigured()` trả `false`, và cả bốn
+nơi dùng nó cùng làm đúng: không đặt `Reply-To`, thư nhắc việc **từ chối gửi** và nói rõ
+địa chỉ nào sai, `/dieu-khoan` **hiện cảnh báo** thay vì in một địa chỉ chết ra công
+khai. Luật chặn theo **đuôi tên miền**, nên `ban@local-school.edu.vn` vẫn dùng được bình
+thường.
+
+Chốt này **không** đoán xa hơn: gõ sai chính tả một tên miền thật thì nó vẫn nhận. Kiểm
+địa chỉ có người đọc hay không là việc của `node infra/mail-check.mjs --send <email>`.
+
+Đổi hai biến này thì chạy lại `cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts`
+(46 phép, không cần server cũng không cần DB).
+
 ---
 
 ## 4. Tài khoản
@@ -117,6 +253,13 @@ pnpm --filter @kidogame/web db:make-admin ban@example.com
 pnpm --filter @kidogame/web db:make-admin ban@example.com --bo   # thu hồi
 ```
 
+**Danh mục game không đi cùng `db:seed`.** Bốn danh mục nằm ở `prisma/tags.ts` và
+`db:deploy` chạy nó tự động (`db push` → `db:constraints` → `db:tags`), vì `db:seed`
+thì bị cấm trên máy thật — nó tạo tài khoản có mật khẩu công khai trong repo. Bản
+deploy nào bỏ qua bước này thì **ô chọn danh mục ở `/upload` trống**, mà upload vẫn
+chạy và game vẫn publish, không lỗi ở đâu. Đo:
+`select count(*) from "Tag";` phải ra 4. Chạy lại lúc nào cũng được, nó idempotent.
+
 Người đó phải **tự đăng ký qua web và xác minh email trước**. Nghĩa là mật khẩu do
 chính họ đặt, không đi qua repo, không qua log, không qua tay ai khác — và quyền ẩn
 game của trẻ, khoá tài khoản người khác chỉ trao cho một hòm thư đã chứng minh được là
@@ -132,13 +275,21 @@ delete from "TakedownRequest" where "claimantEmail" like '%@vidu.test';
 delete from "Parent" where email like 'e2e-%';
 delete from "Game" where title = 'Game kiểm thử e2e'
    or title like 'Game hạn giữ %' or title like 'Game bản quyền %'
-   or title like 'Game kiểm duyệt %';
+   or title like 'Game kiểm duyệt %' or title like 'Game xoá nhà %'
+   or title like 'Game nhắc việc %' or title like 'Game ẩn xoá %';
 delete from "ErrorLog" where message like 'Loi kiem thu %';
+-- `LoginAttempt` không có khoá ngoại nên hai lệnh trên KHÔNG kéo theo nó.
+delete from "LoginAttempt" where identity like '%e2e-%';
 commit;
 ```
 
 **ĐỪNG** `delete from "TakedownRequest";` không kèm điều kiện — trong đó có yêu cầu
 gỡ thật.
+
+**ĐỪNG** `delete from "ModerationLog" where action = 'ADMIN_DELETE_FAMILY';` — đó là hồ
+sơ duy nhất chứng minh một lần xoá tài khoản đã được thực hiện, và nó không mang email
+nên không có cách nào dựng lại. `e2e-xoa-gia-dinh` chỉ xoá đúng những dòng chính nó tạo,
+lọc theo mốc thời gian.
 
 ---
 

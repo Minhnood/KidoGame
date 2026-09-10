@@ -36,7 +36,8 @@ ai biết** cho tới khi có người mở web và thấy trắng.
 |---|---|
 | Analytics | **không có gì** |
 | Error tracking | tự host, xem mục 6 — lỗi phía client vào bảng `ErrorLog`, admin đọc ở `/admin/loi` |
-| Uptime monitoring | **không có gì** — tầng duy nhất còn thiếu, cần tài khoản của fen |
+| Canh máy chủ hằng đêm | **đã có**, xem mục 8 — đĩa, chứng chỉ, tuổi bản sao lưu, đợt lỗi mới |
+| Uptime monitoring | **đã có từ 10/9/2026** — UptimeRobot gói Free, hai monitor `app` và `play`, ping 5 phút, báo qua email |
 | Error boundary của Next | **không có** `error.tsx`, `global-error.tsx`, `not-found.tsx` → đã bổ sung, xem mục 5 |
 | Lỗi phía server | 8 chỗ `console.error` → log Docker → **không ai đọc**; nhưng lỗi làm vỡ trang thì đi qua boundary nên vẫn vào bảng, kèm `digest` để dò ngược log |
 | Lỗi phía client | đã vào DB của chính mình, xem mục 6 |
@@ -97,18 +98,97 @@ byte dữ liệu người dùng nào.
 Error boundary + giới hạn log. Đây là **điều kiện cần** của mọi tầng sau: chưa có
 chỗ để lỗi đi qua thì không cắm được gì vào.
 
-### Tầng 1 — uptime, ~15 phút, giá trị cao nhất trên mỗi phút bỏ ra
+### Tầng 1 — uptime — ĐÃ LÀM 10/9/2026
 
-Một dịch vụ ping miễn phí (UptimeRobot, Better Stack, Healthchecks.io…). Trỏ vào
-`https://<APP_DOMAIN>/` mỗi 5 phút, báo qua email hoặc Telegram.
+> **Trạng thái:** xong. UptimeRobot gói Free, hai monitor theo đúng bảng bên dưới,
+> báo về `mail-chinh@example.com`. Monitor `app` đo được 645ms, 100% trong 24h
+> đầu. **Telegram nằm sau gói trả phí** nên không dùng — cách đi vòng miễn phí
+> (bot Telegram của mình + webhook) ghi ở cuối mục này.
+>
+> Tài khoản đứng tên fen, nên **không phép kiểm nào trong repo nhìn thấy nó**.
+> Chuyển tên miền, đổi email, hay lỡ xoá monitor thì chỉ mục này biết.
+
+Một dịch vụ ping miễn phí. Trỏ vào `https://<APP_DOMAIN>/` mỗi 5 phút, báo qua
+email hoặc Telegram.
 
 Vì sao đáng làm **trước** cả Sentry: một lỗi lẻ ảnh hưởng một người; web sập ảnh
 hưởng tất cả, và hiện tại chẳng ai biết. Không cần sửa một dòng code nào, không
 đụng CSP, không dữ liệu người dùng.
 
-Nên ping thêm **cả hai domain** — `app` và `play`. Player domain sập thì trang web
-vẫn xanh nhưng **không game nào chạy được**, và uptime chỉ theo dõi `app` sẽ báo
-"mọi thứ ổn".
+**Vì sao mục 8 KHÔNG thay được tầng này.** Bước canh hằng đêm chạy *bên trong* VPS
+và gửi thư *từ* VPS. Máy chết hẳn thì nó không gửi được lá thư báo là nó đã chết —
+và tệ hơn: "không có thư" là đúng cái tín hiệu mà mục 8 dùng cho *"mọi thứ ổn"*.
+Hai trạng thái ngược nhau hoàn toàn mà nhìn từ hòm thư thì giống hệt. Chỉ một con
+mắt ở NGOÀI phân biệt được, và đó là toàn bộ lý do tầng này tồn tại.
+
+#### Từng bước — UptimeRobot, không cần thẻ
+
+1. Vào https://uptimerobot.com → **Register** bằng email. Gói Free: 50 monitor,
+   ping mỗi 5 phút, báo qua email. Không hỏi thẻ.
+2. Xác minh email, đăng nhập.
+3. **+ New monitor**, tạo **hai cái** (số liệu tính tới 10/9/2026):
+
+   | Trường | Monitor 1 | Monitor 2 |
+   |---|---|---|
+   | Monitor Type | HTTP(s) | HTTP(s) |
+   | Friendly Name | `KidoGame app` | `KidoGame play` |
+   | URL | `https://app.37-60-251-95.sslip.io` | `https://play.37-60-251-95.sslip.io` |
+   | Monitoring interval | 5 minutes | 5 minutes |
+
+4. **Monitor 2 phải sửa thêm một chỗ, không thì nó báo động mỗi 5 phút suốt ngày
+   đêm.** Player origin trả **404 ở `/` là ĐÚNG** — nó chỉ phát file game theo
+   đường dẫn, không có trang chủ. UptimeRobot mặc định coi 404 là chết. Mở
+   **Advanced Settings → Custom HTTP Statuses** (hoặc *Monitor specific settings*
+   tuỳ giao diện) và khai **404 = Up**.
+
+   Bỏ qua bước này là cách chắc chắn nhất để fen tắt cả hai monitor trong ba ngày.
+
+5. **Alert Contacts**: chọn email của fen. Bật cho cả hai monitor.
+
+Vì sao ping **cả hai domain**: player domain sập thì trang web vẫn xanh nhưng
+**không game nào chạy được**, và uptime chỉ theo dõi `app` sẽ báo "mọi thứ ổn".
+
+Không ping `admin`: nó đi qua đúng Caddy và đúng container với `app`, nên nó
+không trả lời được câu hỏi nào mà `app` chưa trả lời.
+
+> **Đổi tên miền thì phải sửa hai URL này.** Chúng nằm ngoài repo, nên không có
+> phép kiểm nào bắt được lệch — đây là chỗ duy nhất ghi lại rằng chúng tồn tại.
+
+#### MỖI LẦN DEPLOY SẼ SINH RA MỘT BÁO ĐỘNG GIẢ
+
+Đo được 10/9/2026, ngay lượt deploy đầu tiên sau khi bật monitor: `docker compose
+up -d --build` đổi container `web`, và trong vài giây giữa lúc container cũ dừng và
+container mới lành, **Caddy trả 502**. Bắt được đúng một lượt `curl` rơi vào cửa sổ
+đó; ba lượt ngay sau đều 200.
+
+UptimeRobot ping mỗi 5 phút, nên phần lớn lượt deploy sẽ **lọt qua** và không ai
+thấy gì. Nhưng thỉnh thoảng một lượt ping rơi trúng cửa sổ ấy và fen nhận thư "site
+is DOWN" cho một lần deploy hoàn toàn bình thường.
+
+Biết trước thì không sao. **Nguy hiểm là không biết**: vài lần báo động trùng với
+những lúc "tôi vừa deploy xong" là đủ để người ta bắt đầu bỏ qua thư của
+UptimeRobot — và đó là cách tầng này chết mà không ai tắt nó cả.
+
+Việc cần làm khi thấy thư báo down: hỏi *"vừa nãy có ai deploy không"* trước, rồi
+mới đi tìm lỗi. Bảng của UptimeRobot ghi rõ giờ sự cố, đối chiếu được.
+
+#### Muốn báo động vào Telegram mà không trả tiền
+
+UptimeRobot khoá Telegram sau gói trả phí (đã thử 10/9/2026). Không cần trả: Bot
+API miễn phí, và bot do mình tạo thì không nhà cung cấp nào khoá được.
+
+**Từng bước ở [`TELEGRAM.md`](TELEGRAM.md)** — cố ý để ở một file riêng chứ không
+chép vào đây, vì các bước bấm tay chép ra hai chỗ thì một chỗ sẽ lạc hậu, và người
+đọc không có cách nào biết mình đang theo chỗ nào.
+
+Phần **mục 8 (canh gác hằng đêm)** đã dùng đường này rồi — code trong
+`apps/web/src/lib/telegram.ts`, bật bằng `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`.
+
+Phần **tầng 1 (UptimeRobot)** thì vẫn chưa: nếu gói Free có **Webhook** làm alert
+contact thì trỏ nó vào
+`https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>&text=...` với biến
+của UptimeRobot chèn vào `text`. **CHƯA KIỂM** webhook có miễn phí không — phải mở
+Integrations ra xem, đừng tin dòng này.
 
 ### Tầng 2 — lỗi vào DB + trang cho admin xem (ĐÃ LÀM, mục 6)
 
@@ -283,8 +363,86 @@ trong phần đầu `infra/e2e-errorlog.mjs`.
 
 ## 7. Việc tiếp theo cần fen quyết
 
-1. **Tầng 1 (uptime)** — fen tạo tài khoản ở một dịch vụ ping, trỏ vào cả hai
-   domain. Chỉ làm được sau khi có domain thật. Giờ đây là tầng duy nhất còn thiếu
-   mà rẻ, và nó bắt loại hỏng mà tầng 2 **không** bắt được: web sập hẳn thì không có
-   trình duyệt nào chạy được `sendBeacon` để kể lại.
-2. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
+1. ~~**Tầng 1 (uptime)**~~ — **XONG 10/9/2026.** Cả bốn tầng giờ đều có mặt.
+2. **Báo động vào Telegram** — code đã xong và đã lên VPS; còn lại đúng việc tạo
+   bot và điền hai biến vào `infra/.env`. Từng bước ở [`TELEGRAM.md`](TELEGRAM.md),
+   khoảng 5 phút, $0. Chưa điền thì lượt canh in một dòng "bỏ qua kênh này" và mail
+   vẫn đi như cũ.
+3. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
+
+> **Một điều KHÔNG tầng nào bắt được, và nên biết:** cả bốn tầng đều báo về
+> **cùng một hòm thư Gmail**. Mất quyền vào hòm thư đó là mù hoàn toàn, trong khi
+> mọi bảng điều khiển vẫn nói là đang theo dõi bình thường.
+
+---
+
+## 8. Đã làm — canh máy chủ hằng đêm
+
+`apps/web/prisma/canh-gac.ts`, chạy là **bước 4/4** của `infra/prune.sh`, tức
+mỗi đêm lúc `PRUNE_HOUR` (4 giờ sáng). **Chỉ gửi thư khi có vấn đề.**
+
+Nó nhắm vào khoảng trống mà cả tầng 1 lẫn tầng 2 đều không thấy. Ping từ ngoài chỉ
+biết *"trang có trả lời không"*; nó không biết đĩa còn 3%, không biết việc sao lưu
+đã ngừng chạy từ tuần trước, không biết chứng chỉ hết hạn sau chín ngày. Cả ba đều
+là hỏng **đang tới**, và tới lúc chúng xảy ra thì trang chết hẳn — ping mới kêu,
+mà lúc đó thì đã mất dữ liệu hoặc mất giờ.
+
+| Phép canh | Ngưỡng mặc định | Bắt được gì |
+|---|---|---|
+| Ba origin công khai trả lời | app 200 · play **404** · admin 200 | Caddy chết, DNS sai, app crash |
+| Chứng chỉ TLS còn mấy ngày | < 21 ngày | Caddy gia hạn trượt (nó tự gia hạn từ mốc 30) |
+| Đĩa đã dùng bao nhiêu % | ≥ 85% | đĩa đầy dần — Postgres chết TRƯỚC khi log chết |
+| Tuổi bản sao lưu mới nhất | > 26 giờ | **service `backup` đã chết mà không ai biết** |
+| Nhóm lỗi MỚI trong 24h | ≥ 5 | một bản deploy vừa làm hỏng thứ gì đó |
+
+Bốn con số trên đổi được qua `.env` (`CANH_*`), và mỗi con số có một đoạn giải
+thích tại chỗ trong `canh-gac.ts` — vì sao 85 chứ không phải 95, vì sao 26 chứ
+không phải 24, vì sao 21 phải nằm **dưới** mốc 30.
+
+### Năm điều cố ý
+
+1. **Gọi vòng ra Internet rồi quay lại** (hairpin NAT) chứ không gọi
+   `http://web:3000` trong mạng nội bộ. Đường nội bộ xanh kể cả khi Caddy đã
+   chết — tức xanh đúng vào lúc không người dùng nào vào được. Đi vòng ra ngoài
+   thì một lượt gọi kiểm cùng lúc cả DNS, cả chứng chỉ, cả reverse proxy.
+2. **`play` mong 404, không mong 200.** Player origin không có trang chủ. Viết
+   sai chỗ này là có một báo động giả mỗi đêm cho tới khi người ta tắt cả phép
+   canh. Cùng cái bẫy phải xử lý ở bước 4 của UptimeRobot, mục 4.
+3. **Đọc chứng chỉ bằng `node:tls`, không gọi `openssl` CLI.** Image web là
+   `node:24-bookworm-slim` và **không có** binary openssl (chỉ có thư viện, cài
+   cho Prisma). Phép canh gọi lệnh không tồn tại thì ném lỗi mỗi đêm, và lỗi đó
+   trông y hệt "chứng chỉ có vấn đề".
+4. **Đo tuổi bản sao lưu theo TÊN FILE, không theo `mtime`.** Tên mang dấu thời
+   gian; `mtime` thì đổi mỗi khi có ai copy hay `rsync` file đó. Đo bằng `mtime`
+   thì một lượt kéo bản cũ về sẽ đọc ra "vừa chạy xong".
+5. **Không có origin thì GHI RA "BỎ QUA", không `continue` lặng lẽ.** Một phép
+   canh biến mất vì thiếu biến môi trường trông y hệt một phép canh đã chạy và
+   thấy mọi thứ ổn. `docker-compose.yml` chặn thêm một lớp bằng `:?` cho
+   `APP_ORIGIN`/`PLAYER_ORIGIN` của service `prune`.
+
+### Đã kiểm — cả xanh lẫn ĐỎ
+
+Một cơ chế báo động chưa từng ai thấy nó đỏ thì chưa chứng minh được gì. Chạy
+thật trên VPS ngày 10/9/2026:
+
+- **Bảy phép, xanh hết** ở trạng thái thật (chứng chỉ còn 88 ngày, đĩa 13%, bản
+  sao lưu 11 giờ tuổi, 0 lỗi mới).
+- **Ép từng ngưỡng cho đỏ**, từng cái một: đĩa (`CANH_DIA_PHAN_TRAM=5`) → `hỏng`;
+  sao lưu (`CANH_SAO_LUU_GIO=1`) → `hỏng`; chứng chỉ (`CANH_CHUNG_CHI_NGAY=999`)
+  → `lo`; origin sai đường dẫn → `hỏng` kèm mã thật; `BACKUP_DIR` trỏ vào thư mục
+  không tồn tại → `hỏng` kèm ENOENT; `PLAYER_ORIGIN` rỗng → dòng `BỎ QUA`.
+- **Gửi thư thật**, và đọc câu trả lời của máy chủ chứ không chỉ "không ném lỗi" —
+  đúng bài học của commit `80dfec0`:
+
+  ```
+  [mail] SMTP đã trao — tới=mail-chinh@example.com
+         id=<0bc3a0a7-...@gmail.com> phản hồi=250 2.0.0 OK ... - gsmtp
+  ```
+
+### Cái giá, nói thẳng
+
+Im lặng khi mọi thứ ổn là chủ ý (cùng lý do đã ghi ở `nhac-viec-co-han.ts`: một lá
+thư "đều ổn" mỗi đêm là lá thư người ta học cách bỏ qua trong hai tuần). Nhưng nó
+mang một cái giá phải nói ra: **"không có thư" và "cả service `prune` đã chết"
+trông giống hệt nhau từ phía hòm thư.** Chính lá thư báo động cũng viết ra câu đó ở
+cuối thân thư. Đó là loại hỏng mà tầng 1 bắt được — nên hai tầng phải có cả hai.
