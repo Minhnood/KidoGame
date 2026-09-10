@@ -34,7 +34,6 @@ Stack này chạy ARM được — đã kiểm từng thứ, không đoán: `nod
 có binary native nhưng image được **build ngay trên máy đó**, nên target `native`
 tự khớp. Nếu sau này chuyển sang build ở nơi khác rồi push image thì phải khai
 `binaryTargets` cho Prisma — build tại chỗ thì không cần.
-<mật khẩu đã gỡ khỏi lịch sử>
 
 ---
 
