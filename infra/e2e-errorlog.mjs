@@ -345,6 +345,38 @@ check(
      1; nhìn từ ngoài không có gì sai cả. */
   const dauTrang2 = await p.locator('[data-testid=error-group]').first().innerText();
   check('Trang 2 hiện nhóm khác trang 1, không lặp lại', dauTrang1 !== dauTrang2);
+
+  /*
+   * Ô "tới trang" chỉ bày ra khi dãy số đã phải lược bớt. Ở đây mới có hai trang,
+   * nên nó PHẢI vắng mặt — và đó là phép kiểm thật, không phải phép kiểm cho có: một
+   * ngưỡng viết nhầm thành `>= 1` thì ô nhập xuất hiện trên mọi danh sách hai trang,
+   * ngay cạnh hai con số đã bấm thẳng được.
+   */
+  check(
+    'Mới hai trang thì KHÔNG bày ô nhảy trang',
+    (await p.locator('[data-testid=error-pager-nhay]').count()) === 0
+  );
+
+  /*
+   * Trang vượt quá cuối danh sách. Trước đây `skip` chạy qua cuối bảng và màn hình
+   * hiện đúng cái mà "không nhóm lỗi nào khớp" hiện — người đọc đi kiểm bộ lọc chứ
+   * không nghĩ tới số trang. Không có gì trong repo bắt được kiểu rỗng đó.
+   */
+  await p.goto(`${ADMIN}/admin/loi?loc=tat-ca&trang=999`, { waitUntil: 'networkidle' });
+  check(
+    'Trang vượt quá cuối thì NÓI RA, không hiện một danh sách rỗng',
+    (await p.locator('[data-testid=error-pager-khong-co]').count()) === 1
+  );
+  const loiTrang = await p.locator('[data-testid=error-pager-khong-co]').innerText();
+  check('Câu đó nói rõ danh sách có mấy trang', /chỉ có \d+ trang/.test(loiTrang), loiTrang.replace(/\n/g, ' '));
+
+  await p.locator('[data-testid=error-pager-khong-co] a').click();
+  await p.waitForURL((u) => !/trang=999/.test(u.toString()), { timeout: 20000 }).catch(() => {});
+  check('Và có đường về trang cuối, giữ nguyên bộ lọc', /loc=tat-ca/.test(p.url()), p.url());
+  check(
+    'Về tới nơi thì lại thấy danh sách thật',
+    (await p.locator('[data-testid=error-group]').count()) > 0
+  );
 }
 
 // ---------- Dọn: đưa mọi nhóm về đã xử lý ----------
