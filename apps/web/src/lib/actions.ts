@@ -47,6 +47,7 @@ import {
 import { prisma } from './db';
 import { PhanUngError, thaIcon, type TomTatPhanUng } from './phan-ung';
 import { LoiNhanError, nhanLoi, type TomTatLoiNhan } from './loi-nhan';
+import { doiTheoDoi, TheoDoiError } from './theo-doi';
 
 /** Kết quả trả về form. `null` nghĩa là chưa submit lần nào. */
 export type FormState = { error: string } | { ok: true } | null;
@@ -833,6 +834,43 @@ export async function nhanLoiAction(gameId: string, ma: string): Promise<KetQuaN
   } catch (e) {
     if (e instanceof LoiNhanError) return { error: e.message };
     console.error('[nhanLoiAction]', e);
+    return { error: 'Có lỗi xảy ra, thử lại nhé.' };
+  }
+}
+
+// --- Theo dõi một bạn ---------------------------------------------------------
+
+/** Trần số lần bật/tắt theo dõi của MỘT bé trong một phút. */
+const DOI_THEO_DOI_MOI_PHUT = 20;
+
+export type KetQuaTheoDoi = { error: string } | { ok: true; dangTheoDoi: boolean };
+
+/**
+ * Bật / tắt theo dõi. Trả về trạng thái MỚI để nút tự vẽ lại.
+ *
+ * KHÔNG `revalidatePath('/')` dù dải "game mới của bạn bè" trên trang chủ có đổi
+ * theo: nút này được bấm từ TRANG GAME, và dựng lại trang đó là nạp lại iframe —
+ * đứa trẻ đang chơi dở bị đá về màn hình đầu vì vừa bấm theo dõi. Trang chủ sẽ đúng
+ * ở lần tải kế tiếp, và đó chính là lúc bé nhìn vào nó.
+ */
+export async function doiTheoDoiAction(authorId: string): Promise<KetQuaTheoDoi> {
+  const actor = await getActor();
+
+  // Chỉ bé theo dõi được. Phụ huynh có phiên hợp lệ nên chốt phải hỏi ĐÚNG VAI, chứ
+  // không chỉ hỏi "đã đăng nhập chưa".
+  if (!actor || actor.kind !== 'child') {
+    return { error: 'Chỉ tài khoản của bé mới theo dõi bạn được.' };
+  }
+
+  if (tooMany(`theo-doi:${actor.id}`, DOI_THEO_DOI_MOI_PHUT, 60 * 1000)) {
+    return { error: 'Bấm chậm lại một chút nhé!' };
+  }
+
+  try {
+    return { ok: true, dangTheoDoi: await doiTheoDoi(actor.id, authorId) };
+  } catch (e) {
+    if (e instanceof TheoDoiError) return { error: e.message };
+    console.error('[doiTheoDoiAction]', e);
     return { error: 'Có lỗi xảy ra, thử lại nhé.' };
   }
 }

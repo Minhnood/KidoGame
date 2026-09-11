@@ -9,6 +9,7 @@ import { TextInput } from '@/components/field';
 import { Button, ButtonLink } from '@/components/button';
 import { EmptyState, PageTitle } from '@/components/page';
 import { demPhanUngNhieuGame } from '@/lib/phan-ung';
+import { gameMoiCuaBanBe } from '@/lib/theo-doi';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,7 +83,21 @@ export default async function HomePage({
    * lượt `groupBy` cho 20 game vẫn rẻ hơn hẳn `_count` lồng trong `include` — cái
    * đó sinh một truy vấn con cho mỗi hàng.
    */
-  const soIcon = await demPhanUngNhieuGame(games.map((g) => g.id));
+  const filtering = Boolean(query || tagSlug || bracket);
+  const beXem = actor?.kind === 'child' ? actor : null;
+
+  /*
+   * Game mới của những bạn bé đang theo dõi — phần thưởng duy nhất của việc theo
+   * dõi, nên nó phải nằm ở đây chứ không trong một trang riêng phải nhớ đường tới.
+   *
+   * KHÔNG hiện khi đang lọc hay tìm kiếm: lúc đó bé đang đi tìm một game cụ thể, và
+   * chen một dải game khác vào giữa kết quả là đẩy thứ bé vừa gõ ra khỏi màn hình.
+   */
+  const gameBanBe = !filtering && beXem ? await gameMoiCuaBanBe(beXem.id, 4) : [];
+
+  // Một lượt `groupBy` cho CẢ hai dải. Hỏi riêng từng dải là hai truy vấn cho cùng
+  // một câu hỏi, trên mọi lần tải trang chủ của một bé có theo dõi ai đó.
+  const soIcon = await demPhanUngNhieuGame([...games, ...gameBanBe].map((g) => g.id));
 
   /** Giữ nguyên các bộ lọc khác khi bấm đổi một cái. */
   const linkWith = (patch: { tag?: string; tuoi?: string }) => {
@@ -103,8 +118,6 @@ export default async function HomePage({
         ? 'border-transparent bg-accent text-chrome'
         : 'border-border bg-surface text-ink hover:bg-bg',
     ].join(' ');
-
-  const filtering = Boolean(query || tagSlug || bracket);
 
   return (
     <>
@@ -156,6 +169,42 @@ export default async function HomePage({
                 </ButtonLink>
               </>
             )}
+          </div>
+        </section>
+      )}
+
+      {/*
+        Dải bạn bè đứng TRÊN "Game mới nhất", và chỗ đứng đó là cả điểm của nó: nếu
+        nằm dưới danh sách chung thì bé phải cuộn qua hai chục game lạ mới thấy game
+        của bạn mình, tức là theo dõi chẳng đổi được gì so với không theo dõi.
+
+        Chỉ hiện khi có game thật. Một dải rỗng mang tên "Game mới của bạn bè" đọc
+        lên là "các bạn của con chẳng làm gì cả", mà sự thật chỉ là bé mới theo dõi
+        một bạn chưa đăng game nào.
+      */}
+      {gameBanBe.length > 0 && (
+        <section className="mt-8" data-testid="game-ban-be">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="text-xl font-extrabold tracking-tight">Game mới của bạn bè</h2>
+            <Link href="/ban-be" className="text-sm font-semibold text-accent-text">
+              Các bạn bé đang theo dõi
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+            {gameBanBe.map((game) => (
+              <GameCard
+                key={game.id}
+                game={{
+                  id: game.id,
+                  title: game.title,
+                  authorName: game.child.displayName,
+                  thumbUrl: objectUrl('thumb', game.thumbSha256),
+                  playCount: game.playCount,
+                  reactionCount: soIcon[game.id]?.tong ?? 0,
+                  tagLabels: game.tags.map((t) => t.tag.label),
+                }}
+              />
+            ))}
           </div>
         </section>
       )}
