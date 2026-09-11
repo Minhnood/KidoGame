@@ -412,6 +412,84 @@ let dauRa = '';
   );
 }
 
+// ---------- Báo cáo bị bỏ quên: có ngưỡng, và ngưỡng đó phải thật ----------
+{
+  /*
+   * `now() at time zone 'utc'`, KHÔNG phải `now()`.
+   *
+   * Session psql ở đây chạy Asia/Ho_Chi_Minh còn Prisma ghi và đọc UTC, nên một hàng
+   * chèn bằng `now() - interval '3 days'` nằm lệch đúng 7 giờ về phía tương lai.
+   * Hậu quả không đỏ ở đâu cả: script đọc ra "đã chờ 2 ngày" cho một hàng ta vừa đặt
+   * là 3, và nếu ngưỡng là 3 thì cả nhóm im lặng trong khi phép kiểm chờ nó lên
+   * tiếng. Đã vấp đúng bẫy này lúc đo tay.
+   */
+  const cu = `rp-cu-${suffix}`;
+  const moi = `rp-moi-${suffix}`;
+  sql(
+    `insert into "Report" (id, "gameId", "reporterIpHash", reason, status, "createdAt") values ` +
+      `('${cu}', '${games[0]}', 'h-cu-${suffix}', 'Bao cao bi bo quen', 'OPEN', (now() at time zone 'utc') - interval '3 days')`
+  );
+  sql(
+    `insert into "Report" (id, "gameId", "reporterIpHash", reason, status, "createdAt") values ` +
+      `('${moi}', '${games[1]}', 'h-moi-${suffix}', 'Bao cao vua gui', 'OPEN', (now() at time zone 'utc'))`
+  );
+
+  const { out } = chayNhac();
+  const m = out.match(/Báo cáo đang mở: (\d+) \(chờ quá (\d+) ngày: (\d+)\)/);
+  check('In ra được hai con số báo cáo', Boolean(m), m?.[0] ?? '(không khớp)');
+
+  if (m) {
+    const dangMo = Number(m[1]);
+    const choLau = Number(m[3]);
+    check('Đếm được cả báo cáo mới lẫn báo cáo cũ đang mở', dangMo >= 2, `${dangMo} đang mở`);
+    /*
+     * Cái này là toàn bộ điểm của ngưỡng. Không có nó thì mỗi báo cáo gửi tối qua
+     * sinh một lá thư sáng nay, và người nhận học cách xoá thư chưa đọc — đúng thứ
+     * `viec-co-han.ts` đã cố tránh khi loại "game chờ người xem" ra khỏi thư nhắc.
+     */
+    check(
+      'Báo cáo MỚI không lọt vào nhóm nhắc, báo cáo cũ thì có',
+      choLau < dangMo && choLau >= 1,
+      `${choLau} bị bỏ quên / ${dangMo} đang mở`
+    );
+  }
+
+  check('Thân thư gọi tên báo cáo bị bỏ quên', /BÁO CÁO ĐÃ CHỜ QUÁ \d+ NGÀY/.test(out));
+  check('Và nói rõ đã chờ bao nhiêu ngày', /đã chờ 3 ngày/.test(out), out.match(/đã chờ \d+ ngày/)?.[0] ?? '');
+  check(
+    'Nói ra cả số báo cáo mới hơn chưa tới ngưỡng, thay vì giấu đi',
+    /chưa tới ngưỡng nhắc/.test(out)
+  );
+  check('Chủ đề thư nhắc tới báo cáo', /báo cáo chưa ai xem/.test(out));
+
+  /* Con số trên bảng phải khớp con số trong thư — cùng bất biến mà `viec-co-han.ts`
+     tồn tại để giữ, chỉ là cho nhóm mới. */
+  {
+    const admin = await (await newSession()).newPage();
+    await admin.goto(`${ADMIN}/admin/dang-nhap`, { waitUntil: 'networkidle' });
+    await admin.fill('#email', ADMIN_EMAIL);
+    await admin.fill('#password', ADMIN_PASS);
+    await admin.click('[data-testid=auth-form] button[type=submit]');
+    await admin.waitForURL((u) => u.pathname === '/admin', { timeout: 20000 }).catch(() => {});
+    await admin.goto(`${ADMIN}/admin/tong-quan`, { waitUntil: 'networkidle' });
+
+    const o = await admin.locator('[data-testid=o-bao-cao-cho-lau]').innerText();
+    const soTrongThu = m ? m[3] : '?';
+    check(
+      'Tab Tổng quan hiện đúng con số báo cáo bị bỏ quên mà thư đếm được',
+      o.includes(soTrongThu),
+      `bảng: "${o.replace(/\n/g, ' ')}" · thư: ${soTrongThu}`
+    );
+    await admin.close();
+  }
+
+  sql(`delete from "Report" where id in ('${cu}', '${moi}')`);
+  check(
+    'Dọn sạch: hai báo cáo vừa dựng không còn',
+    dem(`select count(*) from "Report" where id in ('${cu}', '${moi}')`) === 0
+  );
+}
+
 // ---------- Dọn ----------
 sql(`delete from "TakedownRequest" where "claimantEmail" like '%-${suffix}@vidu.test'`);
 sql(`delete from "Parent" where email = '${PARENT_EMAIL}'`);
