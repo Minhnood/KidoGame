@@ -46,6 +46,7 @@ import {
 } from './session';
 import { prisma } from './db';
 import { PhanUngError, thaIcon, type TomTatPhanUng } from './phan-ung';
+import { LoiNhanError, nhanLoi, type TomTatLoiNhan } from './loi-nhan';
 
 /** Kết quả trả về form. `null` nghĩa là chưa submit lần nào. */
 export type FormState = { error: string } | { ok: true } | null;
@@ -790,6 +791,48 @@ export async function thaIconAction(gameId: string, ma: string): Promise<KetQuaT
   } catch (e) {
     if (e instanceof PhanUngError) return { error: e.message };
     console.error('[thaIconAction]', e);
+    return { error: 'Có lỗi xảy ra, thử lại nhé.' };
+  }
+}
+
+// --- Lời nhắn có sẵn ----------------------------------------------------------
+
+/**
+ * Trần số lần đổi câu của MỘT bé trong một phút.
+ *
+ * Cùng con số với icon, và cùng lý do: một bé nhiều nhất một lời nhắn mỗi game nên
+ * bấm nhanh không bơm được gì, nhưng mỗi nhịp bấm vẫn là hai truy vấn DB. Đọc hết
+ * tám câu rồi đổi ý vài lần là cách dùng BÌNH THƯỜNG của hàng nút này.
+ */
+const DOI_LOI_NHAN_MOI_PHUT = 30;
+
+export type KetQuaNhanLoi = { error: string } | { ok: true; tomTat: TomTatLoiNhan };
+
+/**
+ * Nhắn / đổi câu / gỡ. Trả về tóm tắt MỚI để giao diện vẽ lại mà không tải lại trang.
+ *
+ * Không `run()` và không `revalidatePath`, đúng như `thaIconAction` — dựng lại trang
+ * game là nạp lại iframe, tức đứa trẻ đang chơi dở bị đá về màn hình đầu chỉ vì vừa
+ * nhắn một câu. Lý lẽ đầy đủ ở `thaIconAction` ngay trên.
+ */
+export async function nhanLoiAction(gameId: string, ma: string): Promise<KetQuaNhanLoi> {
+  const actor = await getActor();
+
+  // Nói rõ "bé" thay vì "bạn chưa đăng nhập": phụ huynh ĐANG đăng nhập, và câu kia
+  // sẽ đẩy họ đi tìm một nút đăng nhập không tồn tại.
+  if (!actor || actor.kind !== 'child') {
+    return { error: 'Chỉ tài khoản của bé mới nhắn được.' };
+  }
+
+  if (tooMany(`loi-nhan:${actor.id}`, DOI_LOI_NHAN_MOI_PHUT, 60 * 1000)) {
+    return { error: 'Bấm chậm lại một chút nhé!' };
+  }
+
+  try {
+    return { ok: true, tomTat: await nhanLoi(gameId, actor.id, ma) };
+  } catch (e) {
+    if (e instanceof LoiNhanError) return { error: e.message };
+    console.error('[nhanLoiAction]', e);
     return { error: 'Có lỗi xảy ra, thử lại nhé.' };
   }
 }

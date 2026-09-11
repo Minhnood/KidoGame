@@ -67,10 +67,11 @@ model Child {
   /// Phụ huynh khoá được tài khoản con mà không cần xoá.
   isLocked Boolean @default(false)
 
-  parent    Parent     @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  games     Game[]
-  sessions  Session[]
-  reactions Reaction[]
+  parent      Parent       @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  games       Game[]
+  sessions    Session[]
+  reactions   Reaction[]
+  compliments Compliment[]
   /// Vết kiểm duyệt nhắm vào chính TÀI KHOẢN này (admin khoá/mở khoá), không
   /// nhắm vào một game cụ thể.
   moderationLogs ModerationLog[]
@@ -231,6 +232,7 @@ model Game {
   tags             GameTag[]
   takedownRequests TakedownRequest[]
   reactions        Reaction[]
+  compliments      Compliment[]
 
   @@index([childId])
   @@index([status, createdAt])
@@ -439,6 +441,43 @@ model Reaction {
 
   @@id([gameId, childId])
   /// Đếm theo game (trang game, danh sách game) là truy vấn duy nhất chạy thường.
+  @@index([gameId])
+  /// Xoá một bé thì cascade phải tìm được hàng của bé đó mà không quét cả bảng.
+  @@index([childId])
+}
+
+/// Lời nhắn một bé để lại trên game của bé khác — CHỌN TỪ BỘ CÂU CÓ SẴN, không gõ.
+///
+/// Vì sao không cho gõ tự do, dù đó là thứ mọi trang khác đều làm: một ô nhập chữ
+/// trên trang trẻ con là một ô kiểm duyệt. Nó đòi người trực đọc từng dòng, suốt
+/// ngày, kể cả 11 giờ đêm — và giữa hai lượt đọc đó thì câu chửi vẫn nằm trên màn
+/// hình đứa trẻ bị nhắm tới. Bộ câu đóng khiến việc đó KHÔNG XẢY RA ĐƯỢC, thay vì
+/// xảy ra rồi mới dọn.
+///
+/// Cột giữ MÃ (`hay-qua`), không giữ câu chữ — cùng lý do như `Reaction.icon`: sửa
+/// lời văn sau này là sửa một bảng tra trong code, dữ liệu cũ vẫn đúng. Và quan
+/// trọng hơn: chữ nằm trong DB thì một ngày nào đó sẽ có người ghi thẳng chữ mới
+/// vào bằng SQL, tức là cánh cửa gõ tự do mở lại bằng đường sau. Danh sách mã hợp
+/// lệ ở `src/lib/loi-nhan.ts`.
+///
+/// MỖI BÉ MỘT LỜI NHẮN cho mỗi game, chặn bằng khoá chính ghép chứ không bằng
+/// logic ứng dụng. Một bé nhiệt tình để mười dòng trên game của bạn thì trang đó
+/// không còn là lời khen nữa mà là tiếng ồn, và những bạn khác bị đẩy khuất xuống
+/// dưới. Đổi câu là sửa hàng của mình; chọn lại đúng câu đang sáng là gỡ.
+model Compliment {
+  gameId  String
+  childId String
+
+  /// Mã câu, KHÔNG phải câu chữ. Xem `LOI_NHAN` trong `src/lib/loi-nhan.ts`.
+  phrase String
+
+  createdAt DateTime @default(now())
+
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, childId])
+  /// Đọc cả trang lời nhắn của MỘT game là truy vấn duy nhất chạy thường.
   @@index([gameId])
   /// Xoá một bé thì cascade phải tìm được hàng của bé đó mà không quét cả bảng.
   @@index([childId])
