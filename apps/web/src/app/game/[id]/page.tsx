@@ -17,6 +17,8 @@ import { PageTitle } from '@/components/page';
 import { PlayCounter } from './play-counter';
 import { ReportForm } from './report-form';
 import { StageFrame } from './stage-frame';
+import { HangIcon } from '@/components/hang-icon';
+import { demPhanUngNhieuGame, docPhanUng } from '@/lib/phan-ung';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,6 +106,13 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
   if (!game || (!xemDuoc && !isAdmin && !chuNhanXemGameAn)) notFound();
 
+  /*
+   * Icon: đọc SAU `notFound()` để không tốn một truy vấn cho trang 404, và truyền
+   * `childId` chỉ khi người xem là bé — phụ huynh với khách thấy số nhưng không có
+   * `cuaToi` để tô sáng.
+   */
+  const phanUng = await docPhanUng(game.id, actor?.kind === 'child' ? actor.id : null);
+
   const warnings = (Array.isArray(game.warnings) ? game.warnings : []) as unknown as Warning[];
   const cloudWarning = warnings.find((w) => w.code === 'CLOUD_VARIABLES');
 
@@ -135,6 +144,9 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
    * hỏng — cùng lý lẽ đã ghi ở trang của bố mẹ.
    */
   const biKhieuNai = laChuNhan ? (await gameDangBiKhieuNai([game.id])).has(game.id) : false;
+
+  /* Số icon cho dãy "game khác của bé" — một truy vấn cho cả bốn thẻ. */
+  const soIconKhac = await demPhanUngNhieuGame(gameKhac.map((g) => g.id));
 
   return (
     <>
@@ -203,6 +215,26 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         {cloudWarning && <Notice tone="warn">{cloudWarning.message}</Notice>}
 
         {game.description && <p className="mt-4">{game.description}</p>}
+
+        {/*
+          Hàng icon đặt NGAY dưới khung game, trên cả thẻ và các nút.
+
+          Đây là chỗ tay đang ở sau khi chơi xong, và là thứ đứa trẻ muốn làm trước
+          tiên. Đẩy xuống dưới hàng nút "Tải .sb3 / Báo cáo" thì nó nằm lẫn giữa
+          những việc mang tính thủ tục, và phải cuộn mới thấy.
+
+          Chỉ hiện khi game còn xem được bình thường: trên bản xem trước của admin
+          hay trang game đã ẩn của con mình, một hàng nút thả tim là lạc chỗ.
+        */}
+        {xemDuoc && (
+          <div className="mt-5">
+            <HangIcon
+              gameId={game.id}
+              banDau={phanUng}
+              thaDuoc={actor?.kind === 'child'}
+            />
+          </div>
+        )}
 
         {/* Tag dẫn ngược về trang chủ đã lọc sẵn — một đứa trẻ thích game giải đố thì
             đường ngắn nhất tới game giải đố tiếp theo là ngay ở đây. */}
@@ -323,6 +355,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
                     authorName: g.child.displayName,
                     thumbUrl: objectUrl('thumb', g.thumbSha256),
                     playCount: g.playCount,
+                    reactionCount: soIconKhac[g.id]?.tong ?? 0,
                   }}
                 />
               ))}

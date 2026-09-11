@@ -43,6 +43,40 @@ KNOWN_HOSTS="${BACKUP_SSH_KNOWN_HOSTS:-/ssh/known_hosts}"
 
 log() { echo "[backup] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
+# ---------------------------------------------------------------------------
+# Băm SHA-256 của một file, in ra ĐÚNG chuỗi hex và không gì khác.
+#
+# VÌ SAO CẦN, và vì sao `pg_restore --list` KHÔNG thay được nó. Đo ngày 11/9/2026
+# trên chính một bản dump thật: lật NGẪU NHIÊN n byte rồi hỏi `pg_restore --list`
+# xem nó có phát hiện không, mỗi n thử ở 9 vị trí khác nhau trong file:
+#
+#     1 byte  -> bắt được 0/9        16 byte -> 4/9
+#     3 byte  -> 2/9                 32 byte -> 6/9
+#     8 byte  -> 2/9
+#
+# `--list` chỉ đọc MỤC LỤC, nên nó bắt hỏng CẤU TRÚC — cắt cụt, hỏng header, hỏng
+# cả khối — chứ không bắt hỏng NỘI DUNG. Một byte lật, đúng kiểu ổ đĩa mục âm
+# thầm, đi qua sạch sẽ. Mà đó lại chính là cách một bản sao lưu chết mà không ai
+# biết: nó vẫn mở được, vẫn liệt kê đủ bảng, và chỉ sai ở đúng hàng cần tới.
+#
+# Băm ghi ngay LÚC TẠO, trên máy tạo ra nó. Nhờ vậy phép so ở máy Mac trả lời được
+# một câu mà không phép kiểm nào khác trả lời được: "file này còn đúng bằng file
+# lúc nó ra đời không" — phủ cả đường truyền lẫn 30 ngày nằm trên đĩa.
+#
+# `sha256sum` (Linux, có trong image postgres) hoặc `shasum -a 256` (macOS): script
+# này chạy ở cả hai nơi, nên phải hỏi cả hai. In mỗi hex, không kèm tên file, để
+# phía đọc không phải cắt chuỗi và không phụ thuộc vào đường dẫn lúc băm.
+# ---------------------------------------------------------------------------
+bam256() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1" | awk '{print $1}'
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$1" | awk '{print $1}'
+	else
+		return 1
+	fi
+}
+
 run_once() {
 	mkdir -p "$DEST"
 	local stamp
@@ -86,6 +120,21 @@ run_once() {
 	else
 		log "CẢNH BÁO: không thấy $SRC_DIR, bỏ qua phần file game"
 	fi
+
+	# Băm SAU khi cả hai file đã ghi xong và đã kiểm mở được. Băm trước thì có thể
+	# băm đúng một file mà bước kiểm ngay sau đó sẽ xoá đi.
+	for f in "$db_file" "$st_file"; do
+		[ -f "$f" ] || continue
+		if bam256 "$f" >"$f.sha256" 2>/dev/null; then
+			log "băm $(basename "$f") -> $(cut -c1-12 <"$f.sha256")…"
+		else
+			# Không có công cụ băm thì XOÁ file băm rỗng vừa tạo. Một file .sha256
+			# rỗng nằm đó sẽ làm phía kiểm so với chuỗi rỗng và báo HỎNG cho một bản
+			# hoàn toàn lành — đỏ sai hướng, đúng loại đắt nhất.
+			rm -f "$f.sha256"
+			log "CẢNH BÁO: không có sha256sum lẫn shasum, không băm được $(basename "$f")"
+		fi
+	done
 
 	rotate 'db-*.dump'
 	rotate 'storage-*.tar.gz'
@@ -176,7 +225,11 @@ rotate() {
 		count=$((count + 1))
 		if [ "$count" -gt "$KEEP" ]; then
 			log "xoá bản cũ $(basename "$file")"
-			rm -f "$file"
+			# Xoá luôn file băm đi kèm. Hai mẫu xoay vòng là `db-*.dump` và
+			# `storage-*.tar.gz`, mà `db-*.dump` KHÔNG khớp `db-*.dump.sha256` —
+			# nên không dọn ở đây thì file băm đọng lại vĩnh viễn, mỗi ngày hai cái,
+			# và thư mục sao lưu dần đầy những mẩu trỏ vào file không còn tồn tại.
+			rm -f "$file" "$file.sha256"
 		fi
 	done < <(ls -1 "$DEST"/$pattern 2>/dev/null | sort -r)
 }

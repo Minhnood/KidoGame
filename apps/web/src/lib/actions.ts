@@ -45,6 +45,7 @@ import {
   getAdmin,
 } from './session';
 import { prisma } from './db';
+import { PhanUngError, thaIcon, type TomTatPhanUng } from './phan-ung';
 
 /** Kết quả trả về form. `null` nghĩa là chưa submit lần nào. */
 export type FormState = { error: string } | { ok: true } | null;
@@ -737,4 +738,58 @@ export async function adminResolveAllErrorsAction(
   });
   revalidatePath('/admin/loi');
   return state;
+}
+
+// --- Thả icon lên game --------------------------------------------------------
+
+/**
+ * Trần số lần đổi icon của MỘT bé trong một phút.
+ *
+ * Không phải để chống tấn công — một bé thả nhiều nhất một icon mỗi game, nên không
+ * có cách nào bơm số đếm lên bằng cách bấm nhanh. Nó chống đúng một thứ: ngón tay
+ * của một đứa trẻ phát hiện ra rằng bấm liên tục thì icon nhấp nháy vui mắt, và mỗi
+ * nhịp nhấp nháy là hai truy vấn DB.
+ *
+ * Đặt rộng tay (30/phút) vì đổi ý vài lần liên tiếp là hành vi BÌNH THƯỜNG ở đây —
+ * thử lần lượt từng icon xem cái nào hợp là đúng cách người ta dùng hàng nút này.
+ */
+const DOI_ICON_MOI_PHUT = 30;
+
+export type KetQuaThaIcon = { error: string } | { ok: true; tomTat: TomTatPhanUng };
+
+/**
+ * Thả / đổi / gỡ icon. Trả về tóm tắt MỚI để giao diện vẽ lại mà không tải lại trang.
+ *
+ * KHÔNG dùng `run()` như các action khác, cố ý: `run()` trả `FormState` chỉ nói
+ * được ok hay lỗi, mà ở đây thứ nơi gọi cần là CON SỐ MỚI. Bắt trang tự tải lại để
+ * lấy số thì mỗi lần bấm là một vòng render cả trang game — kể cả cái iframe đang
+ * chạy game dở.
+ *
+ * KHÔNG `revalidatePath('/game/[id]')` vì lý do vừa nói: dựng lại trang là nạp lại
+ * iframe, tức đứa trẻ đang chơi dở bị đá về màn hình đầu chỉ vì vừa thả một trái
+ * tim. Con số trên các DANH SÁCH sẽ lệch tới lần dựng lại kế tiếp, và đó là đánh
+ * đổi có ý thức: sai vài phút ở một con số trang trí, đổi lấy việc không phá ván
+ * chơi của ai.
+ */
+export async function thaIconAction(gameId: string, ma: string): Promise<KetQuaThaIcon> {
+  const actor = await getActor();
+
+  // Phụ huynh và khách xem được số nhưng không thả được — lý do ở `model Reaction`.
+  // Nói rõ "bé" chứ không nói "bạn chưa đăng nhập", vì phụ huynh ĐANG đăng nhập và
+  // câu kia sẽ làm họ đi tìm nút đăng nhập không tồn tại.
+  if (!actor || actor.kind !== 'child') {
+    return { error: 'Chỉ tài khoản của bé mới thả được icon.' };
+  }
+
+  if (tooMany(`icon:${actor.id}`, DOI_ICON_MOI_PHUT, 60 * 1000)) {
+    return { error: 'Bấm chậm lại một chút nhé!' };
+  }
+
+  try {
+    return { ok: true, tomTat: await thaIcon(gameId, actor.id, ma) };
+  } catch (e) {
+    if (e instanceof PhanUngError) return { error: e.message };
+    console.error('[thaIconAction]', e);
+    return { error: 'Có lỗi xảy ra, thử lại nhé.' };
+  }
 }
