@@ -67,9 +67,10 @@ model Child {
   /// Phụ huynh khoá được tài khoản con mà không cần xoá.
   isLocked Boolean @default(false)
 
-  parent   Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  games    Game[]
-  sessions Session[]
+  parent    Parent     @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  games     Game[]
+  sessions  Session[]
+  reactions Reaction[]
   /// Vết kiểm duyệt nhắm vào chính TÀI KHOẢN này (admin khoá/mở khoá), không
   /// nhắm vào một game cụ thể.
   moderationLogs ModerationLog[]
@@ -229,6 +230,7 @@ model Game {
   moderationLogs   ModerationLog[]
   tags             GameTag[]
   takedownRequests TakedownRequest[]
+  reactions        Reaction[]
 
   @@index([childId])
   @@index([status, createdAt])
@@ -393,6 +395,53 @@ model GameTag {
   tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([gameId, tagId])
+}
+
+/// Một bé thả một icon lên một game. "Thích" KHÔNG phải bảng riêng — nó là icon
+/// `tim` trong bảng này.
+///
+/// VÌ SAO GỘP THÍCH VÀO ĐÂY. Nút tim và hàng icon là cùng một cử chỉ: "mình thấy
+/// game này thế nào". Tách hai bảng thì có hai con số phải hiển thị cạnh nhau, hai
+/// đường ghi phải giữ đồng bộ, và trên màn hình trẻ con nhìn thấy hai thứ làm gần
+/// như một việc. Một hàng icon, trong đó có trái tim, là câu trả lời gọn hơn.
+///
+/// VÌ SAO KHOÁ CHÍNH LÀ (gameId, childId) — MỘT icon mỗi bé mỗi game. Không phải
+/// giới hạn cho vui: khoá chính ghép làm DB tự chặn, nên không có đường nào ở tầng
+/// ứng dụng ghi ra hai hàng. Bấm lại đúng icon đang chọn là gỡ, bấm icon khác là
+/// đổi. Cho thả nhiều icon thì một bé đủ sức tự đẩy game mình lên đầu bảng, và con
+/// số đếm được thôi trả lời câu "bao nhiêu BẠN thích", chỉ còn trả lời "bao nhiêu
+/// lần có người bấm".
+///
+/// VÌ SAO CHỈ BÉ, KHÔNG PHẢI PHỤ HUYNH. Con số này nói "mấy bạn thích game của con"
+/// và nó chỉ giữ được nghĩa đó nếu người thả đều là bạn. Phụ huynh vẫn xem được số,
+/// chỉ không thả được.
+///
+/// KHÔNG có cột đếm dồn trên `Game` như `playCount`. Hai cột đếm kia chỉ TĂNG, còn
+/// icon thì gỡ ra được, nên cột dồn sẽ lệch dần mỗi lần có ai đổi ý — và lệch theo
+/// hướng không ai phát hiện. Đếm bằng `groupBy` lúc đọc: với quy mô này là một truy
+/// vấn, và nó không bao giờ sai.
+model Reaction {
+  gameId  String
+  childId String
+
+  /// Mã ngắn, KHÔNG lưu ký tự emoji: `tim`, `vui`, `bat-ngo`, `dep`, `gioi`.
+  ///
+  /// Lưu mã thì đổi hình vẽ sau này chỉ là sửa một bảng tra trong code, còn dữ liệu
+  /// cũ vẫn đúng. Lưu thẳng emoji thì bộ ký tự đó khoá cứng vào database, và một
+  /// emoji có nhiều cách mã hoá (biến thể màu da, ZWJ) nên hai hàng trông giống hệt
+  /// nhau vẫn là hai chuỗi khác nhau. Danh sách mã hợp lệ ở `src/lib/phan-ung.ts`.
+  icon String
+
+  createdAt DateTime @default(now())
+
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, childId])
+  /// Đếm theo game (trang game, danh sách game) là truy vấn duy nhất chạy thường.
+  @@index([gameId])
+  /// Xoá một bé thì cascade phải tìm được hàng của bé đó mà không quét cả bảng.
+  @@index([childId])
 }
 
 /// Lỗi xảy ra ở máy người dùng thật, GOM THEO NHÓM chứ không một dòng một lần.

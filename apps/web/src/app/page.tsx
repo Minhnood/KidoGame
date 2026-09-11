@@ -8,6 +8,7 @@ import { GameCard } from '@/components/game-card';
 import { TextInput } from '@/components/field';
 import { Button, ButtonLink } from '@/components/button';
 import { EmptyState, PageTitle } from '@/components/page';
+import { demPhanUngNhieuGame } from '@/lib/phan-ung';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +73,16 @@ export default async function HomePage({
       },
     }),
   ]);
+
+  /*
+   * Số icon cho CẢ trang game trong MỘT truy vấn, chạy sau vì nó cần danh sách id.
+   *
+   * Không gộp được vào `Promise.all` ở trên: `where` của trang chủ có tìm kiếm, lọc
+   * thẻ và lọc tuổi, nên tập game chỉ biết được sau khi truy vấn kia trả về. Một
+   * lượt `groupBy` cho 20 game vẫn rẻ hơn hẳn `_count` lồng trong `include` — cái
+   * đó sinh một truy vấn con cho mỗi hàng.
+   */
+  const soIcon = await demPhanUngNhieuGame(games.map((g) => g.id));
 
   /** Giữ nguyên các bộ lọc khác khi bấm đổi một cái. */
   const linkWith = (patch: { tag?: string; tuoi?: string }) => {
@@ -247,6 +258,7 @@ export default async function HomePage({
                 authorName: game.child.displayName,
                 thumbUrl: objectUrl('thumb', game.thumbSha256),
                 playCount: game.playCount,
+                reactionCount: soIcon[game.id]?.tong ?? 0,
                 tagLabels: game.tags.map((t) => t.tag.label),
               }}
             />

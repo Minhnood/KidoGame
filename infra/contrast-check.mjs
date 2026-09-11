@@ -234,6 +234,47 @@ const CAP_ALPHA = [
   },
 ];
 
+/**
+ * Cặp mà chính NỀN là màu trộn alpha, không phải chữ.
+ *
+ * `CAP_ALPHA` ở trên trộn màu CHỮ rồi đặt lên nền đặc. Ở đây ngược lại: nút icon
+ * đang được chọn dùng `bg-accent/15`, tức một lớp cam 15% phủ lên nền thẻ, rồi chữ
+ * và emoji nằm trên lớp đó. Không có nhóm này thì hàng icon nằm ngoài tầm phủ của cả
+ * bộ kiểm — và một bộ kiểm xanh trong khi không đo thứ vừa thêm vào là bộ kiểm nói
+ * dối.
+ *
+ * `duoi` là màu nằm DƯỚI lớp phủ. Nút icon nằm trên nền thẻ/khung nên là `surface`.
+ */
+const CAP_NEN_ALPHA = [
+  {
+    ten: 'Chữ trên nút icon ĐANG CHỌN (cam 15% phủ nền thẻ)',
+    fg: 'ink',
+    nen: 'accent',
+    duoi: 'surface',
+    alpha: 0.15,
+    min: 7,
+  },
+  {
+    ten: 'Số đếm mờ trên nút icon đang chọn',
+    fg: 'ink-soft',
+    nen: 'accent',
+    duoi: 'surface',
+    alpha: 0.15,
+    min: 4.5,
+  },
+];
+
+/**
+ * Viền phân biệt trạng thái — ngưỡng 3.0 vì nó KHÔNG phải chữ (WCAG 1.4.11).
+ *
+ * Viền cam là một trong ba dấu hiệu nói "bạn đã thả icon này": viền, nền, và
+ * `aria-pressed`. Ba lớp cố ý — riêng màu thì người mù màu không đọc được, riêng
+ * `aria-pressed` thì người nhìn màn hình không nghe thấy.
+ */
+const CAP_VIEN = [
+  { ten: 'Viền nút icon đang chọn trên nền thẻ', fg: 'accent-text', bg: 'surface', min: 3 },
+];
+
 let hong = 0;
 for (const [nhan, toi] of [
   ['SÁNG', false],
@@ -249,6 +290,20 @@ for (const [nhan, toi] of [
   for (const c of CAP_ALPHA) {
     const bg = mau(c.bg, toi);
     const r = ratio(over(mau(c.fg, toi), bg, c.alpha), bg);
+    const ok = r >= c.min;
+    if (!ok) hong++;
+    console.log(`${ok ? '✅' : '❌'} ${r.toFixed(2)}:1 (cần ${c.min}) — ${c.ten}`);
+  }
+  for (const c of CAP_NEN_ALPHA) {
+    // Trộn lớp phủ xuống nền dưới TRƯỚC, rồi mới đo chữ trên kết quả đó.
+    const nenThuc = over(mau(c.nen, toi), mau(c.duoi, toi), c.alpha);
+    const r = ratio(mau(c.fg, toi), nenThuc);
+    const ok = r >= c.min;
+    if (!ok) hong++;
+    console.log(`${ok ? '✅' : '❌'} ${r.toFixed(2)}:1 (cần ${c.min}) — ${c.ten}`);
+  }
+  for (const c of CAP_VIEN) {
+    const r = ratio(mau(c.fg, toi), mau(c.bg, toi));
     const ok = r >= c.min;
     if (!ok) hong++;
     console.log(`${ok ? '✅' : '❌'} ${r.toFixed(2)}:1 (cần ${c.min}) — ${c.ten}`);

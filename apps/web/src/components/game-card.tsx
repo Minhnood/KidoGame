@@ -188,6 +188,18 @@ export interface GameCardData {
   playCount: number;
   /** Nhãn loại game, ví dụ "Giải đố". Thẻ chỉ hiện CÁI ĐẦU TIÊN — xem `NhanLoai`. */
   tagLabels?: string[];
+  /**
+   * TỔNG số icon đã thả, gộp cả năm loại. Bỏ trống hoặc 0 thì viên thuốc không hiện.
+   *
+   * Tổng chứ không tách từng loại: thẻ game to bằng ngón tay cái, năm con số nhỏ trên
+   * đó không đọc được và cũng không ai cần đọc ở đây — muốn biết bạn bè thả gì thì vào
+   * trang game. Ở danh sách, câu hỏi duy nhất là "cái này có được yêu thích không".
+   *
+   * KHÔNG hiện số 0. Một dãy thẻ mà thẻ nào cũng đeo "❤️ 0" đọc lên là một bảng xếp
+   * hạng những game không ai thích — với trang mà mỗi thẻ là công của một đứa trẻ thì
+   * đó là thứ tệ hơn hẳn việc không hiện gì.
+   */
+  reactionCount?: number;
 }
 
 /**
@@ -365,9 +377,39 @@ export function GameCard({ game }: { game: GameCardData }) {
             `contrast-check` bó tay. Nền đặc thì cặp `chrome-ink` trên `chrome` đã đo:
             15.3:1.
           */}
-          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-chrome px-2 py-0.5 text-xs font-bold text-chrome-ink shadow-sm">
-            <TamGiac className="size-2.5" />
-            {game.playCount}
+          {/* Hai viên thuốc nằm cùng một hàng ở góc trên trái. Đặt viên icon ở góc
+              khác thì nó đụng `NhanLoai`, và ba thứ nổi trên một tấm ảnh nhỏ bằng
+              ngón tay cái là quá đông. */}
+          <span className="absolute left-2 top-2 flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 rounded-full bg-chrome px-2 py-0.5 text-xs font-bold text-chrome-ink shadow-sm">
+              <TamGiac className="size-2.5" />
+              {game.playCount}
+            </span>
+            {(game.reactionCount ?? 0) > 0 && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-chrome px-2 py-0.5 text-xs font-bold text-chrome-ink shadow-sm"
+                data-testid="the-so-icon"
+                aria-label={`${game.reactionCount} bạn đã thả icon`}
+              >
+                {/*
+                  `❤` (U+2764) TRẦN, cố ý không kèm U+FE0F.
+
+                  Thiếu ký tự chọn kiểu ấy thì đa số hệ điều hành vẽ nó như MỘT CHỮ
+                  trong font của trang — nhận màu `chrome-ink` như con số bên cạnh, và
+                  cao đúng bằng dòng chữ. Thêm U+FE0F vào là ép sang emoji màu, mà
+                  emoji màu thì mỗi hệ một hình và trên viên thuốc cỡ này nó nhô cao
+                  hơn con số, làm hàng bị lệch.
+
+                  Đây KHÁC với hàng icon ở trang game: chỗ đó cần emoji màu thật vì
+                  chính hình vẽ là nội dung. Ở đây hình chỉ là nhãn cho con số.
+
+                  `aria-hidden` vì câu đọc cho trình đọc màn hình nằm ở `aria-label`
+                  của cả viên thuốc — không thì nó đọc "trái tim hai" cụt lủn.
+                */}
+                <span aria-hidden="true">❤</span>
+                {game.reactionCount}
+              </span>
+            )}
           </span>
 
           <NhanLoai labels={game.tagLabels} />
