@@ -103,30 +103,80 @@ launchctl kickstart -p gui/$(id -u)/vn.kidogame.keo-sao-luu   # chay ngay
 tail -30 ~/Library/Logs/kidogame-keo-sao-luu.log
 ```
 
+### Ba phép kiểm, và chúng KHÔNG mạnh như nhau
+
+Mỗi lượt kéo kiểm ba thứ. Biết cái nào chứng minh được gì mới đọc đúng dòng log:
+
+| Phép | Trả lời được câu gì | Mạnh cỡ nào |
+|---|---|---|
+| Tuổi bản mới nhất | "lượt sao lưu đêm qua có chạy không" | chắc chắn |
+| `pg_restore --list` | "file mở ra được, thấy đủ bảng" | **yếu, xem dưới** |
+| **So băm SHA-256** | "file còn ĐÚNG BẰNG lúc nó ra đời" | **mạnh nhất** |
+
+### `pg_restore --list` yếu hơn vẻ ngoài rất nhiều — đo 11/9/2026
+
+Lật ngẫu nhiên *n* byte trong một bản dump thật, mỗi *n* thử ở **9 vị trí** khác
+nhau, rồi hỏi `--list` xem nó có phát hiện không:
+
+| Sửa | Bắt được |
+|---|---|
+| **1 byte** | **0/9** |
+| 3 byte | 2/9 |
+| 8 byte | 2/9 |
+| 16 byte | 4/9 |
+| 32 byte | 6/9 |
+
+Nó chỉ đọc **mục lục**, nên bắt hỏng **cấu trúc** — cắt cụt, hỏng header, hỏng cả
+khối — chứ không bắt hỏng **nội dung**. Cắt 5000 byte cuối thì bắt được; lật một
+byte thì lọt sạch. Mà một byte lật đúng là cách **ổ đĩa mục âm thầm**, và đúng cách
+một bản sao lưu chết mà vẫn mở ra được, vẫn liệt kê đủ bảng, chỉ sai ở đúng hàng
+cần tới.
+
+### Nên có thêm lớp băm — `backup.sh` ghi, `keo-sao-luu.sh` kiểm
+
+`backup.sh` băm SHA-256 **ngay lúc tạo, trên máy tạo ra nó**, ghi vào
+`<tên-file>.sha256` nằm cạnh. Nhờ vậy phép so ở máy Mac trả lời được câu mà không
+phép nào khác trả lời được: *"file này còn đúng bằng file lúc nó ra đời không"* —
+phủ cả đường truyền lẫn 30 ngày nằm trên đĩa.
+
+Chứng minh trên một bản thật, lật **đúng một byte**:
+
+```
+HỎNG: db-20260911-101156.dump KHÁC với lúc nó được tạo — nội dung đã đổi
+ổn:   db-20260911-101156.dump mở được, mục lục đọc được
+```
+
+Hai dòng đó nói về **cùng một file hỏng**. Băm bắt được, `pg_restore` thì không —
+và trước ngày 11/9/2026 thì phép kiểm sẽ gọi bản này là lành.
+
+Ba trạng thái, **cố ý không gộp**: khớp là ổn · lệch là **HỎNG THẬT** · **thiếu**
+file băm thì **BỎ QUA**, vì mọi bản tạo trước 11/9/2026 không có băm và báo đỏ cho
+chúng là đỏ sai hướng.
+
 ### Bẫy: `pg_restore` trên máy Mac cũ hơn dump
 
-`pg_restore` của Homebrew trên máy này là **16.14**, dump do **`pg_dump` 17.11**
-trong container tạo ra. Bản cũ hơn **từ chối** đọc file của bản mới hơn:
+**Đã xử lý 11/9/2026 — `brew install postgresql@17`.** Ghi lại vì cơ chế còn
+nguyên giá trị.
+
+`pg_restore` của Homebrew là **16.14**, dump do **`pg_dump` 17.11** trong container
+tạo ra. Bản cũ hơn **từ chối** đọc file của bản mới hơn:
 
 ```
 pg_restore: error: unsupported version (1.16) in file header
 ```
 
-Đây là đúng luật đã ghi trong `Dockerfile.backup` ("pg_dump lệch major với server
-là nó TỪ CHỐI chạy"), chỉ khác chiều và khác máy. **Dump không sai.** Script báo
-`BỎ QUA` chứ không báo `HỎNG` cho trường hợp này — báo hỏng là cách chắc chắn nhất
-để người ta học cách bỏ qua dòng đỏ mỗi ngày, rồi bỏ qua luôn cái ngày dump hỏng
-thật.
+Đúng luật đã ghi trong `Dockerfile.backup` ("pg_dump lệch major với server là nó
+TỪ CHỐI chạy"), chỉ khác chiều và khác máy. **Dump không sai.** Script báo `BỎ QUA`
+chứ không `HỎNG` — báo hỏng cho một bản lành là cách chắc chắn nhất để người ta học
+cách bỏ qua dòng đỏ mỗi ngày, rồi bỏ qua luôn cái ngày dump hỏng thật.
 
-Muốn kiểm được nội dung ngay trên máy Mac:
-
-```bash
-brew install postgresql@17
-KEO_PG_RESTORE=/opt/homebrew/opt/postgresql@17/bin/pg_restore infra/keo-sao-luu.sh --kiem
-```
-
-Không cài cũng không sao — phục hồi thật thì chạy trong container `postgres:17`,
-ở đó phiên bản luôn khớp (xem mục 4).
+> **`postgresql@17` là keg-only nên nó KHÔNG che khuất `postgresql@16` đang chạy DB
+> dev**, và brew không tự khởi động nó (`brew services list` → `postgresql@17 none`).
+> **ĐỪNG chạy `brew link postgresql@17`** — link chính là để nó che khuất bản 16.
+>
+> Không cần khai biến nào: `keo-sao-luu.sh` tự dò
+> `/opt/homebrew/opt/postgresql@17/bin` trước khi rơi về `PATH`. Biến
+> `KEO_PG_RESTORE` vẫn còn cho trường hợp cài ở chỗ lạ.
 
 ---
 
@@ -228,6 +278,10 @@ Nói ra để không ai tưởng nhầm là đã xong:
   thứ ba ở nơi khác về mặt địa lý — kho lưu trữ trả tiền, hoặc một máy khác.
 - **Hỏng âm thầm lâu ngày.** Giữ 30 bản ở máy Mac tức lùi lại được khoảng một
   tháng. Dữ liệu hỏng từ 40 ngày trước thì mọi bản đang giữ đều đã mang cái hỏng đó.
+- **Dữ liệu sai mà file vẫn nguyên vẹn.** Băm chỉ chứng minh file **không đổi kể từ
+  lúc tạo** — nó không biết nội dung lúc tạo có đúng hay không. Một lỗi ứng dụng ghi
+  sai vào DB rồi được sao lưu trung thực thì mọi phép kiểm ở đây đều xanh. Thứ duy
+  nhất bắt được loại này là **phục hồi thử và NHÌN vào số liệu**, mục 4.1.
 - **Bản sao lưu bị đọc trộm.** File nằm nguyên dạng, **không mã hoá**, ở cả hai
   máy. Ai vào được máy Mac là đọc được email phụ huynh và hash mật khẩu. Đây là
   đánh đổi có ý thức: mã hoá thêm một khoá phải giữ, và mất khoá thì mất luôn bản

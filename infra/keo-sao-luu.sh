@@ -111,6 +111,69 @@ fi
 [ -z "$PG_RESTORE" ] && PG_RESTORE=$(tim_lenh pg_restore)
 
 # ---------------------------------------------------------------------------
+# So băm SHA-256 với băm đã ghi LÚC TẠO trên VPS (`backup.sh` ghi file `.sha256`
+# cạnh mỗi bản).
+#
+# ĐÂY LÀ PHÉP KIỂM MẠNH NHẤT TRONG FILE NÀY, và nó có mặt vì `pg_restore --list`
+# yếu hơn vẻ ngoài rất nhiều. Đo ngày 11/9/2026 trên một bản dump thật, lật ngẫu
+# nhiên n byte ở 9 vị trí khác nhau rồi hỏi `--list`:
+#
+#     1 byte  -> bắt 0/9        16 byte -> 4/9
+#     3 byte  -> 2/9            32 byte -> 6/9
+#     8 byte  -> 2/9
+#
+# Một byte lật thì lọt HOÀN TOÀN — mà đó đúng là cách ổ đĩa hỏng âm thầm, và đúng
+# cách một bản sao lưu chết mà vẫn mở ra được, vẫn liệt kê đủ bảng, chỉ sai ở đúng
+# hàng cần tới. Băm bắt được cả một byte.
+#
+# Ba trạng thái, và KHÔNG gộp chúng: khớp là ổn, lệch là HỎNG THẬT (file đã đổi kể
+# từ lúc ra đời), còn THIẾU file băm thì BỎ QUA — các bản kéo về trước ngày
+# 11/9/2026 không có băm, và báo đỏ cho chúng là đỏ sai hướng.
+# ---------------------------------------------------------------------------
+bam256() {
+	# macOS không có `sha256sum`; hỏi cả hai vì thư mục này cũng có thể đọc trên Linux.
+	if command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$1" | awk '{print $1}'
+	elif command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1" | awk '{print $1}'
+	else
+		return 1
+	fi
+}
+
+kiem_bam() {
+	local f="$1" ten mong thuc
+	ten=$(basename "$f")
+
+	if [ ! -f "$f.sha256" ]; then
+		log "BỎ QUA: $ten không có file băm đi kèm (bản tạo trước 11/9/2026)"
+		return 0
+	fi
+
+	mong=$(tr -d '[:space:]' <"$f.sha256")
+	if [ -z "$mong" ]; then
+		log "BỎ QUA: $ten có file băm nhưng RỖNG — máy tạo không có công cụ băm"
+		return 0
+	fi
+
+	if ! thuc=$(bam256 "$f"); then
+		log "BỎ QUA: máy này không có shasum lẫn sha256sum, chưa so băm được"
+		return 0
+	fi
+
+	if [ "$thuc" = "$mong" ]; then
+		log "ổn: $ten khớp băm ghi lúc tạo ($(printf '%s' "$mong" | cut -c1-12)…)"
+		return 0
+	fi
+
+	log "HỎNG: $ten KHÁC với lúc nó được tạo — nội dung đã đổi"
+	log "      lúc tạo: $mong"
+	log "      bây giờ: $thuc"
+	log "      Bản này KHÔNG dùng được. Kéo lại, hoặc lấy bản cũ hơn."
+	return 1
+}
+
+# ---------------------------------------------------------------------------
 # `db-20260910-030000.dump` -> tuổi tính bằng giờ.
 #
 # Đọc từ TÊN FILE, không từ mtime. Cùng lý do như `rotate()` trong backup.sh, và ở
@@ -197,7 +260,9 @@ xoay_vong() {
 		count=$((count + 1))
 		if [ "$count" -gt "$GIU" ]; then
 			log "xoá bản cũ $(basename "$file")"
-			rm -f "$file"
+			# Cùng lý do như `rotate()` bên `backup.sh`: mẫu `db-*.dump` KHÔNG khớp
+			# `db-*.dump.sha256`, nên không xoá kèm ở đây thì file băm đọng lại mãi.
+			rm -f "$file" "$file.sha256"
 		fi
 	done < <(ls -1 "$DICH"/$pattern 2>/dev/null | sort -r)
 }
@@ -245,18 +310,23 @@ kiem() {
 	# Báo HỎNG cho trường hợp này là cách chắc chắn nhất để người ta học cách bỏ
 	# qua dòng đỏ mỗi ngày — rồi bỏ qua luôn cái ngày dump hỏng thật.
 	# -------------------------------------------------------------------------
+	kiem_bam "$f" || ma=1
+
 	if [ -n "$PG_RESTORE" ]; then
 		local loi
 		if loi=$("$PG_RESTORE" --list "$f" 2>&1 >/dev/null); then
-			log "ổn: $(basename "$f") đọc được bằng pg_restore"
+			# Nói ĐÚNG cái nó chứng minh được, không hơn. `--list` đọc mục lục, nên
+			# nó trả lời "mở ra được và thấy đủ bảng" — KHÔNG phải "nội dung còn
+			# nguyên". Câu sau là việc của kiem_bam().
+			log "ổn: $(basename "$f") mở được, mục lục đọc được"
 		elif printf '%s' "$loi" | grep -q 'unsupported version'; then
 			log "BỎ QUA: pg_restore ở đây ($("$PG_RESTORE" --version | awk '{print $3}')) CŨ HƠN"
 			log "        pg_dump đã tạo dump (17.x), nên nó không đọc được — dump KHÔNG sai."
-			log "        Muốn kiểm được nội dung ngay trên máy này:"
-			log "          brew install postgresql@17"
-			log "          KEO_PG_RESTORE=/opt/homebrew/opt/postgresql@17/bin/pg_restore infra/keo-sao-luu.sh --kiem"
-			log "        Không cài cũng không sao: lúc phục hồi thật thì chạy trong container"
-			log "        postgres:17 của stack, ở đó phiên bản luôn khớp."
+			log "        Cài bản khớp: brew install postgresql@17"
+			log "        (keg-only, KHÔNG che khuất postgres 16 đang chạy DB dev, và script này"
+			log "         tự dò /opt/homebrew/opt/postgresql@17/bin nên không cần khai biến nào.)"
+			log "        Không cài cũng không sao: phép băm ở trên vẫn chạy và nó mạnh hơn,"
+			log "        còn lúc phục hồi thật thì chạy trong container postgres:17 của stack."
 		else
 			log "HỎNG: $(basename "$f") KHÔNG đọc được bằng pg_restore — bản này vô dụng"
 			log "      pg_restore nói: $(printf '%s' "$loi" | head -1)"
@@ -277,6 +347,10 @@ kiem() {
 		ma=1
 	elif tar tzf "$t" >/dev/null 2>&1; then
 		log "ổn: $(basename "$t") giải nén thử được ($(du -h "$t" | cut -f1))"
+		# Gói `.tar.gz` đỡ hơn dump ở chỗ gzip có CRC32 riêng, nên `tar tzf` bắt được
+		# hỏng nội dung chứ không chỉ hỏng cấu trúc. Vẫn so băm: CRC32 là 32 bit và
+		# sinh ra để bắt lỗi đường truyền, không phải để phân biệt hai file khác nhau.
+		kiem_bam "$t" || ma=1
 	else
 		log "HỎNG: $(basename "$t") KHÔNG giải nén được"
 		ma=1
