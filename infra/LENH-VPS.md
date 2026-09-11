@@ -284,6 +284,33 @@ Xem tường lửa:
 ufw status
 ```
 
+### Đổi App Password của Gmail — 🖥 **MÁY MAC**
+
+Làm khi mật khẩu 16 ký tự ấy lỡ lọt ra đâu đó: dán nhầm vào chat, vào ảnh chụp màn
+hình, vào file theo repo.
+
+Trước hết vào `https://myaccount.google.com/apppasswords`, **xoá cái cũ**, tạo cái
+mới. Rồi:
+
+```
+infra/doi-smtp-pass.sh
+```
+
+Script hỏi mật khẩu mới (gõ không hiện lên màn hình), sao lưu bản cũ ra ngoài repo,
+sửa **cả ba** nơi — `apps/web/.env`, `infra/.env`, và `.env` trên VPS — rồi tự hỏi
+Gmail xem mật khẩu mới có dùng được không.
+
+Ba nơi phải khớp nhau, và sửa tay ba file là ba cơ hội gõ sai. Cách hỏng thì im
+lặng: web vẫn chạy, trang chủ vẫn xanh, chỉ có thư xác minh ngừng đi — phụ huynh
+không xác minh được thì con họ không đăng được game, mà không có gì báo cho ai biết.
+
+Script dừng lại trước khi đụng tới VPS nếu Gmail từ chối mật khẩu mới, nên gõ sai
+thì production vẫn đang chạy bình thường bằng mật khẩu cũ.
+
+> Sau khi đổi, việc **bắt buộc** còn lại là mở web thật, đăng ký một tài khoản phụ
+> huynh và **bấm** link trong thư xác minh. Gửi được thư và bấm được link là hai câu
+> hỏi khác nhau.
+
 ---
 
 ## ⛔ NHỮNG LỆNH KHÔNG BAO GIỜ GÕ

@@ -67,10 +67,18 @@ model Child {
   /// Phụ huynh khoá được tài khoản con mà không cần xoá.
   isLocked Boolean @default(false)
 
-  parent    Parent     @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  games     Game[]
-  sessions  Session[]
-  reactions Reaction[]
+  parent      Parent       @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  games       Game[]
+  sessions    Session[]
+  reactions   Reaction[]
+  compliments Compliment[]
+
+  /// Những bạn bé này đang theo dõi. Bé tự xem được danh sách của mình.
+  dangTheoDoi Follow[] @relation("DangTheoDoi")
+  /// Những bạn đang theo dõi bé này. Quan hệ này TỒN TẠI để xoá tài khoản kéo
+  /// theo được các hàng liên quan — KHÔNG có màn hình nào trong sản phẩm đọc nó.
+  /// Lý do ở `model Follow`.
+  duocTheoDoi Follow[] @relation("DuocTheoDoi")
   /// Vết kiểm duyệt nhắm vào chính TÀI KHOẢN này (admin khoá/mở khoá), không
   /// nhắm vào một game cụ thể.
   moderationLogs ModerationLog[]
@@ -231,6 +239,7 @@ model Game {
   tags             GameTag[]
   takedownRequests TakedownRequest[]
   reactions        Reaction[]
+  compliments      Compliment[]
 
   @@index([childId])
   @@index([status, createdAt])
@@ -442,6 +451,82 @@ model Reaction {
   @@index([gameId])
   /// Xoá một bé thì cascade phải tìm được hàng của bé đó mà không quét cả bảng.
   @@index([childId])
+}
+
+/// Lời nhắn một bé để lại trên game của bé khác — CHỌN TỪ BỘ CÂU CÓ SẴN, không gõ.
+///
+/// Vì sao không cho gõ tự do, dù đó là thứ mọi trang khác đều làm: một ô nhập chữ
+/// trên trang trẻ con là một ô kiểm duyệt. Nó đòi người trực đọc từng dòng, suốt
+/// ngày, kể cả 11 giờ đêm — và giữa hai lượt đọc đó thì câu chửi vẫn nằm trên màn
+/// hình đứa trẻ bị nhắm tới. Bộ câu đóng khiến việc đó KHÔNG XẢY RA ĐƯỢC, thay vì
+/// xảy ra rồi mới dọn.
+///
+/// Cột giữ MÃ (`hay-qua`), không giữ câu chữ — cùng lý do như `Reaction.icon`: sửa
+/// lời văn sau này là sửa một bảng tra trong code, dữ liệu cũ vẫn đúng. Và quan
+/// trọng hơn: chữ nằm trong DB thì một ngày nào đó sẽ có người ghi thẳng chữ mới
+/// vào bằng SQL, tức là cánh cửa gõ tự do mở lại bằng đường sau. Danh sách mã hợp
+/// lệ ở `src/lib/loi-nhan.ts`.
+///
+/// MỖI BÉ MỘT LỜI NHẮN cho mỗi game, chặn bằng khoá chính ghép chứ không bằng
+/// logic ứng dụng. Một bé nhiệt tình để mười dòng trên game của bạn thì trang đó
+/// không còn là lời khen nữa mà là tiếng ồn, và những bạn khác bị đẩy khuất xuống
+/// dưới. Đổi câu là sửa hàng của mình; chọn lại đúng câu đang sáng là gỡ.
+model Compliment {
+  gameId  String
+  childId String
+
+  /// Mã câu, KHÔNG phải câu chữ. Xem `LOI_NHAN` trong `src/lib/loi-nhan.ts`.
+  phrase String
+
+  createdAt DateTime @default(now())
+
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, childId])
+  /// Đọc cả trang lời nhắn của MỘT game là truy vấn duy nhất chạy thường.
+  @@index([gameId])
+  /// Xoá một bé thì cascade phải tìm được hàng của bé đó mà không quét cả bảng.
+  @@index([childId])
+}
+
+/// Một bé theo dõi một bé khác để thấy game mới của bạn ấy — ẨN DANH MỘT NỬA.
+///
+/// "Một nửa" là nửa nào, nói cho rõ vì cả thiết kế nằm ở đây: người ĐI theo dõi
+/// thấy được danh sách mình đang theo. Người ĐƯỢC theo dõi không thấy gì cả —
+/// không biết ai theo mình, không biết có bao nhiêu người, không biết có ai không.
+/// Người thứ ba cũng không.
+///
+/// VÌ SAO KHÔNG CÓ CON SỐ NGƯỜI THEO DÕI, kể cả cho chính chủ: con số đó biến
+/// trang này thành bảng xếp hạng độ nổi tiếng giữa những đứa trẻ, và một bảng xếp
+/// hạng thì luôn có đứa đứng cuối. Đứa trẻ đăng game lên đây để khoe thứ mình làm
+/// được, không phải để biết mình có ít bạn hơn đứa khác. Cùng lập luận đã loại 👎
+/// khỏi hàng icon: không có đường nào trong sản phẩm để một đứa trẻ thấy tệ hơn
+/// sau khi mở nó ra.
+///
+/// Hệ quả kỹ thuật, cố ý chấp nhận: `src/lib/theo-doi.ts` KHÔNG có hàm nào đếm
+/// hay liệt kê người theo dõi của một tác giả. Không phải vì viết khó — vì một
+/// hàm như thế tồn tại thì sớm muộn sẽ có người gọi nó ra một cái nhãn "3 bạn
+/// đang theo dõi bạn", và lúc ấy quyết định trên đã mất mà không ai nhận ra.
+///
+/// `@@index([authorId])` vẫn cần, nhưng chỉ để xoá một bé không phải quét cả
+/// bảng. Index là chuyện của máy; sản phẩm bày ra cái gì là chuyện khác.
+model Follow {
+  /// Bé đi theo dõi.
+  followerId String
+  /// Bé được theo dõi — tác giả của game.
+  authorId String
+
+  createdAt DateTime @default(now())
+
+  follower Child @relation("DangTheoDoi", fields: [followerId], references: [id], onDelete: Cascade)
+  author   Child @relation("DuocTheoDoi", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, authorId])
+  /// "Tôi đang theo dõi những ai" — truy vấn duy nhất sản phẩm thật sự chạy.
+  @@index([followerId])
+  /// Chỉ để cascade lúc xoá tài khoản. Không màn hình nào dùng chiều này.
+  @@index([authorId])
 }
 
 /// Lỗi xảy ra ở máy người dùng thật, GOM THEO NHÓM chứ không một dòng một lần.

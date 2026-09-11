@@ -19,6 +19,10 @@ import { ReportForm } from './report-form';
 import { StageFrame } from './stage-frame';
 import { HangIcon } from '@/components/hang-icon';
 import { demPhanUngNhieuGame, docPhanUng } from '@/lib/phan-ung';
+import { LoiNhan } from '@/components/loi-nhan';
+import { docLoiNhan } from '@/lib/loi-nhan';
+import { NutTheoDoi } from '@/components/nut-theo-doi';
+import { dangTheoDoi } from '@/lib/theo-doi';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,7 +115,19 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
    * `childId` chỉ khi người xem là bé — phụ huynh với khách thấy số nhưng không có
    * `cuaToi` để tô sáng.
    */
-  const phanUng = await docPhanUng(game.id, actor?.kind === 'child' ? actor.id : null);
+  const beDangXem = actor?.kind === 'child' ? actor : null;
+
+  /* Icon và lời nhắn đọc song song: hai truy vấn độc lập, không việc nào chờ việc
+     nào, và cả hai chỉ chạy SAU `notFound()` để trang 404 không tốn gì. */
+  /* Bé khác chủ game mới có nút theo dõi, nên chỉ hỏi khi đúng vai đó — người lạ mở
+     trang game không có nút nào để bày, và câu trả lời cũng chẳng dùng vào việc gì. */
+  const hoiTheoDoi = !!beDangXem && beDangXem.id !== game.childId;
+
+  const [phanUng, loiNhan, daTheoDoi] = await Promise.all([
+    docPhanUng(game.id, beDangXem?.id ?? null),
+    docLoiNhan(game.id, beDangXem?.id ?? null),
+    hoiTheoDoi ? dangTheoDoi(beDangXem.id, game.childId) : Promise.resolve(false),
+  ]);
 
   const warnings = (Array.isArray(game.warnings) ? game.warnings : []) as unknown as Warning[];
   const cloudWarning = warnings.find((w) => w.code === 'CLOUD_VARIABLES');
@@ -236,6 +252,23 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           </div>
         )}
 
+        {/*
+          Nút theo dõi ngay dưới hàng icon, cùng một cụm "phản ứng với game này".
+
+          Đặt được ở đây là vì nó KHÔNG có con số nào đi kèm — nếu có thì nó sẽ đọc
+          như một chỉ số nữa cạnh số icon, và đó đúng là thứ `model Follow` quyết
+          định không tạo ra.
+        */}
+        {xemDuoc && hoiTheoDoi && (
+          <div className="mt-4">
+            <NutTheoDoi
+              authorId={game.childId}
+              tenBan={game.child.displayName}
+              banDau={daTheoDoi}
+            />
+          </div>
+        )}
+
         {/* Tag dẫn ngược về trang chủ đã lọc sẵn — một đứa trẻ thích game giải đố thì
             đường ngắn nhất tới game giải đố tiếp theo là ngay ở đây. */}
         {game.tags.length > 0 && (
@@ -336,6 +369,31 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           link, và chính nó là loại game cần thêm tín hiệu nhất. Bỏ nút ở đây thì mức
           ẩn mềm thành cái sàn không bao giờ leo lên ẩn hẳn được.
         */}
+        {/*
+          Lời nhắn nằm SAU hàng nút, TRƯỚC ô báo cáo — và cả hai vị trí đều có lý do.
+
+          Không đặt cạnh hàng icon ngay dưới khung game: icon là một cú chạm, còn
+          đây là một khối chữ đọc mất vài giây. Dán chúng vào nhau thì phần dưới
+          khung game phình ra và cái nút "Tải .sb3" bị đẩy khuất.
+
+          Nhưng vẫn phải ở TRÊN ô báo cáo. Thứ tự trên trang nói cho đứa trẻ biết
+          việc gì là việc thường làm: khen bạn trước, báo cáo sau — không phải ngược
+          lại.
+        */}
+        {xemDuoc && (
+          <div className="mt-8 border-t border-border pt-6">
+            <LoiNhan
+              gameId={game.id}
+              banDau={loiNhan}
+              /* Chủ game đọc được nhưng không nhắn được — lý do ở `nhanLoi`. */
+              nhanDuoc={!!beDangXem && beDangXem.id !== game.childId}
+              laGameCuaToi={!!beDangXem && beDangXem.id === game.childId}
+              tenToi={beDangXem?.displayName ?? null}
+              childIdToi={beDangXem?.id ?? null}
+            />
+          </div>
+        )}
+
         <div className="mb-10">{xemDuoc && <ReportForm gameId={game.id} />}</div>
 
         {gameKhac.length > 0 && (
