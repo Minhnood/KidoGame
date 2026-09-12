@@ -186,6 +186,209 @@ if (!gameId) {
   );
 }
 
+// ---------- Phân trang ----------
+/*
+ * Trước khi có phân trang, trang chủ lấy 60 game rồi in "60 game đầu tiên" và dừng ở
+ * đó: game thứ 61 không có một đường nào đi tới. Bộ này phải canh ba thứ, và thứ thứ
+ * hai mới là thứ dễ hỏng.
+ *
+ *   1. sang trang có ra game KHÁC không  — `skip` sai là trang 2 lặp lại trang 1
+ *   2. đổi bộ lọc có VỨT số trang đi không, và sang trang có GIỮ bộ lọc không
+ *   3. `?trang=999` nói gì
+ *
+ * Cả ba đều hỏng IM LẶNG. Không cái nào ném lỗi, không cái nào để lại chỗ trống trên
+ * màn hình — chúng chỉ bày ra một danh sách sai, mà một danh sách game thì trông lúc
+ * nào cũng như một danh sách game.
+ */
+const PAGE_SIZE = 24;
+
+/**
+ * Bấm một link rồi CHỜ URL THẬT SỰ ĐỔI.
+ *
+ * `waitForLoadState('networkidle')` không dùng được ở đây: Next điều hướng phía máy
+ * khách, trang cũ đã idle sẵn nên phép chờ trả về ngay lập tức và mọi phép kiểm đọc
+ * đúng cái URL trước khi bấm. Cả năm phép kiểm dưới đây từng đỏ vì chuyện đó, trong
+ * khi sản phẩm chưa bao giờ sai — đúng cái bẫy đã cắn nhiều lần ở bộ khác.
+ */
+async function bamRoiCho(p, locator) {
+  const truoc = p.url();
+  await locator.click();
+  await p.waitForURL((u) => u.toString() !== truoc, { timeout: 30000 });
+  await p.waitForSelector('[data-testid=result-count], [data-testid=pager-khong-co]', {
+    timeout: 30000,
+  });
+}
+
+/** Mở trang chủ, trả về id game hiện ra + tổng đọc từ dòng đếm + URL thật. */
+async function xemTrang(params) {
+  const p = await anon.newPage();
+  const qs = new URLSearchParams(params).toString();
+  /* `domcontentloaded` chứ KHÔNG `networkidle`: một trang đầy 24 ảnh thumbnail trên
+     dev server không chịu yên đủ lâu để networkidle chốt, và phép chờ đó đã một lần
+     làm cả bộ này chết ở trang 2 trong khi trang 2 render hoàn toàn đúng. Thứ cần
+     chờ là dòng đếm, nên chờ thẳng nó. */
+  await p.goto(`${APP}/${qs ? `?${qs}` : ''}`, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('[data-testid=result-count], [data-testid=pager-khong-co]', {
+    timeout: 30000,
+  });
+  const hrefs = await p.locator('[data-testid=game-card]').evaluateAll((els) =>
+    els.map((el) => el.getAttribute('href') ?? '')
+  );
+  const dem = await p.locator('[data-testid=result-count]').innerText();
+  return {
+    p,
+    ids: hrefs.map((h) => h.replace('/game/', '')),
+    dem,
+    tong: Number(dem.match(/^(\d+)/)?.[1] ?? 0),
+  };
+}
+
+{
+  const t1 = await xemTrang({});
+  check('Trang chủ nói TỔNG số game, không phải số thẻ đang bày', t1.tong >= t1.ids.length, t1.dem);
+
+  if (t1.tong <= PAGE_SIZE) {
+    /* Không đủ game để có trang thứ hai. Nói ra chứ đừng báo xanh — một phép kiểm
+       phân trang chạy trên một danh sách một trang là một phép kiểm không kiểm gì. */
+    check(
+      `DB dev chỉ có ${t1.tong} game (cần hơn ${PAGE_SIZE}), BỎ QUA phần phân trang`,
+      false,
+      'không phải lỗi sản phẩm — hãy đăng thêm game rồi chạy lại'
+    );
+    await t1.p.close();
+  } else {
+    check('Trang 1 lấy đúng một trang, không lấy hết', t1.ids.length === PAGE_SIZE, `${t1.ids.length} thẻ`);
+    check('Có thanh phân trang', (await t1.p.locator('[data-testid=pager]').count()) === 1);
+    check(
+      'Trang đang mở nói ra được cho trình đọc màn hình',
+      (await t1.p.locator('[data-testid=pager-so-1]').getAttribute('aria-current')) === 'page'
+    );
+    /* Dải chào chỉ ở trang đầu — kiểm nó CÓ ở đây trước, nếu không thì phép kiểm
+       "vắng mặt ở trang 2" bên dưới xanh sẵn dù ai xoá hẳn dải chào đi. */
+    check('Dải chào có mặt ở trang 1', (await t1.p.locator('[data-testid=home-hero]').count()) === 1);
+    await t1.p.close();
+
+    const t2 = await xemTrang({ trang: '2' });
+    check('Trang 2 có game', t2.ids.length > 0, `${t2.ids.length} thẻ`);
+    /*
+     * Phép kiểm đáng giá nhất của cả phần này. `skip` quên nhân với cỡ trang, hay
+     * `orderBy` không định trước, đều cho ra một trang 2 trông hoàn toàn bình thường
+     * mà lặp lại game của trang 1 — và cái duy nhất lộ ra là một đứa trẻ thấy cùng
+     * một game hai lần rồi nghĩ mình bấm nhầm.
+     */
+    const trung = t2.ids.filter((id) => t1.ids.includes(id));
+    check('Trang 2 KHÔNG lặp lại game nào của trang 1', trung.length === 0, `${trung.length} game trùng`);
+    check('Tổng không đổi khi sang trang', t2.tong === t1.tong, `${t1.tong} → ${t2.tong}`);
+    check('Dòng đếm nói đang ở trang mấy trên mấy', /trang 2\/\d+/.test(t2.dem), t2.dem);
+    check(
+      'Dải chào KHÔNG lặp lại ở trang 2',
+      (await t2.p.locator('[data-testid=home-hero]').count()) === 0
+    );
+
+    /*
+     * HAI MŨI TÊN PHẢI PHẢN HỒI KHI RÊ CHUỘT, y như mấy nút số bên cạnh.
+     *
+     * Chúng từng là chữ trần: đo ra nền trong suốt, chữ cùng màu, không viền, không
+     * gạch chân — không đổi một pixel nào khi rê vào, ngay cạnh những nút số thì có
+     * đổi. Trên khu quản trị chuyện đó chỉ phiền; ở đây người đọc là trẻ con, và một
+     * thứ bấm được mà không nhúc nhích đọc ra là hỏng. Đúng cái bẫy đã phải sửa ba
+     * lần ở hàng icon và ở nút rút lại của ba tính năng xã hội.
+     *
+     * `mouse.move` ra góc TRƯỚC khi đo trạng thái thường: Playwright để con trỏ nằm
+     * lại chỗ vừa bấm, nên không đẩy đi thì số "trước" đã là số lúc đang hover, và
+     * phép kiểm đang so một giá trị với chính nó.
+     */
+    const veNut = (sel) =>
+      t2.p.locator(sel).evaluate((el) => {
+        const st = getComputedStyle(el);
+        return `${st.backgroundColor}|${st.color}|${st.borderColor}|${st.textDecorationLine}`;
+      });
+    await t2.p.mouse.move(5, 5);
+    await t2.p.waitForTimeout(250);
+    const truocHover = await veNut('[data-testid=pager-truoc]');
+    await t2.p.locator('[data-testid=pager-truoc]').hover();
+    await t2.p.waitForTimeout(350);
+    const sauHover = await veNut('[data-testid=pager-truoc]');
+    check('Nút "Trang trước" có phản hồi khi rê chuột', truocHover !== sauHover, `${truocHover} → ${sauHover}`);
+    check(
+      '… và nó cao đủ tầm ngón tay trẻ (48px)',
+      (await t2.p.locator('[data-testid=pager-truoc]').boundingBox()).height >= 44,
+      `${Math.round((await t2.p.locator('[data-testid=pager-truoc]').boundingBox()).height)}px`
+    );
+
+    // Bấm "Trang trước" phải quay đúng về trang 1, và về URL sạch không còn `trang`.
+    await bamRoiCho(t2.p, t2.p.locator('[data-testid=pager-truoc]'));
+    check('Bấm "Trang trước" từ trang 2 về URL sạch, không mang ?trang=1', !/trang=/.test(t2.p.url()), t2.p.url());
+
+    /*
+     * ĐỔI BỘ LỌC KHI ĐANG Ở TRANG 2 phải vứt số trang đi.
+     *
+     * Giữ lại là bé chọn một loại game rồi rơi thẳng vào màn hình trống, vì tập kết
+     * quả mới hầu như luôn ngắn hơn. Bé sẽ đọc ra "loại này không có game nào" —
+     * không ai nghĩ tới con số còn sót trong URL.
+     */
+    const t2b = await xemTrang({ trang: '2' });
+    await bamRoiCho(t2b.p, t2b.p.locator(`[data-testid=tag-${TAG}]`));
+    const urlSauLoc = t2b.p.url();
+    check('Đổi bộ lọc khi đang ở trang 2 thì VỀ trang 1', !/trang=/.test(urlSauLoc), urlSauLoc);
+    check('… và bộ lọc vừa bấm thật sự có hiệu lực', /tag=/.test(urlSauLoc), urlSauLoc);
+    await t2b.p.close();
+
+    /*
+     * Chiều ngược lại: sang trang phải GIỮ bộ lọc. Tìm một bộ lọc tuổi tự nó đã đủ
+     * dài để có trang thứ hai — đo chứ không đoán, vì DB dev đổi theo từng phiên.
+     */
+    let daKiemGiuLoc = false;
+    for (const tuoi of ['5-7', '8-10', '11-13', '14+']) {
+      const l = await xemTrang({ tuoi });
+      if (l.tong > PAGE_SIZE) {
+        await bamRoiCho(l.p, l.p.locator('[data-testid=pager-sau]'));
+        const u = new URL(l.p.url());
+        check(
+          `Sang trang GIỮ bộ lọc tuổi (${tuoi}, ${l.tong} game)`,
+          u.searchParams.get('tuoi') === tuoi && u.searchParams.get('trang') === '2',
+          u.search
+        );
+        daKiemGiuLoc = true;
+        await l.p.close();
+        break;
+      }
+      await l.p.close();
+    }
+    if (!daKiemGiuLoc) {
+      check(
+        'Sang trang GIỮ bộ lọc tuổi',
+        false,
+        `không khung tuổi nào có hơn ${PAGE_SIZE} game trong DB dev — chưa kiểm được`
+      );
+    }
+
+    /*
+     * `?trang=999`: trang không tồn tại KHÔNG được hiện ra như danh sách rỗng.
+     *
+     * Trang chủ kẹp dưới mà không kẹp trên, nên `skip` chạy qua khỏi cuối bảng và
+     * truy vấn trả về rỗng. Nếu để mặc, màn hình in "Chưa có game nào cả. Đăng game
+     * đầu tiên nhé!" — một câu sai hoàn toàn, trên một trang chủ có hàng trăm game.
+     */
+    const xa = await xemTrang({ trang: '999' });
+    check(
+      'Trang không tồn tại thì NÓI RA, không giả vờ là danh sách rỗng',
+      (await xa.p.locator('[data-testid=pager-khong-co]').count()) === 1
+    );
+    check(
+      '… và KHÔNG in "chưa có game nào" trên một trang chủ đầy game',
+      (await xa.p.locator('text=Chưa có game nào cả').count()) === 0
+    );
+    await bamRoiCho(xa.p, xa.p.locator('[data-testid=pager-khong-co] a'));
+    check(
+      '… và có đường quay về trang cuối',
+      (await xa.p.locator('[data-testid=game-card]').count()) > 0,
+      xa.p.url()
+    );
+    await xa.p.close();
+  }
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

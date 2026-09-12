@@ -13,7 +13,7 @@ import {
   ResolveBugReportButton,
   ResolveErrorButton,
 } from './error-controls';
-import { Pager } from '../pager';
+import { Pager } from '@/components/pager';
 
 export const dynamic = 'force-dynamic';
 

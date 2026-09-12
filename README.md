@@ -63,7 +63,7 @@ SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 66 kiểm t
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 76
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 34, cần >24 game
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
@@ -72,16 +72,21 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 24, DỌ
 node infra/e2e-bieu-do.mjs                                         # 21, không cần gì thêm
 node infra/e2e-bao-loi.mjs                                         # 29, cần psql
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
-node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
+node infra/e2e-errorlog.mjs                                        # 38, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 39, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 16, cần psql
-node infra/contrast-check.mjs                                      # 132 phép đo màu
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 19, cần psql
+node infra/contrast-check.mjs                                      # 144 phép đo màu
 node infra/a11y-check.mjs                                          # 21
 ```
+
+> **`e2e-discovery` cần DB dev có hơn 24 game published.** Phần phân trang của nó
+> không kiểm được gì trên một danh sách một trang, nên thay vì báo xanh nó báo ĐỎ kèm
+> câu "không phải lỗi sản phẩm" — một phép kiểm phân trang xanh trên dữ liệu không đủ
+> để phân trang là một phép kiểm nói dối.
 
 > **Mấy con số phía trên khối này đã cũ ở vài dòng** — chúng được ghi từ lúc bộ kiểm
 > còn nhỏ hơn, và một vài bộ đã dày lên từ đó (`e2e-nhac-viec`, `e2e-an-vs-xoa`,

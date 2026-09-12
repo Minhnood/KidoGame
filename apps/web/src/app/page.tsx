@@ -8,12 +8,25 @@ import { GameCard } from '@/components/game-card';
 import { TextInput } from '@/components/field';
 import { Button, ButtonLink } from '@/components/button';
 import { EmptyState, PageTitle } from '@/components/page';
+import { Pager } from '@/components/pager';
 import { demPhanUngNhieuGame } from '@/lib/phan-ung';
 import { gameMoiCuaBanBe } from '@/lib/theo-doi';
 
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 60;
+/**
+ * 24 game một trang, không phải 60.
+ *
+ * Lưới chạy 2 cột trên điện thoại, 3 cột từ `sm`, 4 cột từ `lg` — 24 chia hết cho cả
+ * ba, nên hàng cuối luôn đầy ở mọi bề rộng thay vì bỏ lại một hai thẻ lẻ trông như
+ * danh sách bị cắt giữa chừng.
+ *
+ * 60 là con số của thời chưa có phân trang: nó không phải một trang, nó là chỗ mà
+ * danh sách im lặng dừng lại. Ở 60 thẻ, trẻ phải cuộn qua mười lăm hàng mới tới được
+ * thanh phân trang, tức là thứ duy nhất nói cho bé biết còn game nữa nằm ở chỗ bé
+ * ít có khả năng tới nhất.
+ */
+const PAGE_SIZE = 24;
 
 /**
  * Lọc theo tuổi của BÉ LÀM RA GAME, không phải độ tuổi phù hợp để chơi.
@@ -32,12 +45,16 @@ const AGE_BRACKETS = [
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tag?: string; tuoi?: string }>;
+  searchParams: Promise<{ q?: string; tag?: string; tuoi?: string; trang?: string }>;
 }) {
   const sp = await searchParams;
   const query = (sp.q ?? '').trim().slice(0, 80);
   const tagSlug = sp.tag ?? '';
   const ageKey = sp.tuoi ?? '';
+  /* Kẹp dưới, KHÔNG kẹp trên — giống ba danh sách của khu quản trị. `?trang=999` đi
+     qua được tới tận truy vấn, và `Pager` là chỗ nói ra "không có trang đó"; kẹp im
+     lặng về trang cuối thì URL trên thanh địa chỉ nói một đằng, màn hình một nẻo. */
+  const page = Math.max(1, Number(sp.trang) || 1);
 
   const bracket = AGE_BRACKETS.find((b) => b.key === ageKey);
   const thisYear = new Date().getFullYear();
@@ -58,12 +75,17 @@ export default async function HomePage({
     };
   }
 
-  const [actor, tags, games] = await Promise.all([
+  const [actor, tags, total, games] = await Promise.all([
     getActor(),
     prisma.tag.findMany({ orderBy: { label: 'asc' }, select: { slug: true, label: true } }),
+    /* Đếm cùng `where` với danh sách. Đây là truy vấn thứ hai trên mọi lần tải trang
+       chủ, và nó mua đúng một thứ: con số tổng, thứ duy nhất biến "60 game đầu tiên"
+       thành một câu nói được còn bao nhiêu game nữa. */
+    prisma.game.count({ where }),
     prisma.game.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
         child: { select: { displayName: true } },
@@ -86,6 +108,20 @@ export default async function HomePage({
   const filtering = Boolean(query || tagSlug || bracket);
   const beXem = actor?.kind === 'child' ? actor : null;
 
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  /* Trang vượt quá cuối danh sách KHÔNG phải danh sách rỗng, và không được hiện ra
+     như danh sách rỗng. `?trang=999` cho một danh sách 2 trang thì truy vấn trả về
+     không có gì, và màn hình sẽ nói "Chưa có game nào cả. Đăng game đầu tiên nhé!" —
+     một câu sai hoàn toàn, ngay trên một trang chủ đầy game. `Pager` có sẵn câu đúng
+     kèm đường quay về; ở đây chỉ cần nhường chỗ cho nó. */
+  const vuotTrang = page > lastPage;
+
+  /* Dải chào và dải bạn bè chỉ ở TRANG ĐẦU, đúng lý do đã khiến chúng biến mất khi
+     lọc: người đã đi tới trang 2 không cần được mời chào lại, họ đang ở trong trang
+     rồi. Giữ lại thì mỗi lần sang trang là một màn hình đầu bị chiếm bởi thứ vừa đọc
+     xong ở trang trước. */
+  const trangDau = page === 1;
+
   /*
    * Game mới của những bạn bé đang theo dõi — phần thưởng duy nhất của việc theo
    * dõi, nên nó phải nằm ở đây chứ không trong một trang riêng phải nhớ đường tới.
@@ -93,13 +129,21 @@ export default async function HomePage({
    * KHÔNG hiện khi đang lọc hay tìm kiếm: lúc đó bé đang đi tìm một game cụ thể, và
    * chen một dải game khác vào giữa kết quả là đẩy thứ bé vừa gõ ra khỏi màn hình.
    */
-  const gameBanBe = !filtering && beXem ? await gameMoiCuaBanBe(beXem.id, 4) : [];
+  const gameBanBe = !filtering && trangDau && beXem ? await gameMoiCuaBanBe(beXem.id, 4) : [];
 
   // Một lượt `groupBy` cho CẢ hai dải. Hỏi riêng từng dải là hai truy vấn cho cùng
   // một câu hỏi, trên mọi lần tải trang chủ của một bé có theo dõi ai đó.
   const soIcon = await demPhanUngNhieuGame([...games, ...gameBanBe].map((g) => g.id));
 
-  /** Giữ nguyên các bộ lọc khác khi bấm đổi một cái. */
+  /**
+   * Giữ nguyên các bộ lọc khác khi bấm đổi một cái.
+   *
+   * ĐỔI BỘ LỌC LÀ VỀ TRANG 1, luôn luôn. Đang đứng ở trang 3 của "tất cả game" rồi
+   * bấm một thẻ loại: tập kết quả mới thường chỉ có một trang, nên mang số 3 theo là
+   * rơi thẳng vào một màn hình trống ngay lúc vừa chọn xong bộ lọc — bé sẽ đọc ra
+   * "loại này không có game nào", chứ không ai nghĩ tới cái số trang còn sót lại
+   * trong URL. Hàm này cố ý KHÔNG chép `trang` sang.
+   */
   const linkWith = (patch: { tag?: string; tuoi?: string }) => {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
@@ -107,6 +151,22 @@ export default async function HomePage({
     const nextAge = patch.tuoi !== undefined ? patch.tuoi : ageKey;
     if (nextTag) params.set('tag', nextTag);
     if (nextAge) params.set('tuoi', nextAge);
+    const qs = params.toString();
+    return qs ? `/?${qs}` : '/';
+  };
+
+  /**
+   * Ngược lại: sang trang thì GIỮ HẾT bộ lọc.
+   *
+   * Rơi một tham số ở đây là lỗi im lặng đúng nghĩa — danh sách đổi hẳn nội dung mà
+   * không có gì trên màn hình nói vì sao, và mấy cái chip lọc vẫn sáng như cũ.
+   */
+  const hrefTrang = (p: number) => {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (tagSlug) params.set('tag', tagSlug);
+    if (ageKey) params.set('tuoi', ageKey);
+    if (p > 1) params.set('trang', String(p));
     const qs = params.toString();
     return qs ? `/?${qs}` : '/';
   };
@@ -133,7 +193,7 @@ export default async function HomePage({
         và hai h1 làm trình đọc màn hình mất mốc "trang này nói về gì" —
         `infra/a11y-check.mjs` canh đúng điều đó.
       */}
-      {!filtering && (
+      {!filtering && trangDau && (
         <section
           data-testid="home-hero"
           className="mt-7 rounded-card border border-accent/30 bg-accent/12 px-6 py-7 sm:px-8"
@@ -227,7 +287,11 @@ export default async function HomePage({
           aria-label="Tìm game theo tên"
           className="max-w-100"
         />
-        {/* Giữ bộ lọc đang chọn khi submit form tìm kiếm. */}
+        {/* Giữ bộ lọc đang chọn khi submit form tìm kiếm.
+
+            KHÔNG có hidden `trang` ở đây, và đó là chủ ý: gõ một từ khoá mới là một
+            tập kết quả mới, mang số trang cũ sang thì lần tìm đầu tiên của bé rơi vào
+            màn hình trống. Cùng một luật với `linkWith`. */}
         {tagSlug && <input type="hidden" name="tag" value={tagSlug} />}
         {ageKey && <input type="hidden" name="tuoi" value={ageKey} />}
         <Button type="submit">Tìm</Button>
@@ -266,9 +330,17 @@ export default async function HomePage({
         ))}
       </div>
 
+      {/*
+        Đếm TỔNG, không đếm số thẻ đang bày ra.
+
+        Câu cũ là "60 game" kèm chữ "đầu tiên" — nó nói được rằng còn nữa, nhưng không
+        nói còn bao nhiêu, và cũng chẳng có đường nào đi tới chỗ ấy. Giờ con số là
+        toàn bộ tập kết quả, và phần "trang x/y" chỉ hiện khi thật sự có hơn một
+        trang: trên một trang chủ đúng một trang, "trang 1/1" là chữ thừa.
+      */}
       <p className="mb-4 text-sm text-ink-soft" data-testid="result-count">
-        {games.length} game
-        {games.length === PAGE_SIZE ? ' đầu tiên' : ''}
+        {total} game
+        {lastPage > 1 ? ` · trang ${Math.min(page, lastPage)}/${lastPage}` : ''}
       </p>
 
       {/*
@@ -277,7 +349,7 @@ export default async function HomePage({
         thấy được 1,5 game. Hai cột trên mobile vẫn đủ to để bấm mà thấy được
         nhiều game hơn.
       */}
-      {games.length === 0 ? (
+      {games.length === 0 && vuotTrang ? null : games.length === 0 ? (
         <EmptyState>
           {filtering ? (
             <>
@@ -297,7 +369,7 @@ export default async function HomePage({
           )}
         </EmptyState>
       ) : (
-        <div className="mb-12 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           {games.map((game) => (
             <GameCard
               key={game.id}
@@ -314,6 +386,16 @@ export default async function HomePage({
           ))}
         </div>
       )}
+
+      {/*
+        Cùng thanh phân trang với khu quản trị, không phải một bản riêng cho trẻ.
+
+        `mb-12` chuyển từ lưới xuống đây: nó vốn là khoảng thở cuối trang, và nếu để
+        nguyên trên lưới thì thanh phân trang dính vào đáy màn hình mà thẻ game cuối
+        lại cách nó một quãng rộng — trông như thanh ấy thuộc về thứ gì khác chứ không
+        phải danh sách vừa đọc.
+      */}
+      <Pager page={page} lastPage={lastPage} href={hrefTrang} testId="pager" className="mb-12 mt-6" />
     </>
   );
 }

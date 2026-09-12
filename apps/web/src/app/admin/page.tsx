@@ -23,7 +23,7 @@ import {
   RestoreGameButton,
 } from './admin-controls';
 import { TakedownControls } from './takedown-controls';
-import { Pager } from './pager';
+import { Pager } from '@/components/pager';
 
 export const dynamic = 'force-dynamic';
 

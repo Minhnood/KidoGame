@@ -1,7 +1,16 @@
 import Link from 'next/link';
 
 /**
- * Thanh phân trang dùng chung cho ba danh sách của khu quản trị.
+ * Thanh phân trang dùng chung: ba danh sách của khu quản trị và TRANG CHỦ.
+ *
+ * Nó từng nằm trong `app/admin/`. Chuyển ra `components/` khi trang chủ cần phân
+ * trang, chứ không chép một bản thứ hai cho trẻ con: hai bản thì bản ít người nhìn
+ * hơn sẽ lặng lẽ tụt lại, mà ở đây "ít người nhìn hơn" chính là bản của khu quản
+ * trị — nơi duy nhất có đủ dữ liệu để phân trang thật sự chạy tới trang thứ mười.
+ *
+ * Hình dáng đủ dùng cho trẻ vì nó vốn đã được dựng theo đúng những luật của cả
+ * trang: `min-h-touch` cho mọi thứ bấm được, `aria-current` cho trang đang mở, và
+ * form GET thường nên không cần JS.
  *
  * VÌ SAO CÓ SỐ TRANG, không chỉ hai mũi tên. Bản trước chỉ có "Trang trước / Trang
  * sau", nên đi từ trang 1 sang trang 7 là bảy lần bấm và bảy lần chờ tải — mà hàng
@@ -58,6 +67,19 @@ export function daySoTrang(page: number, lastPage: number): (number | null)[] {
  */
 const HIEN_O_NHAY_TU = 8;
 
+/**
+ * Hình dáng chung của mọi thứ bấm được trên thanh này.
+ *
+ * HAI MŨI TÊN TỪNG LÀ CHỮ TRẦN, và đo ra thì chúng KHÔNG đổi một pixel nào khi rê
+ * chuột: nền trong suốt, chữ cùng màu, không viền, không gạch chân — trong khi mấy
+ * nút số ngay bên cạnh thì đổi nền. Một thứ bấm được nằm cạnh những thứ bấm được
+ * khác mà lại không phản hồi gì là đúng cái bẫy đã phải sửa ba lần ở hàng icon và ở
+ * nút rút lại của ba tính năng xã hội. Trên khu quản trị nó chỉ phiền; trên trang chủ
+ * thì người đọc là trẻ con, và "bấm vào không thấy gì nhúc nhích" đọc ra là hỏng.
+ */
+const NUT = 'min-h-touch inline-flex items-center justify-center rounded-lg border px-3 font-semibold no-underline';
+const NUT_THUONG = 'border-border bg-surface text-ink hover:bg-bg';
+
 export function Pager({
   page,
   lastPage,
@@ -105,7 +127,7 @@ export function Pager({
       aria-label="Phân trang"
     >
       {page > 1 && (
-        <Link href={href(page - 1)} data-testid={`${testId}-truoc`} className="px-2 py-2">
+        <Link href={href(page - 1)} data-testid={`${testId}-truoc`} className={`${NUT} ${NUT_THUONG}`}>
           ← Trang trước
         </Link>
       )}
@@ -127,10 +149,9 @@ export function Pager({
                được cho trình đọc màn hình, giống hệt cách tab và bộ lọc đang làm. */
             aria-current={n === page ? 'page' : undefined}
             className={[
-              'min-h-touch inline-flex min-w-11 items-center justify-center rounded-lg border px-2 font-semibold tabular-nums no-underline',
-              n === page
-                ? 'border-transparent bg-accent text-chrome'
-                : 'border-border bg-surface text-ink hover:bg-bg',
+              NUT,
+              'min-w-11 px-2 tabular-nums',
+              n === page ? 'border-transparent bg-accent text-chrome' : NUT_THUONG,
             ].join(' ')}
           >
             {n}
@@ -139,7 +160,7 @@ export function Pager({
       )}
 
       {page < lastPage && (
-        <Link href={href(page + 1)} data-testid={`${testId}-sau`} className="px-2 py-2">
+        <Link href={href(page + 1)} data-testid={`${testId}-sau`} className={`${NUT} ${NUT_THUONG}`}>
           Trang sau →
         </Link>
       )}
@@ -185,10 +206,7 @@ export function Pager({
                 aria-label={`Nhảy tới trang, từ 1 đến ${lastPage}`}
                 className="min-h-touch w-18 rounded-lg border border-border bg-surface px-2 text-center tabular-nums text-ink"
               />
-              <button
-                type="submit"
-                className="min-h-touch inline-flex items-center rounded-lg border border-border bg-surface px-3 font-semibold text-ink hover:bg-bg"
-              >
+              <button type="submit" className={`${NUT} ${NUT_THUONG}`}>
                 Đi
               </button>
             </form>
