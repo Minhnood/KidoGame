@@ -167,12 +167,54 @@ const child1Ctx = await newSession();
   );
 
   /*
+   * HAI HIỆU ỨNG RÊ CHUỘT, và phép kiểm tồn tại để chúng không trộn vào nhau.
+   *
+   * Cái TÊN icon hiện cho mọi người xem; cái NHẤC LÊN chỉ cho người bấm được. Trộn
+   * lại là hứa "bấm được" với người bấm không ra gì — đúng cái bẫy vừa sửa ở
+   * `/admin/loi`, lần này do CSS chứ không do HTML lồng sai.
+   *
+   * Đo `opacity` đã tính toán chứ không đo sự tồn tại của thẻ: bong bóng LUÔN nằm
+   * trong DOM, nó chỉ trong suốt lúc chưa rê chuột tới. Kiểm "có thẻ span" thì xanh
+   * kể cả khi CSS không bao giờ hiện nó ra.
+   */
+  const nhanCuaTim = p.locator('[data-testid=icon-tim] ~ .kg-icon-nhan');
+  const mo = () => nhanCuaTim.evaluate((e) => Number(getComputedStyle(e).opacity));
+  check('Tên icon ẨN khi chưa rê chuột tới', (await mo()) === 0, `opacity ${await mo()}`);
+
+  await p.locator('[data-testid=icon-tim]').hover();
+  await p.waitForTimeout(400);
+  check('Rê chuột vào thì tên icon HIỆN — kể cả với khách', (await mo()) === 1, `opacity ${await mo()}`);
+  check(
+    '… và mang đúng tên tiếng Việt, không phải tên Unicode',
+    (await nhanCuaTim.innerText()).trim() === 'Thích'
+  );
+  check(
+    'Nút KHÔNG nhấc lên với khách (không hứa bấm được)',
+    !(await p.locator('[data-testid=icon-tim]').evaluate((e) => e.classList.contains('kg-icon-bam')))
+  );
+
+  /*
+   * Phép "bấm thì được nói vì sao" KHÔNG đặt ở đây, cố ý. Lúc này hàng icon còn
+   * trống nên câu gợi ý đã hiện sẵn từ đầu — kiểm ở đây là xanh dù cú bấm chẳng làm
+   * gì cả. Nó nằm ở khối phụ huynh phía dưới, nơi đã có hai lượt icon nên câu gợi ý
+   * PHẢI vắng mặt trước khi bấm.
+   */
+
+  /*
    * GỠ RÀO RỒI BẤM. Xem ghi chú số 2 ở đầu file: chỉ kiểm `disabled` là đo cái
    * khoá trên cửa, không đo cái cửa.
+   *
+   * Rào giao diện giờ là `aria-disabled`, không còn là `disabled`: nút phải rê
+   * chuột và tab tới được thì khách mới đọc được TÊN icon, mà một nút `disabled`
+   * thì không nhận cả hai. Phải gỡ CẢ HAI ở đây — gỡ thiếu một cái thì Playwright
+   * từ chối bấm và phép kiểm đỏ vì lý do không liên quan gì tới server.
    */
   await p.evaluate(() => {
     const b = document.querySelector('[data-testid=icon-tim]');
-    if (b) b.removeAttribute('disabled');
+    if (b) {
+      b.removeAttribute('disabled');
+      b.removeAttribute('aria-disabled');
+    }
   });
   await p.click('[data-testid=icon-tim]');
   await p.waitForTimeout(1500);
@@ -189,6 +231,13 @@ const c1 = await child1Ctx.newPage();
 await c1.goto(`${APP}/game/${GAME_ID}`, { waitUntil: 'networkidle' });
 
 check('Bé đăng nhập thì nút bấm được', !(await c1.locator('[data-testid=icon-tim]').isDisabled()));
+
+/* Vế CÓ của cặp trên: người bấm được thì nút mới nhấc lên dưới con trỏ. Thiếu phép
+   này thì xoá sạch hiệu ứng đi vẫn xanh, vì phép ở khối khách chỉ kiểm vế KHÔNG. */
+check(
+  'Nút CÓ nhấc lên với bé đăng nhập',
+  await c1.locator('[data-testid=icon-tim]').evaluate((e) => e.classList.contains('kg-icon-bam'))
+);
 
 check('Thả được icon tim', await thaIcon(c1, 'tim'));
 check(
@@ -268,13 +317,36 @@ const child2Ctx = await newSession();
   check('Nút bị khoá với phụ huynh', await p.locator('[data-testid=icon-tim]').isDisabled());
 
   /*
+   * BẤM THÌ PHẢI NHẬN LẠI MỘT CÂU — và đo đúng ở đây chứ không ở khối khách.
+   *
+   * Game này giờ đã có hai lượt icon, nên câu gợi ý KHÔNG hiện sẵn: nó chỉ tự hiện
+   * lúc hàng còn trống trơn. Hai phép dưới đây vì vậy đo được thật sự việc cú bấm
+   * gây ra cái gì — vắng trước, có sau. Đặt ở khối khách thì phép sau xanh sẵn từ
+   * đầu, và ai xoá cả nhánh xử lý bấm đi nó vẫn xanh.
+   */
+  check(
+    'Câu gợi ý VẮNG mặt khi hàng đã có icon',
+    (await p.locator('[data-testid=icon-goi-y]').count()) === 0
+  );
+  await p.click('[data-testid=icon-tim]', { force: true });
+  await p.waitForTimeout(300);
+  check(
+    'Phụ huynh bấm icon thì được nói vì sao không thả được',
+    (await p.locator('[data-testid=icon-goi-y]').count()) === 1 &&
+      (await p.locator('[data-testid=icon-goi-y]').innerText()).includes('Đăng nhập')
+  );
+
+  /*
    * Lại gỡ rào rồi bấm. Phụ huynh là vai NGUY HIỂM NHẤT cho phép kiểm này: họ ĐANG
    * đăng nhập, có phiên hợp lệ, nên một chốt viết là "phải có actor" thay vì "actor
    * phải là bé" sẽ để lọt đúng vai này mà mọi phép kiểm dùng khách vẫn xanh.
    */
   await p.evaluate(() => {
     const b = document.querySelector('[data-testid=icon-dep]');
-    if (b) b.removeAttribute('disabled');
+    if (b) {
+      b.removeAttribute('disabled');
+      b.removeAttribute('aria-disabled');
+    }
   });
   await p.click('[data-testid=icon-dep]');
   await p.waitForTimeout(1500);
