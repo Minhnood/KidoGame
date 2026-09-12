@@ -289,23 +289,39 @@ ufw status
 Làm khi mật khẩu 16 ký tự ấy lỡ lọt ra đâu đó: dán nhầm vào chat, vào ảnh chụp màn
 hình, vào file theo repo.
 
-Trước hết vào `https://myaccount.google.com/apppasswords`, **xoá cái cũ**, tạo cái
-mới. Rồi:
+⚠️ **Máy Mac và VPS gửi thư bằng HAI tài khoản Gmail KHÁC NHAU:**
+
+| Nơi | Tài khoản gửi |
+|---|---|
+| 🖥 máy Mac (`infra/.env`, `apps/web/.env`) | `mail-chinh@example.com` |
+| ☁️ VPS (`infra/.env`) | `mail-du-phong@example.com` |
+
+Mỗi App Password chỉ hợp với **đúng tài khoản tạo ra nó**, nên dán mật khẩu của bên
+này sang bên kia là bên kia **câm lặng**: Gmail từ chối mọi lá thư, web vẫn chạy,
+trang chủ vẫn xanh, chỉ thư xác minh ngừng đi — và phụ huynh không xác minh được thì
+con họ không đăng được game.
+
+Chạy **không kèm gì** trước, để xem nơi nào đang dùng tài khoản nào:
 
 ```
 infra/doi-smtp-pass.sh
 ```
 
-Script hỏi mật khẩu mới (gõ không hiện lên màn hình), sao lưu bản cũ ra ngoài repo,
-sửa **cả ba** nơi — `apps/web/.env`, `infra/.env`, và `.env` trên VPS — rồi tự hỏi
-Gmail xem mật khẩu mới có dùng được không.
+Rồi vào `https://myaccount.google.com/apppasswords` — **đăng nhập đúng tài khoản của
+nơi định đổi** — xoá cái cũ, tạo cái mới. Sau đó chọn một nơi:
 
-Ba nơi phải khớp nhau, và sửa tay ba file là ba cơ hội gõ sai. Cách hỏng thì im
-lặng: web vẫn chạy, trang chủ vẫn xanh, chỉ có thư xác minh ngừng đi — phụ huynh
-không xác minh được thì con họ không đăng được game, mà không có gì báo cho ai biết.
+```
+infra/doi-smtp-pass.sh --mac
+```
 
-Script dừng lại trước khi đụng tới VPS nếu Gmail từ chối mật khẩu mới, nên gõ sai
-thì production vẫn đang chạy bình thường bằng mật khẩu cũ.
+```
+infra/doi-smtp-pass.sh --vps
+```
+
+Script hỏi Gmail xem cặp tài khoản + mật khẩu có dùng được không **trước khi sửa bất
+cứ file nào**, nên gõ sai thì không có gì bị đụng tới. Nó cũng từ chối nếu mật khẩu
+vừa gõ trùng cái đang dùng — nghĩa là chưa thu hồi ở Google, và cái lộ ra vẫn còn
+dùng được.
 
 > Sau khi đổi, việc **bắt buộc** còn lại là mở web thật, đăng ký một tài khoản phụ
 > huynh và **bấm** link trong thư xác minh. Gửi được thư và bấm được link là hai câu
