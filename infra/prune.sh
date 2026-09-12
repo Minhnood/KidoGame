@@ -48,13 +48,13 @@ run_once() {
 	#
 	# Thư này KHÔNG gửi gì khi không có việc có hạn nào, nên chạy nó mỗi đêm không
 	# sinh ra một hòm thư đầy tin nhắn giống nhau.
-	log "bước 1/4: nhắc việc có hạn (chỉ gửi nếu có việc)"
+	log "bước 1/5: nhắc việc có hạn (chỉ gửi nếu có việc)"
 	if ! pnpm --filter @kidogame/web db:nhac-viec-co-han --gui; then
 		log "LỖI: bước nhắc việc thất bại"
 		ma=1
 	fi
 
-	log "bước 2/4: xoá hẳn game đã gỡ quá hạn"
+	log "bước 2/5: xoá hẳn game đã gỡ quá hạn"
 	if ! pnpm --filter @kidogame/web db:prune-removed --xoa; then
 		log "LỖI: bước xoá game thất bại"
 		ma=1
@@ -62,7 +62,7 @@ run_once() {
 
 	# Chạy bước 3 kể cả khi bước 2 lỗi: file rác từ những lượt trước vẫn nên được
 	# dọn, và storage:prune có chốt an toàn riêng (dừng nếu DB không có Game nào).
-	log "bước 3/4: dọn file không game nào trỏ tới"
+	log "bước 3/5: dọn file không game nào trỏ tới"
 	if ! pnpm --filter @kidogame/web storage:prune --xoa; then
 		log "LỖI: bước dọn file thất bại"
 		ma=1
@@ -80,9 +80,28 @@ run_once() {
 	# và gửi báo động "sao lưu không chạy" vào đúng những đêm nó vẫn chạy.
 	#
 	# Chạy KỂ CẢ khi ba bước trên lỗi — càng lỗi thì càng cần biết máy đang thế nào.
-	log "bước 4/4: canh máy chủ (chỉ gửi nếu có vấn đề)"
+	log "bước 4/5: canh máy chủ (chỉ gửi nếu có vấn đề)"
 	if ! pnpm --filter @kidogame/web db:canh-gac --gui; then
 		log "LỖI: bước canh máy chủ thất bại"
+		ma=1
+	fi
+
+	# BƯỚC 5 LÀ LÁ THƯ DUY NHẤT GỬI KỂ CẢ KHI KHÔNG CÓ GÌ XẢY RA.
+	#
+	# Bốn bước trên đều im lặng khi mọi thứ tốt, và đó là thiết kế đúng. Nhưng nó để
+	# lại một lỗ: từ phía hòm thư, "tuần này không có việc gì" và "SMTP chết từ thứ
+	# Ba" trông giống hệt nhau — cả cơ chế giám sát có thể đã tắt mà vẫn "yên tĩnh"
+	# y như lúc chạy tốt.
+	#
+	# Script tự kiểm hôm nay có đúng thứ cần gửi không, nên gọi nó mỗi đêm là đúng:
+	# lịch tuần viết bằng `if` trong shell là chỗ dễ sai mà không phép kiểm nào soi
+	# tới. Sáu đêm trong bảy, bước này in một dòng rồi thoát.
+	#
+	# Đi SAU bước canh vì nó đọc hàng đợi quản trị, và bước 2 vừa có thể làm hàng đợi
+	# đó đổi. Chạy kể cả khi các bước trên lỗi — càng lỗi thì càng cần biết.
+	log "bước 5/5: thư tuần (chỉ gửi đúng một ngày trong tuần)"
+	if ! pnpm --filter @kidogame/web db:thu-tuan --gui; then
+		log "LỖI: bước thư tuần thất bại"
 		ma=1
 	fi
 

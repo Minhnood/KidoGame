@@ -455,3 +455,57 @@ thư "đều ổn" mỗi đêm là lá thư người ta học cách bỏ qua tro
 mang một cái giá phải nói ra: **"không có thư" và "cả service `prune` đã chết"
 trông giống hệt nhau từ phía hòm thư.** Chính lá thư báo động cũng viết ra câu đó ở
 cuối thân thư. Đó là loại hỏng mà tầng 1 bắt được — nên hai tầng phải có cả hai.
+
+---
+
+## 9. Đã làm — thư tuần, 12/9/2026
+
+Mục 8 kết thúc bằng đúng câu này: *"không có thư" và "cả service `prune` đã chết"
+trông giống hệt nhau từ phía hòm thư.* Nó nói thêm rằng tầng 1 (UptimeRobot) bắt
+được loại hỏng ấy — đúng, nhưng chỉ đúng một nửa. UptimeRobot ping HTTP, nên nó bắt
+được **web sập**. Nó không biết gì về việc **đường gửi thư đã chết**, mà đường gửi
+thư mới là thứ cả ba tầng còn lại dùng để nói chuyện với người.
+
+Nói cách khác: App Password hết hạn, hoặc Gmail khoá tài khoản, thì UptimeRobot vẫn
+xanh, web vẫn chạy, và **mọi báo động của hệ thống rơi vào hư không** — im lặng y
+hệt một tuần bình yên.
+
+### Cách lấp: một lá thư luôn gửi
+
+`apps/web/prisma/thu-tuan.ts`, **bước 5/5 của `prune.sh`**, gửi mỗi **thứ Hai**.
+Không thêm service nào — cùng một image, cùng một đồng hồ 4:00, đúng lập luận đã
+dựng cho bước 4. Sáu đêm trong bảy nó in một dòng rồi thoát.
+
+**Luật đọc đảo ngược, và phải nhớ đúng chiều:**
+
+| Lá thư | Im lặng nghĩa là |
+|---|---|
+| Nhắc việc có hạn | tốt |
+| Canh máy chủ | tốt |
+| **Thư tuần** | **xấu** |
+
+### Vì sao nó không rơi vào cái bẫy nó đang tránh
+
+Một lá "tôi vẫn sống" trống rỗng chính là thứ mục 8 cảnh báo: thư đều đặn không mang
+tin gì thì người ta học cách xoá chưa đọc, rồi xoá luôn cái đêm nó mang tin thật.
+
+Nên thư này mang thứ chủ dự án thật sự muốn biết mà **không có chỗ nào khác nói**:
+tuần qua bao nhiêu gia đình mới, bé mới, game mới, các bé thả icon và nhắn cho nhau
+bao nhiêu lần, hàng đợi quản trị còn gì. Nó là **báo cáo sản phẩm**; việc nó chứng
+minh đường thư còn sống là tác dụng phụ.
+
+Khi không có ai mới, thư nói thẳng ra điều đó kèm một câu rằng đây là con số về
+**người dùng**, không phải về **máy** — một bảng toàn số 0 mà thiếu câu ấy thì đọc
+như báo cáo hỏng, và người đọc sẽ đi kiểm script thay vì kiểm sản phẩm.
+
+### Giới hạn còn lại, nói thẳng
+
+Thư tuần chứng minh được đường thư sống **tại thời điểm nó gửi**. SMTP chết vào thứ
+Ba thì phải tới thứ Hai sau mới lộ ra — tối đa sáu ngày mù. Rút ngắn thì phải gửi
+dày hơn, và dày hơn thì quay lại đúng cái bẫy trên. Bảy ngày là chỗ dừng đã chọn,
+không phải chỗ tốt nhất có thể.
+
+Và nó chỉ có tác dụng nếu người nhận **để ý khi thư vắng mặt** — đó là việc của con
+người, không có cách nào tự động hoá bằng chính cái kênh đang nghi ngờ.
+
+**Tắt:** `THU_TUAN=off`. **Đổi ngày:** `THU_TUAN_NGAY=4` (1 = thứ Hai).

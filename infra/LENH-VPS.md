@@ -395,11 +395,25 @@ node infra/mail-check.mjs --send mail-chinh@example.com
 > không thì cách chắc nhất là mở web thật, đăng ký một tài khoản phụ huynh bằng hòm
 > thư có thật, và **bấm** link xác minh.
 
-### Còn thiếu, chưa làm
+### Thư tuần — lá thư DUY NHẤT gửi kể cả khi không có gì xảy ra
 
-Chưa có **thư “tôi vẫn sống”** định kỳ. Nó sẽ lấp đúng khoảng trống vừa nói, nhưng
-đổi lại là một lá thư đều đặn không mang tin gì — đúng loại thư người ta học cách xoá
-chưa đọc, rồi xoá luôn cái đêm nó mang tin thật. Chưa chốt, cố ý.
+Mỗi **thứ Hai** có một lá thư tóm tắt tuần: bao nhiêu gia đình mới, bé mới, game mới,
+các bé khen nhau bao nhiêu lần, hàng đợi quản trị còn gì.
+
+Nó vừa là báo cáo sản phẩm, vừa là cách lấp đúng khoảng trống vừa nói ở trên. Nhưng
+**luật đọc nó ngược với hai lá kia**:
+
+| Lá thư | Im lặng nghĩa là |
+|---|---|
+| Nhắc việc có hạn | **tốt** — không có việc nào tới hạn |
+| Canh máy chủ | **tốt** — máy chủ không có vấn đề |
+| **Thư tuần** | **XẤU** — đầu tuần mà không thấy nó thì tự mở trang quản trị, đừng chờ |
+
+Nó là bước 5/5 của `prune.sh`, chạy cùng đồng hồ 4:00 với bốn bước kia — không thêm
+service nào. Sáu đêm trong bảy, bước này in một dòng rồi thoát.
+
+Đổi ngày gửi: `THU_TUAN_NGAY=4` trong `infra/.env` (1 = thứ Hai). Tắt hẳn:
+`THU_TUAN=off`.
 
 ---
 
