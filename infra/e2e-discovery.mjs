@@ -389,6 +389,60 @@ async function xemTrang(params) {
   }
 }
 
+// ---------- Trang 404 ----------
+/*
+ * Trang 404 là trang DUY NHẤT không ai chủ động mở, nên cũng là trang dễ mục nhất
+ * mà không ai biết. Ở đây nó đáng kiểm vì một lý do cụ thể của sản phẩm này: link
+ * game được trẻ chia cho nhau qua tin nhắn, mà game bị ẩn hay bị gỡ thì link cũ vẫn
+ * nằm trong máy bạn bè — nên phần lớn người rơi vào đây đang đi tìm MỘT game cụ thể.
+ *
+ * Vì thế phép kiểm nặng nhất không phải "trang có hiện chữ gì không", mà là ô tìm
+ * kiếm trên đó có thật sự dẫn tới game hay không.
+ */
+{
+  const p = await anon.newPage();
+  const res = await p.goto(`${APP}/khong-co-duong-nay-${suffix}`, {
+    waitUntil: 'domcontentloaded',
+  });
+
+  /* Mã HTTP phải là 404 THẬT. Một trang 404 đẹp trả về 200 là nói dối với mọi thứ
+     không phải con người đang đọc — trình thu thập, bộ nhớ đệm, phần mềm kiểm link. */
+  check('Đường dẫn sai trả đúng mã 404', res?.status() === 404, `HTTP ${res?.status()}`);
+  check(
+    'Trang 404 nói tiếng Việt, không phải trang mặc định của Next',
+    (await p.locator('h1').innerText()).includes('Không có trang này')
+  );
+  /* KHÔNG được có chữ "lỗi": 404 không phải lỗi của đứa trẻ đang đọc, mà với trẻ con
+     thì "lỗi" đọc ra là "mình vừa làm hỏng cái gì". */
+  const chu = await p.locator('main').innerText();
+  check('… và KHÔNG đổ lỗi cho người đọc (không có chữ "lỗi")', !/\blỗi\b/i.test(chu));
+
+  check(
+    'Đường về trang chủ là NÚT thật, cao đủ tầm tay trẻ',
+    (await p.locator('[data-testid=not-found-ve-trang-chu]').boundingBox()).height >= 44,
+    `${Math.round((await p.locator('[data-testid=not-found-ve-trang-chu]').boundingBox()).height)}px`
+  );
+
+  /*
+   * Phép kiểm đáng giá nhất ở đây: gõ tên game vào ô trên trang 404 rồi bấm Tìm,
+   * phải ra ĐÚNG game đó. Một ô tìm kiếm chỉ đưa người ta về trang chủ trắng trơn
+   * thì trông y hệt ô này mà chẳng làm được việc gì.
+   */
+  await p.fill('[data-testid=not-found-search] input[name=q]', TITLE_NO_DIACRITICS);
+  await p.click('[data-testid=not-found-search] button[type=submit]');
+  await p.waitForURL(/\?q=/, { timeout: 20000 });
+  await p.waitForSelector('[data-testid=result-count]', { timeout: 30000 });
+  const raHrefs = await p.locator('[data-testid=game-card]').evaluateAll((els) =>
+    els.map((el) => el.getAttribute('href') ?? '')
+  );
+  check(
+    'Tìm từ trang 404 ra ĐÚNG game, không chỉ ném về trang chủ',
+    raHrefs.some((h) => h.includes(gameId)),
+    `${raHrefs.length} kết quả`
+  );
+  await p.close();
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
