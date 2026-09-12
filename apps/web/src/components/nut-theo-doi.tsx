@@ -56,9 +56,21 @@ export function NutTheoDoi({
         className={[
           'min-h-touch inline-flex items-center rounded-full border px-4 py-1.5',
           'text-sm font-semibold transition cursor-pointer',
+          /*
+           * Trạng thái ĐANG THEO DÕI cũng phải phản hồi khi rê chuột vào.
+           *
+           * Đo được trước khi sửa: `hover:border-accent-text` chỉ nằm ở nhánh CHƯA
+           * theo dõi, nên nút "Đang theo dõi kubin" — đúng cái nút để BỎ theo dõi —
+           * không đổi viền, không đổi nền, không gì cả. Nó là nút duy nhất trên trang
+           * mà con trỏ đi qua như đi qua một dòng chữ.
+           *
+           * Nền đậm thêm (15% → 20%) chứ không nhạt đi: hover là tiến tới, không lùi.
+           * Con số 20 do phép đo chặn lại, không phải chọn cho đẹp — xem
+           * `contrast-check.mjs`, mục "lúc rê chuột".
+           */
           dang
-            ? 'border-accent-text bg-accent/15 text-ink'
-            : 'border-border bg-surface text-ink hover:border-accent-text',
+            ? 'border-accent-text bg-accent/15 text-ink hover:bg-accent/20'
+            : 'border-border bg-surface text-ink hover:border-accent-text hover:bg-accent/10',
           dangGui ? 'opacity-70' : '',
         ].join(' ')}
       >

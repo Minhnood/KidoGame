@@ -250,6 +250,37 @@ check(
 );
 check('Số đếm hiện lên 1', (await c1.locator('[data-testid=icon-tim]').innerText()).includes('1'));
 
+/*
+ * NÚT ĐANG CHỌN PHẢI ĐẬM THÊM KHI RÊ CHUỘT VÀO, không đứng im và không nhạt đi.
+ *
+ * Nó là nút GỠ — đường rút lại duy nhất của bé — và nó từng là nút duy nhất trong
+ * hàng không phản hồi gì: viền đã sẵn là `accent-text` nên `hover:border-accent-text`
+ * chẳng đổi được gì, còn một `hover:bg-accent/10` dùng chung thì kéo nền từ 15% xuống
+ * 10%, tức rê chuột vào làm nút nhạt đi.
+ *
+ * Đo ĐỘ ĐẬM của lớp phủ chứ không so hai chuỗi màu: "khác nhau" thì nhạt đi cũng đạt,
+ * mà nhạt đi chính là lỗi đang chặn ở đây.
+ */
+{
+  const doPhu = async () => {
+    const s = await c1.locator('[data-testid=icon-tim]').evaluate((e) => getComputedStyle(e).backgroundColor);
+    return Number(s.match(/\/\s*([\d.]+)\s*\)/)?.[1] ?? 1);
+  };
+  /* Đẩy chuột ra KHỎI nút trước khi đo số "trước". Playwright để con trỏ nằm
+     lại đúng chỗ vừa bấm, nên đo ngay là đo trạng thái ĐANG hover và so nó với
+     chính nó — phép kiểm đỏ trong khi sản phẩm đúng. Đã đỏ thật một lần vì đúng
+     chuyện này. */
+  await c1.mouse.move(5, 5);
+  await c1.waitForTimeout(250);
+  const truoc = await doPhu();
+  await c1.locator('[data-testid=icon-tim]').hover();
+  await c1.waitForTimeout(300);
+  const sau = await doPhu();
+  check('Rê chuột vào nút ĐANG CHỌN thì nền đậm THÊM, không nhạt đi', sau > truoc, `${truoc} -> ${sau}`);
+  await c1.mouse.move(5, 5);
+  await c1.waitForTimeout(200);
+}
+
 // ---------- Đổi icon: phải ĐỔI, không phải thêm ----------
 check('Đổi sang icon khác được', await thaIcon(c1, 'vui'));
 check(
