@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# Chặn hai thứ không hoàn lại được trên `main` và `dev`: XOÁ nhánh, và GHI ĐÈ lịch sử.
+#
+# ═══ VÌ SAO LÀ HOOK Ở MÁY NÀY, KHÔNG PHẢI BẢO VỆ NHÁNH TRÊN GITHUB ═══
+#
+# GitHub từ chối cả `branch protection` lẫn `rulesets` cho repo PRIVATE ở gói Free —
+# đo ngày 12/9, API trả 403 "Upgrade to GitHub Pro or make this repository public".
+# Hai đường mở khoá đều có giá: trả tiền, hoặc công khai repo. Công khai thì KHÔNG
+# được — lịch sử git còn commit `5d4e3f9` mang một mật khẩu trong
+# `infra/ORACLE-FREE.md`, và công khai là phơi nó ra vĩnh viễn, kể cả khi file đã gỡ.
+#
+# Nên đây là hàng rào đặt ở đúng chỗ rủi ro THẬT đi qua: repo này chỉ có một người
+# push, từ một máy. Hook không ngăn được người khác ở máy khác — nói rõ như vậy, đừng
+# nhầm nó với bảo vệ nhánh. Nó ngăn đúng cái đã suýt xảy ra: một dòng
+# `git push --force` gõ nhầm nhánh lúc đang vội.
+#
+# CÀI (chạy một lần, trên máy Mac):
+#   git config core.hooksPath infra/git-hooks
+#
+# Cố tình muốn ghi đè thật thì nói ra bằng một công tắc có ý thức:
+#   CHO_PHEP_GHI_DE=1 git push --force origin main
+set -euo pipefail
+
+NHANH_GIU="main dev"
+KHONG=0000000000000000000000000000000000000000
+
+if [ "${CHO_PHEP_GHI_DE:-}" = "1" ]; then
+  echo "⚠️  CHO_PHEP_GHI_DE=1 — hook đứng sang một bên, bạn tự chịu trách nhiệm." >&2
+  exit 0
+fi
+
+# stdin: <ref cục bộ> <sha cục bộ> <ref từ xa> <sha từ xa>, mỗi lần push một dòng.
+while read -r _ref_cb sha_cb ref_tx sha_tx; do
+  [ -n "${ref_tx:-}" ] || continue
+
+  ten="${ref_tx#refs/heads/}"
+  giu=0
+  for n in $NHANH_GIU; do [ "$ten" = "$n" ] && giu=1; done
+  [ "$giu" = "1" ] || continue
+
+  # Xoá nhánh: phía cục bộ là toàn số 0.
+  if [ "$sha_cb" = "$KHONG" ]; then
+    echo "⛔ Không xoá nhánh '$ten' từ máy này." >&2
+    echo "   Thật sự muốn: CHO_PHEP_GHI_DE=1 git push origin --delete $ten" >&2
+    exit 1
+  fi
+
+  # Nhánh mới trên remote thì chưa có gì để ghi đè.
+  [ "$sha_tx" = "$KHONG" ] && continue
+
+  # Push bình thường LUÔN là fast-forward, tức sha trên remote là tổ tiên của sha sắp
+  # đẩy lên. Không phải tổ tiên nghĩa là lịch sử đã bị viết lại, và những commit chỉ
+  # còn ở remote sẽ mất.
+  #
+  # Phép kiểm tổ tiên ở ĐÂY khác với `merge --ff-only` mà bàn giao dặn đừng tin: ở
+  # kia nó trả lời sai câu hỏi "hai nhánh đã hội tụ nội dung chưa"; ở đây câu hỏi
+  # đúng là "có commit nào sắp biến mất không", và tổ tiên chính là phép đo đó.
+  if ! git merge-base --is-ancestor "$sha_tx" "$sha_cb" 2>/dev/null; then
+    mat=$(git rev-list --count "$sha_cb..$sha_tx" 2>/dev/null || echo '?')
+    echo "⛔ Push này GHI ĐÈ lịch sử của '$ten'." >&2
+    echo "   $mat commit đang có trên remote sẽ không còn nhánh nào trỏ tới." >&2
+    git log --oneline "$sha_cb..$sha_tx" 2>/dev/null | head -5 | sed 's/^/     /' >&2
+    echo "   Thật sự muốn: CHO_PHEP_GHI_DE=1 git push --force origin $ten" >&2
+    exit 1
+  fi
+done
+
+exit 0

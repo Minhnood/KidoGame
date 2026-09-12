@@ -284,6 +284,24 @@ Xem tường lửa:
 ufw status
 ```
 
+### Chặn ghi đè nhánh `main` — 🖥 **MÁY MAC**, chạy một lần
+
+```
+git config core.hooksPath infra/git-hooks
+```
+
+Sau lệnh này, `git push --force` hay xoá nhánh `main`/`dev` **từ máy này** sẽ bị chặn
+kèm danh sách commit sắp mất. Cố tình muốn thì `CHO_PHEP_GHI_DE=1` đặt trước lệnh.
+
+Vì sao là hook chứ không phải bảo vệ nhánh trên GitHub: GitHub **không cho** bảo vệ
+nhánh trên repo **private** ở gói Free (API trả 403, đo 12/9). Hai đường mở khoá là
+trả tiền GitHub Pro, hoặc công khai repo — mà công khai thì **không được**, vì lịch
+sử git còn một commit mang mật khẩu (`5d4e3f9`, `infra/ORACLE-FREE.md`), và công khai
+là phơi nó ra vĩnh viễn kể cả khi file đã gỡ.
+
+> Hook chỉ bảo vệ **máy này**. Ai clone repo ở máy khác thì nó không biết gì cả —
+> đừng nhầm nó với bảo vệ nhánh thật.
+
 ### Đổi App Password của Gmail — 🖥 **MÁY MAC**
 
 Làm khi mật khẩu 16 ký tự ấy lỡ lọt ra đâu đó: dán nhầm vào chat, vào ảnh chụp màn
@@ -326,6 +344,62 @@ dùng được.
 > Sau khi đổi, việc **bắt buộc** còn lại là mở web thật, đăng ký một tài khoản phụ
 > huynh và **bấm** link trong thư xác minh. Gửi được thư và bấm được link là hai câu
 > hỏi khác nhau.
+
+---
+
+## 11. Trực hằng ngày — việc của người, không phải của máy
+
+Game hiện công khai **ngay khi bé đăng**, không ai duyệt trước. Cả cơ chế đó đứng
+trên một giả định: có người đọc hàng đợi. Máy đã làm hết phần nó làm được — thư nhắc
+khi có việc có hạn, canh gác khi máy chủ có vấn đề — nhưng **thư chỉ nhắc, nó không
+đọc hộ**.
+
+### Mỗi ngày một lần, khoảng một phút — 🖥 **bất kỳ máy nào**
+
+Mở `https://admin.37-60-251-95.sslip.io/admin/tong-quan`.
+
+Thấy dòng **“Không có việc gấp.”** → xong, đóng lại. Đó là câu khẳng định, không
+phải bốn ô số 0 để tự đoán.
+
+Thấy số khác 0 ở nhóm **“Việc có hạn”** thì:
+
+| Ô | Nghĩa là gì | Làm gì |
+|---|---|---|
+| **Yêu cầu gỡ quá hạn** | Đã lỡ hạn **hứa công khai** ở `/dieu-khoan` | Trả lời ngay, đây là nghĩa vụ pháp lý chứ không phải mong muốn nội bộ |
+| **Sắp xoá hẳn** | Game đã gỡ, sắp mất file gốc | Việc **duy nhất** bỏ lỡ là mất vĩnh viễn. Quyết cho hiện lại hay để xoá |
+| **Báo cáo bị bỏ quên** | Người thật đã bấm báo cáo, quá 2 ngày chưa ai xem | Mở game đó xem. Trên trang mà người chơi là trẻ con, đây là ô đáng nhìn trước |
+| **Nhóm lỗi chưa xử lý** | Lỗi xảy ra ở máy người dùng thật | Đọc `/admin/loi`, đánh dấu đã xử lý sau khi sửa |
+
+### Mỗi tuần một lần: hỏi xem đường thư còn sống không
+
+**Đây không phải việc thừa.** Cả hai kênh báo động đều **im lặng khi mọi thứ tốt** —
+thư nhắc chỉ gửi khi có việc, canh gác chỉ gửi khi có vấn đề. Nghĩa là “tuần này
+không nhận được thư nào” và “SMTP đã chết từ thứ ba” **trông giống hệt nhau** từ phía
+hòm thư.
+
+🖥 **MÁY MAC** — hỏi thẳng Gmail, không gửi thư cho ai:
+
+```
+node infra/mail-check.mjs
+```
+
+Muốn chắc tới mức nhận được thư thật thì thêm địa chỉ của mình:
+
+```
+node infra/mail-check.mjs --send mail-chinh@example.com
+```
+
+> ⚠️ Lệnh này đọc `infra/.env` **trên máy Mac**, tức nó kiểm tài khoản
+> `mail-chinh@example.com`. **VPS gửi bằng tài khoản khác**
+> (`mail-du-phong@example.com`) — xem mục 10. Muốn biết production còn gửi được
+> không thì cách chắc nhất là mở web thật, đăng ký một tài khoản phụ huynh bằng hòm
+> thư có thật, và **bấm** link xác minh.
+
+### Còn thiếu, chưa làm
+
+Chưa có **thư “tôi vẫn sống”** định kỳ. Nó sẽ lấp đúng khoảng trống vừa nói, nhưng
+đổi lại là một lá thư đều đặn không mang tin gì — đúng loại thư người ta học cách xoá
+chưa đọc, rồi xoá luôn cái đêm nó mang tin thật. Chưa chốt, cố ý.
 
 ---
 
