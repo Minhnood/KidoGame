@@ -200,9 +200,16 @@ export default async function AdminErrorsPage({
                     <span className="text-ink-soft">Không để lại email — không trả lời được.</span>
                   )}
                 </p>
-                <p className="mt-3">
+                {/* `div`, KHÔNG phải `p`: `ResolveBugReportButton` render một
+                    `<form>`, và HTML không cho `<form>` nằm trong `<p>`. Trình duyệt
+                    tự đóng thẻ `<p>` ngay trước `<form>`, nên cây DOM nó dựng khác
+                    cây React gửi từ server — ra lỗi hydration, và nút có thể mất
+                    handler. Đây là lỗi nằm trong HTML chứ không nằm trong React, nên
+                    không phép kiểm giao diện nào của repo nhìn thấy: nút vẫn hiện,
+                    vẫn đúng chỗ, vẫn bấm được trong bản render server. */}
+                <div className="mt-3">
                   <ResolveBugReportButton id={b.id} resolved={false} />
-                </p>
+                </div>
               </li>
             ))}
           </ul>

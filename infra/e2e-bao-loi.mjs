@@ -206,6 +206,25 @@ const p = await ctx.newPage();
 // ---------- Khu quản trị: thấy, và đánh dấu đã trả lời ----------
 {
   const a = await (await browser.newContext({ viewport: { width: 1300, height: 1400 } })).newPage();
+
+  /*
+   * THU LỖI CONSOLE, vì có một loại hỏng mà mọi phép kiểm khác ở đây đều mù.
+   *
+   * `<form>` không được nằm trong `<p>` — HTML cấm, và trình duyệt xử lý bằng cách
+   * tự ĐÓNG thẻ `<p>` ngay trước `<form>`. Cây DOM nó dựng ra khác cây React gửi từ
+   * server, nên React báo lỗi hydration và có thể bỏ luôn phần đó khỏi lần
+   * hydrate — nút mất handler mà vẫn hiện ra đúng chỗ, đúng chữ.
+   *
+   * Nhìn từ phía phép kiểm thì mọi thứ xanh: nút tồn tại, đếm được, bấm được trong
+   * bản render server. Chính trang này đã mang lỗi ấy cho tới 12/9, và thứ phát hiện
+   * ra là một người mở DevTools chứ không phải 29 phép kiểm trong file này.
+   */
+  const loiConsole = [];
+  a.on('console', (m) => {
+    if (m.type() === 'error') loiConsole.push(m.text());
+  });
+  a.on('pageerror', (e) => loiConsole.push(String(e?.message ?? e)));
+
   await a.goto(`${ADMIN}/admin/dang-nhap`, { waitUntil: 'networkidle' });
   await a.fill('#email', ADMIN_EMAIL);
   await a.fill('#password', ADMIN_PASS);
@@ -219,6 +238,18 @@ const p = await ctx.newPage();
   check('… và nó chứa đúng chữ người dùng vừa gõ', chu.includes(MO_TA), MO_TA.slice(0, 40));
   check('… kèm mã lỗi để tra log server', chu.includes('abc123'));
   check('… kèm email hiện thành link trả lời được', (await khu.locator(`a[href="mailto:${EMAIL}"]`).count()) === 1);
+
+  /* Chờ một nhịp: React hydrate sau khi `networkidle`, nên đọc mảng lỗi ngay lập tức
+     có thể đọc trước lúc lỗi kịp được in ra — một phép kiểm xanh vì tới quá sớm. */
+  await a.waitForTimeout(1500);
+  const loiHydrat = loiConsole.filter((t) =>
+    /hydrat|cannot be a descendant|did not match|validateDOMNesting/i.test(t)
+  );
+  check(
+    'Trang không có lỗi hydration nào (HTML lồng sai thì nút mất handler mà vẫn hiện)',
+    loiHydrat.length === 0,
+    loiHydrat[0]?.slice(0, 130) ?? ''
+  );
 
   /* Phần này KHÔNG được chịu bộ lọc của trang: ba bộ lọc bên dưới nói về `ErrorLog`.
      Cho chúng lọc cả hai danh sách thì "Đã xử lý" hiện một hàng đợi trống rỗng cạnh
