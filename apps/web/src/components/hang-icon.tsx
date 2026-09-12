@@ -33,10 +33,25 @@ export function HangIcon({
 }) {
   const [tomTat, setTomTat] = useState(banDau);
   const [loi, setLoi] = useState<string | null>(null);
+  /** Đã bấm mà không thả được -> nói vì sao. Không phải lỗi, nên không đỏ. */
+  const [nhac, setNhac] = useState(false);
   const [dangGui, startTransition] = useTransition();
 
   function bam(ma: string) {
-    if (!thaDuoc) return;
+    /*
+     * Người không thả được BẤM ĐƯỢC, và nhận lại một câu.
+     *
+     * Trước đây nút này `disabled`, nên cú bấm rơi vào hư không — đúng, nhưng cũng
+     * câm: đứa trẻ chưa đăng nhập bấm tim, không gì xảy ra, và nó không có cách nào
+     * biết là do chưa đăng nhập chứ không phải do trang hỏng. Câu gợi ý ở cuối hàng
+     * chỉ hiện khi CHƯA AI thả gì, tức đúng lúc hàng có sẵn vài con số thì nó biến
+     * mất — và đó lại là lúc đứa trẻ muốn thả nhất.
+     */
+    if (!thaDuoc) {
+      setNhac(true);
+      return;
+    }
+    setNhac(false);
 
     // Dựng trạng thái lạc quan bằng ĐÚNG ba nhánh mà `thaIcon` trên server dùng —
     // giữ hai bên cùng một luật, nếu không thì con số nhảy một nhịp lúc server trả
@@ -77,41 +92,69 @@ export function HangIcon({
           const so = tomTat.dem[icon.ma] ?? 0;
           const dangChon = tomTat.cuaToi === icon.ma;
           return (
-            <button
-              key={icon.ma}
-              type="button"
-              onClick={() => bam(icon.ma)}
-              disabled={!thaDuoc || dangGui}
-              aria-pressed={thaDuoc ? dangChon : undefined}
-              /*
-               * Nhãn mang CẢ tên lẫn số. Nút chỉ có emoji thì trình đọc màn hình
-               * đọc ra tên Unicode tiếng Anh ("red heart"), tức đứa trẻ dùng trình
-               * đọc nghe một câu khác hẳn đứa trẻ nhìn màn hình.
-               */
-              aria-label={`${icon.nhan}${so > 0 ? `, ${so} bạn` : ''}`}
-              title={icon.nhan}
-              data-testid={`icon-${icon.ma}`}
-              data-chon={dangChon ? 'co' : 'khong'}
-              /*
-               * min-h/min-w 44px: đây là ngón tay trẻ con trên điện thoại. Nhỏ hơn
-               * thì bấm nhầm sang icon bên cạnh, mà bấm nhầm ở đây là thả nhầm một
-               * lời khen rồi phải bấm thêm lần nữa để gỡ.
-               */
-              className={[
-                'inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full border px-3 py-1.5',
-                'text-lg leading-none transition',
-                dangChon
-                  ? 'border-accent-text bg-accent/15 text-ink'
-                  : 'border-border bg-surface text-ink',
-                thaDuoc ? 'cursor-pointer hover:border-accent-text' : 'cursor-default',
-                dangGui ? 'opacity-70' : '',
-              ].join(' ')}
-            >
-              <span aria-hidden="true">{icon.ky_tu}</span>
-              {/* Số 0 KHÔNG hiện. Một hàng năm con số 0 dưới game của một đứa trẻ
-                  đọc lên là "chưa ai thích cái này", lặp lại năm lần. */}
-              {so > 0 && <span className="text-sm tabular-nums text-ink-soft">{so}</span>}
-            </button>
+            /*
+             * Bọc thêm một lớp CHỈ để treo cái tên nổi lên trên. Không gộp vào nút
+             * được: bong bóng phải nằm NGOÀI nút thì mới `pointer-events: none` mà
+             * không mất hover của chính nút, và nút thì `overflow` theo viền bo tròn.
+             */
+            <span key={icon.ma} className="kg-icon-boc">
+              <button
+                type="button"
+                onClick={() => bam(icon.ma)}
+                /*
+                 * CHỈ `disabled` lúc ĐANG GỬI. Người không thả được thì chặn bằng
+                 * `aria-disabled` + nhánh `if (!thaDuoc) return` ở trên.
+                 *
+                 * Vì sao không dùng `disabled` cho họ: một nút `disabled` không nhận
+                 * chuột và không tab tới được, nên khách và phụ huynh mất luôn cái
+                 * tên icon — mà đó chính là thứ duy nhất hàng icon còn nói được với
+                 * người không thả được. Chốt thật vẫn nằm ở server (`thaIconAction`),
+                 * chưa bao giờ nằm ở thuộc tính này: `e2e-icon` gỡ rào giao diện rồi
+                 * bấm thật đúng để chứng minh điều đó.
+                 */
+                disabled={dangGui}
+                aria-disabled={thaDuoc ? undefined : true}
+                aria-pressed={thaDuoc ? dangChon : undefined}
+                /*
+                 * Nhãn mang CẢ tên lẫn số. Nút chỉ có emoji thì trình đọc màn hình
+                 * đọc ra tên Unicode tiếng Anh ("red heart"), tức đứa trẻ dùng trình
+                 * đọc nghe một câu khác hẳn đứa trẻ nhìn màn hình.
+                 */
+                aria-label={`${icon.nhan}${so > 0 ? `, ${so} bạn` : ''}`}
+                data-testid={`icon-${icon.ma}`}
+                data-chon={dangChon ? 'co' : 'khong'}
+                /*
+                 * min-h/min-w 44px: đây là ngón tay trẻ con trên điện thoại. Nhỏ hơn
+                 * thì bấm nhầm sang icon bên cạnh, mà bấm nhầm ở đây là thả nhầm một
+                 * lời khen rồi phải bấm thêm lần nữa để gỡ.
+                 */
+                className={[
+                  'inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full border px-3 py-1.5',
+                  'text-lg leading-none transition',
+                  dangChon
+                    ? 'border-accent-text bg-accent/15 text-ink'
+                    : 'border-border bg-surface text-ink',
+                  // `kg-icon-bam` là thứ bật hiệu ứng NHẤC LÊN, và chỉ nó. Cái tên
+                  // hiện ra thì treo ở lớp bọc, nên người không thả được vẫn thấy.
+                  thaDuoc
+                    ? 'kg-icon-bam cursor-pointer hover:border-accent-text hover:bg-accent/10'
+                    : 'cursor-default',
+                  dangGui ? 'opacity-70' : '',
+                ].join(' ')}
+              >
+                <span className="kg-icon-hinh" aria-hidden="true">
+                  {icon.ky_tu}
+                </span>
+                {/* Số 0 KHÔNG hiện. Một hàng năm con số 0 dưới game của một đứa trẻ
+                    đọc lên là "chưa ai thích cái này", lặp lại năm lần. */}
+                {so > 0 && <span className="text-sm tabular-nums text-ink-soft">{so}</span>}
+              </button>
+              {/* `aria-hidden`: chữ này đã nằm trong `aria-label` của nút rồi. Để nó
+                  lộ ra là trình đọc màn hình đọc tên icon hai lần liền nhau. */}
+              <span className="kg-icon-nhan" aria-hidden="true">
+                {icon.nhan}
+              </span>
+            </span>
           );
         })}
       </div>
@@ -122,8 +165,10 @@ export function HangIcon({
         </p>
       )}
 
-      {!thaDuoc && tomTat.tong === 0 && (
-        <p className="mt-2 text-sm text-ink-soft" data-testid="icon-goi-y">
+      {/* Hiện sẵn khi hàng còn trống, hoặc ngay khi có người bấm thử. `role=status`
+          để trình đọc màn hình đọc lên câu này sau cú bấm, chứ không im. */}
+      {!thaDuoc && (tomTat.tong === 0 || nhac) && (
+        <p className="mt-2 text-sm text-ink-soft" role="status" data-testid="icon-goi-y">
           Đăng nhập bằng tài khoản của bé để thả icon nhé!
         </p>
       )}

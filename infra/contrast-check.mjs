@@ -152,6 +152,26 @@ const CAP = [
    */
   { ten: 'Thẻ nổi trên chặng trời của nền', fg: 'surface', bg: 'bg-troi', min: 1.05 },
   { ten: 'Thẻ nổi trên chặng đất của nền', fg: 'surface', bg: 'bg-dat', min: 1.05 },
+  /*
+   * BONG BÓNG TÊN ICON phải nổi khỏi nền trang — bốn cặp, cùng loại "không phải
+   * chữ" như hai cặp thẻ ở trên, nhưng ngưỡng cao hơn hẳn: 2.5 thay vì 1.05.
+   *
+   * Vì sao cao hơn: thẻ game là một mảng lớn có viền, có bóng, có ảnh bên trong —
+   * mắt tìm ra nó kể cả khi nền chỉ chênh 1.1:1. Bong bóng này là một viên thuốc
+   * rộng chừng 60px hiện ra trong 140ms rồi biến mất, và nếu mép nó không tách khỏi
+   * nền thì thứ người ta thấy là mấy chữ trắng lơ lửng chứ không phải một cái nhãn.
+   *
+   * Bản đầu dùng `chrome` và ĐÚNG là hỏng ở đây: 1.07:1 với nền tối. Chữ vẫn 7:1 nên
+   * mọi phép đo chữ vẫn xanh — cặp hỏng là cặp NỀN-TRÊN-NỀN, mà lúc đó chưa ai đo
+   * nó. Bốn dòng dưới đây có mặt để lần sau không phải chụp ảnh mới biết.
+   */
+  { ten: 'Bong bóng tên icon trên nền trang', fg: 'nhan-bg', bg: 'bg', min: 2.5 },
+  { ten: 'Bong bóng tên icon trên thẻ/khung', fg: 'nhan-bg', bg: 'surface', min: 2.5 },
+  { ten: 'Bong bóng tên icon trên chặng trời', fg: 'nhan-bg', bg: 'bg-troi', min: 2.5 },
+  { ten: 'Bong bóng tên icon trên chặng đất', fg: 'nhan-bg', bg: 'bg-dat', min: 2.5 },
+  /* Và chữ TRONG bong bóng. Ngưỡng 7 như mọi chữ thường khác trong file — nhãn này
+     là chữ để đọc, không phải nhãn trang trí. */
+  { ten: 'Chữ trong bong bóng tên icon', fg: 'nhan-ink', bg: 'nhan-bg', min: 7 },
   { ten: 'Chữ lỗi trong hộp lỗi', fg: 'danger', bg: 'danger-bg', min: 4.5 },
   { ten: 'Chữ trên nút danger lúc hover', fg: 'surface', bg: 'danger', min: 4.5 },
   { ten: 'Chữ cảnh báo trong hộp cảnh báo', fg: 'warn-ink', bg: 'warn-bg', min: 4.5 },

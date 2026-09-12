@@ -138,6 +138,27 @@
      giao diện tối, tức không mất gì về tương phản. */
   --color-chrome-ink: #f4f4fa;
 
+  /* --- Bong bóng tên icon (hàng icon dưới game) ---
+   *
+   * CẶP DUY NHẤT TRONG FILE NÀY ĐẢO NGƯỢC THEO GIAO DIỆN, và phải thế.
+   *
+   * Mọi token "tối cố định" ở trên (`chrome`, `nav-*`) sống được vì chúng nằm trên
+   * thanh điều hướng — một dải luôn tối, ở cả hai giao diện. Bong bóng này thì nằm
+   * thẳng trên NỀN TRANG, mà nền trang đảo màu. Một màu cố định thì hoặc chìm vào
+   * nền sáng, hoặc chìm vào nền tối; không có giá trị nào thoát được cả hai.
+   *
+   * Nên nó luôn NGƯỢC với nền: viên thuốc tối chữ sáng ở giao diện sáng, viên thuốc
+   * sáng chữ tối ở giao diện tối. Đo được: nổi khỏi nền trang 15.68:1 (sáng) và
+   * 15.44:1 (tối), chỗ thấp nhất trong bốn nền là 13.94:1 — xem năm cặp "Bong bóng
+   * tên icon" trong `contrast-check.mjs`.
+   *
+   * Đây là chỗ bản đầu đã sai: nó mượn `chrome`, chữ vẫn 7:1 nên mọi phép đo CHỮ vẫn
+   * xanh, mà ở giao diện tối cái bong bóng chênh nền đúng 1.07:1 — nhìn ra là mấy
+   * chữ trắng lơ lửng giữa không trung. Phải chụp ảnh mới thấy.
+   */
+  --color-nhan-bg: #1b1b32;
+  --color-nhan-ink: #f4f4fa;
+
   /* --- Màu của tranh trang trí hai bên lề ---
    *
    * Tách hẳn khỏi bảng màu giao diện, cố ý. Đây là hình TRANG TRÍ thuần tuý: không
@@ -292,6 +313,12 @@
 
   --toi-chrome: #0d0d18;
 
+  /* Bong bóng tên icon, ĐẢO lại: viên thuốc sáng, chữ tối. Lý do dài ở chỗ khai báo
+     `--color-nhan-bg`. Không phải trắng tinh, cùng lý do với `--color-chrome-ink`:
+     trắng tinh trên nền gần đen thì loang viền với người loạn thị. */
+  --toi-nhan-bg: #e9e9f4;
+  --toi-nhan-ink: #14142a;
+
   /* Tranh trang trí ở giao diện tối: TỐI đi và bớt rực, không phải sáng lên.
      Ban đêm mà để nguyên xanh lá tươi thì hai bên lề sáng hơn cả nội dung, và mắt
      bị kéo ra rìa màn hình đúng lúc đang cần nhìn vào giữa. */
@@ -358,6 +385,8 @@
     --color-accent-text: var(--toi-accent-text);
     --color-focus: var(--toi-focus);
     --color-chrome: var(--toi-chrome);
+    --color-nhan-bg: var(--toi-nhan-bg);
+    --color-nhan-ink: var(--toi-nhan-ink);
     --color-decor-la: var(--toi-decor-la);
     --color-decor-la-dam: var(--toi-decor-la-dam);
     --color-decor-la-sang: var(--toi-decor-la-sang);
@@ -409,6 +438,8 @@
   --color-accent-text: var(--toi-accent-text);
   --color-focus: var(--toi-focus);
   --color-chrome: var(--toi-chrome);
+  --color-nhan-bg: var(--toi-nhan-bg);
+  --color-nhan-ink: var(--toi-nhan-ink);
   --color-decor-la: var(--toi-decor-la);
   --color-decor-la-dam: var(--toi-decor-la-dam);
   --color-decor-la-sang: var(--toi-decor-la-sang);
@@ -786,6 +817,106 @@ body {
   animation: kg-la-roi 2.8s ease-in infinite;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * HÀNG ICON DƯỚI GAME — rê chuột vào thì icon nảy lên và TÊN nó hiện ra
+ *
+ * HAI HIỆU ỨNG, và chúng cố ý KHÔNG bật tắt cùng nhau:
+ *
+ *   - Icon nảy lên, viền sáng, nút nhấc khỏi mặt trang  -> chỉ khi BẤM ĐƯỢC.
+ *   - Tên icon hiện ra                                  -> cho MỌI người xem.
+ *
+ * Vì sao tách: một nút nhúc nhích dưới con trỏ là lời hứa "bấm được". Khách và
+ * phụ huynh bấm cũng không thả được icon, nên cho họ hiệu ứng nhấc lên là dựng
+ * lại đúng cái bẫy vừa sửa ở `/admin/loi` — nút nhìn sống động, bấm không ra gì.
+ * Còn cái TÊN thì ngược lại: "🎨 nghĩa là gì" là câu hỏi thật của cả đứa trẻ chưa
+ * đăng nhập lẫn ông bố đang xem cùng con, và trả lời nó chẳng hứa hẹn gì cả.
+ *
+ * VÌ SAO KHÔNG DÙNG `title=""`. Tooltip của trình duyệt chờ khoảng một giây mới
+ * hiện — với một đứa bảy tuổi đang rê chuột dọc hàng icon thì một giây là đã bỏ đi
+ * rồi. Nó cũng vẽ bằng khung của hệ điều hành: không theo giao diện tối, không
+ * theo cỡ chữ của trang.
+ */
+
+.kg-icon-boc {
+  position: relative;
+  display: inline-flex;
+}
+
+/*
+ * Tên icon, nổi lên PHÍA TRÊN nút.
+ *
+ * `pointer-events: none` là bắt buộc chứ không phải dọn dẹp: bong bóng nằm đè lên
+ * mép trên của nút, nên nếu nó ăn chuột thì con trỏ vừa chạm bong bóng là nút mất
+ * `:hover`, bong bóng tắt, con trỏ lại chạm nút, bong bóng bật — nhấp nháy liên tục
+ * ngay tại chỗ người ta đang nhắm vào.
+ *
+ * Căn giữa bằng thuộc tính `translate` riêng, KHÔNG bằng `transform`: để dành
+ * `transform` cho riêng cái trượt lên. Gộp cả hai vào `transform` thì khối
+ * `prefers-reduced-motion` dưới đây muốn tắt trượt sẽ tắt luôn căn giữa, và bong
+ * bóng lệch hẳn sang phải đúng với người đã xin đừng có gì chuyển động.
+ */
+.kg-icon-nhan {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  translate: -50% 0;
+  z-index: 20;
+  pointer-events: none;
+  white-space: nowrap;
+  border-radius: 9999px;
+  /* Cặp ĐẢO theo giao diện — lý do dài ở chỗ khai báo `--color-nhan-bg`. Tóm tắt:
+     bong bóng nằm thẳng trên nền trang, mà nền trang đảo màu, nên một màu cố định
+     luôn chìm vào một trong hai giao diện. */
+  background: var(--color-nhan-bg);
+  color: var(--color-nhan-ink);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(0.25rem);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+/*
+ * `@media (hover: hover)` bằng tay ở đây, vì đây là CSS tự viết — các lớp `hover:`
+ * của Tailwind v4 đã tự có rào đó, các lớp này thì không. Thiếu rào thì trên điện
+ * thoại một cú chạm để thả tim cũng tính là hover, và cái tên đứng lại trên màn hình
+ * cho tới lúc bé chạm chỗ khác.
+ */
+@media (hover: hover) {
+  .kg-icon-boc:hover .kg-icon-nhan {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .kg-icon-bam:hover .kg-icon-hinh {
+    transform: scale(1.3) rotate(-8deg);
+  }
+
+  .kg-icon-bam:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/*
+ * Tab tới cũng phải thấy tên. Dùng `:has(:focus-visible)` chứ không `:focus-within`
+ * — `:focus-within` bật cả sau một cú bấm chuột, tức bé thả tim xong thì cái tên
+ * đứng lại trên màn hình dù chuột đã đi chỗ khác.
+ */
+.kg-icon-boc:has(:focus-visible) .kg-icon-nhan {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.kg-icon-hinh {
+  display: inline-block;
+  /* Hơi quá đà rồi lùi về (`cubic-bezier` có chặng > 1): icon nảy như một món đồ
+     chơi, không trượt như một ô cửa sổ. Người bấm là trẻ con. */
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /*
  * Tắt HẲN chuyển động khi người dùng xin ít chuyển động.
  *
@@ -806,6 +937,25 @@ body {
   .kg-rung-canh,
   .kg-la-roi {
     animation: none !important;
+  }
+
+  /*
+   * Hàng icon: BỎ hẳn phần dịch chuyển, GIỮ phần đổi màu và giữ cái tên.
+   *
+   * Khối chung ở cuối file chỉ ép `transition-duration` về 0.01ms, tức icon vẫn
+   * nhảy tới đúng chỗ đó — chỉ là nhảy tức thì thay vì trượt, mà một cú giật nảy
+   * dưới con trỏ còn chóng mặt hơn một cú trượt mượt. Nói thẳng `transform: none`
+   * thì icon đứng yên thật.
+   *
+   * Cái TÊN vẫn hiện, cố ý: nó là thông tin, không phải trang trí. Người xin ít
+   * chuyển động không phải người xin ít chữ.
+   */
+  .kg-icon-hinh,
+  .kg-icon-bam:hover,
+  .kg-icon-bam:hover .kg-icon-hinh,
+  .kg-icon-boc:hover .kg-icon-nhan,
+  .kg-icon-boc:has(:focus-visible) .kg-icon-nhan {
+    transform: none !important;
   }
 }
 
