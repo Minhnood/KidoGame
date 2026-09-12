@@ -921,6 +921,35 @@ body {
   transition:
     opacity 140ms ease,
     transform 140ms ease;
+  /* Bóng đổ mềm: bong bóng nằm ĐÈ lên nội dung trang, nên nó phải đọc ra là một lớp
+     nổi lên trên chứ không phải một viên thuốc dán vào trang. Bóng đen nhạt chứ
+     không phải bóng cam — đây là một lớp giấy nổi, không phải một vật phát sáng. */
+  box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.45);
+}
+
+/*
+ * ĐUÔI NHỌN của bong bóng, chỉ xuống đúng nút nó đang gọi tên.
+ *
+ * Không có đuôi thì đây là một viên thuốc lơ lửng phía trên một hàng năm nút giống
+ * hệt nhau, và mắt phải tự đoán nó thuộc về nút nào — trên hàng icon thì năm nút chỉ
+ * cách nhau 8px, nên đoán sai là chuyện thường. Cái đuôi biến nó từ một nhãn trôi nổi
+ * thành một lời chú thích có địa chỉ.
+ *
+ * Vẽ bằng viền chứ không phải `clip-path`: hình tam giác dựng bằng viền lấy màu từ
+ * `border-top-color`, nên nó tự đi theo `--color-nhan-bg` khi giao diện đảo. Một
+ * `clip-path` thì phải có `background` riêng, tức thêm một chỗ nữa phải nhớ đổi màu.
+ */
+.kg-icon-nhan::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  /* `-1px` để đuôi ăn vào thân bong bóng một chút: hở ra dù nửa pixel là thấy một
+     khe sáng giữa hai hình, và khe đó đọc ra như lỗi vẽ. */
+  translate: -50% -1px;
+  border: 5px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--color-nhan-bg);
 }
 
 /*
@@ -957,6 +986,39 @@ body {
 
   .kg-icon-bam:hover {
     transform: translateY(-2px);
+    /*
+     * Bóng CAM, không phải bóng đen, và nó là phần còn thiếu của cú nhấc.
+     *
+     * Nhấc 2px mà không có bóng thì nút chỉ trượt lên chứ không rời khỏi mặt trang —
+     * mắt đọc ra là hình bị xê dịch, không phải vật được nâng lên. Bóng là thứ nói
+     * cho biết có khoảng cách giữa nút và nền.
+     *
+     * Cam chứ không đen vì cùng lý do đã chốt ở dấu hiệu logo: nền tối thì bóng đen
+     * biến mất hoàn toàn, còn quầng cam thì sống ở cả hai giao diện và đọc ra là nút
+     * đang sáng lên.
+     */
+    box-shadow: 0 8px 18px -8px var(--color-accent);
+  }
+
+  /*
+   * NGƯỜI KHÔNG THẢ ĐƯỢC CŨNG CÓ PHẢN HỒI — nhưng là một phản hồi TĨNH.
+   *
+   * Luật ở đây không đổi và không được đổi: cái gì NHÚC NHÍCH dưới con trỏ là một lời
+   * hứa "bấm được". Khách bấm vào thì chỉ nhận lại câu mời đăng nhập, nên cho họ cú
+   * nhấc và cú rung là dựng lại đúng cái bẫy `91852ee` — một nút cư xử như nút thật
+   * mà không làm được việc của nút thật.
+   *
+   * Nhưng "không hứa" không có nghĩa là không trả lời gì. Đổi MÀU VIỀN là một trạng
+   * thái tĩnh: nó nói "con trỏ đang ở đây, đây là một vật riêng biệt" mà không nói gì
+   * về chuyện bấm. Trước đó khách rê chuột qua cả hàng và không có một pixel nào đổi
+   * — hàng icon đọc ra như một dãy hình dán.
+   *
+   * CỐ Ý KHÔNG đổi nền: nền là thứ nhánh bấm được đang dùng (`accent/10` và
+   * `accent/20`), và hai nhánh mà giống nhau thì cái khác biệt duy nhất còn lại là
+   * chuyển động — thứ mà người dùng bàn phím hoặc người xin ít chuyển động không có.
+   */
+  .kg-icon-xem:hover {
+    border-color: var(--color-accent-text);
   }
 }
 

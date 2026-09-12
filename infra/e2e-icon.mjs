@@ -200,6 +200,53 @@ const child1Ctx = await newSession();
   );
 
   /*
+   * KHÁCH VẪN PHẢI CÓ MỘT PHẢN HỒI — chỉ là phản hồi TĨNH.
+   *
+   * "Không hứa bấm được" từng bị hiểu thành "không trả lời gì": trước đây rê chuột
+   * qua cả hàng với tư cách khách thì ngoài cái tên ra không một pixel nào đổi, và
+   * hàng icon đọc ra như một dãy hình dán. Giờ viền sáng lên.
+   *
+   * Đổi MÀU chứ không phải chuyển động, và ranh giới đó là cả điểm của phép kiểm
+   * này: cái gì nhúc nhích dưới con trỏ là một lời hứa "bấm được", mà khách bấm vào
+   * chỉ nhận lại câu mời đăng nhập. Nên hai phép kiểm dưới đây đi thành CẶP — một
+   * cái đòi có phản hồi, cái kia đòi phản hồi ấy đứng yên.
+   *
+   * `mouse.move` ra góc trước khi đo số "trước": Playwright để con trỏ nằm lại chỗ
+   * cũ, nên không đẩy đi là đang so trạng thái hover với chính nó.
+   */
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(250);
+  const vienTim = () =>
+    p.locator('[data-testid=icon-tim]').evaluate((e) => getComputedStyle(e).borderTopColor);
+  const vienThuong = await vienTim();
+  await p.locator('[data-testid=icon-tim]').hover();
+  await p.waitForTimeout(350);
+  const vienHover = await vienTim();
+  check(
+    'Khách rê chuột thì VIỀN sáng lên, không phải đứng im',
+    vienThuong !== vienHover,
+    `${vienThuong} → ${vienHover}`
+  );
+  check(
+    '… nhưng nút KHÔNG dịch đi một pixel nào (không hứa bấm được)',
+    (await p
+      .locator('[data-testid=icon-tim]')
+      .evaluate((e) => getComputedStyle(e).transform)) === 'none'
+  );
+
+  /* Đuôi nhọn của bong bóng tên: không có nó thì một viên thuốc lơ lửng phía trên
+     năm nút cách nhau 8px, và mắt phải đoán nó đang gọi tên nút nào. Đo màu viền
+     trên của `::after` — trong suốt nghĩa là không vẽ ra tam giác nào cả. */
+  check(
+    'Bong bóng tên có đuôi chỉ xuống đúng nút nó gọi tên',
+    (await nhanCuaTim.evaluate((e) => getComputedStyle(e, '::after').borderTopColor)) !==
+      'rgba(0, 0, 0, 0)',
+    await nhanCuaTim.evaluate((e) => getComputedStyle(e, '::after').borderTopColor)
+  );
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(200);
+
+  /*
    * Phép "bấm thì được nói vì sao" KHÔNG đặt ở đây, cố ý. Lúc này hàng icon còn
    * trống nên câu gợi ý đã hiện sẵn từ đầu — kiểm ở đây là xanh dù cú bấm chẳng làm
    * gì cả. Nó nằm ở khối phụ huynh phía dưới, nơi đã có hai lượt icon nên câu gợi ý
@@ -265,6 +312,15 @@ check(
   await c1.waitForTimeout(140);
   const b = await hinh.evaluate((e) => getComputedStyle(e).transform);
   check('Rê chuột vào thì emoji RUNG (và to lên)', ten === 'kg-icon-rung' && a !== b, `${ten}, transform ${a === b ? 'đứng yên' : 'đang đổi'}`);
+
+  /* BÓNG dưới nút, phần còn thiếu của cú nhấc. Nhấc 2px mà không có bóng thì mắt
+     đọc ra là hình bị xê dịch chứ không phải vật được nâng lên — không có khoảng
+     cách nào giữa nút và nền để nhìn thấy. */
+  const bong = await c1
+    .locator('[data-testid=icon-tim]')
+    .evaluate((e) => getComputedStyle(e).boxShadow);
+  check('… và nút đổ BÓNG, để cú nhấc đọc ra là được nâng lên', bong !== 'none', bong);
+
   await c1.mouse.move(5, 5);
   await c1.waitForTimeout(200);
 }

@@ -75,7 +75,7 @@ GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy 
 node infra/e2e-errorlog.mjs                                        # 38, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 39, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 19, cần psql

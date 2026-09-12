@@ -162,7 +162,15 @@ export function HangIcon({
                     ? dangChon
                       ? 'kg-icon-bam cursor-pointer hover:bg-accent/20'
                       : 'kg-icon-bam cursor-pointer hover:border-accent-text hover:bg-accent/10'
-                    : 'cursor-default',
+                    : /*
+                       * `kg-icon-xem`: phản hồi TĨNH cho người không thả được — viền
+                       * sáng lên, không nhấc, không rung. Trước đó nhánh này không có
+                       * lớp hover nào cả, nên khách rê chuột qua cả hàng mà không một
+                       * pixel nào đổi; đo bằng hai ảnh chụp thì chúng giống nhau từng
+                       * pixel. Vì sao là màu chứ không phải chuyển động: ghi ở chỗ
+                       * khai báo `.kg-icon-xem` trong `globals.css`.
+                       */
+                      'kg-icon-xem cursor-default',
                   dangGui ? 'opacity-70' : '',
                 ].join(' ')}
               >
