@@ -159,6 +159,39 @@
   --color-nhan-bg: #1b1b32;
   --color-nhan-ink: #f4f4fa;
 
+  /* --- Ô chờ lúc đang tải ---
+   *
+   * ẤM, không phải xám xanh. Bản đầu mượn `--color-border` (#d9d9e4) cho tiện, và nó
+   * đúng là "một màu xám nhạt" — nhưng là xám XANH, trong khi cả trang đi theo tông
+   * kem ấm (`--color-bg` #f8f7f3, năm tông thẻ đều ngả vàng/hồng). Hệ quả: đúng lúc
+   * trang đang tải — ấn tượng đầu tiên của mỗi lần mở game — nó lạnh hơn hẳn chính
+   * nó lúc tải xong. Khung chờ là một phần của trang, không phải một màn hình chờ
+   * mượn từ chỗ khác.
+   *
+   * Đo được: 1.259:1 trên nền trang và 1.328:1 trên thẻ, tức gần bằng đúng độ nổi của
+   * màu cũ (1.306) — đổi sắc chứ không đổi độ tương phản. Có cặp riêng trong
+   * `contrast-check`, vì một ô chờ chìm vào nền thì cả khung chờ biến thành một
+   * khoảng trắng, đúng thứ nó sinh ra để xoá.
+   */
+  --color-cho: #e5ddcd;
+
+  /*
+   * TÔNG THỨ HAI của khung chờ, cho những hình nằm ĐÈ LÊN một ô chờ khác.
+   *
+   * Thẻ game thật có bốn thứ nổi trên tấm ảnh: hai viên thuốc số ở góc trên, nhãn
+   * loại ở góc dưới trái, nút chơi tròn ở góc dưới phải. Khung chờ phải dựng lại đủ
+   * cả bốn, nếu không nó không còn là "trang đã tải xong nhưng chưa có màu chưa có
+   * chữ" — nó thành một hình chữ nhật với hai gạch, tức một thứ khác hẳn.
+   *
+   * Mà vẽ chúng bằng chính `--color-cho` thì chúng tàng hình: cùng một màu đặt lên
+   * nhau không có mép nào. Nên cần đúng một bậc nữa — tối hơn ở giao diện sáng, sáng
+   * hơn ở giao diện tối, luôn theo chiều "nổi lên khỏi ô dưới".
+   *
+   * Đo được 1.32:1 so với `--color-cho` (1.39 ở giao diện tối). Vẫn là màu trung
+   * tính, không mang sắc gì của thương hiệu — "chưa có màu" là đúng ý.
+   */
+  --color-cho-net: #cdc1a6;
+
   /* --- Màu của tranh trang trí hai bên lề ---
    *
    * Tách hẳn khỏi bảng màu giao diện, cố ý. Đây là hình TRANG TRÍ thuần tuý: không
@@ -319,6 +352,13 @@
   --toi-nhan-bg: #e9e9f4;
   --toi-nhan-ink: #14142a;
 
+  /* Ô chờ ở giao diện tối: sáng hơn nền một bậc. Phải nổi trên CẢ `--toi-bg` (khung
+     chờ đứng thẳng trên nền trang) lẫn `--toi-surface` (ô chờ bên trong thẻ game),
+     mà hai cái đó chỉ chênh nhau 1.107:1 — nên khe hở ở đây hẹp, và cặp chặn là cái
+     trên `surface`, không phải cái trên `bg`. */
+  --toi-cho: #2d2d3f;
+  --toi-cho-net: #42425d;
+
   /* Tranh trang trí ở giao diện tối: TỐI đi và bớt rực, không phải sáng lên.
      Ban đêm mà để nguyên xanh lá tươi thì hai bên lề sáng hơn cả nội dung, và mắt
      bị kéo ra rìa màn hình đúng lúc đang cần nhìn vào giữa. */
@@ -387,6 +427,8 @@
     --color-chrome: var(--toi-chrome);
     --color-nhan-bg: var(--toi-nhan-bg);
     --color-nhan-ink: var(--toi-nhan-ink);
+    --color-cho: var(--toi-cho);
+    --color-cho-net: var(--toi-cho-net);
     --color-decor-la: var(--toi-decor-la);
     --color-decor-la-dam: var(--toi-decor-la-dam);
     --color-decor-la-sang: var(--toi-decor-la-sang);
@@ -440,6 +482,8 @@
   --color-chrome: var(--toi-chrome);
   --color-nhan-bg: var(--toi-nhan-bg);
   --color-nhan-ink: var(--toi-nhan-ink);
+  --color-cho: var(--toi-cho);
+  --color-cho-net: var(--toi-cho-net);
   --color-decor-la: var(--toi-decor-la);
   --color-decor-la-dam: var(--toi-decor-la-dam);
   --color-decor-la-sang: var(--toi-decor-la-sang);
@@ -891,8 +935,24 @@ body {
     transform: translateY(0);
   }
 
+  /*
+   * To lên VÀ rung, suốt thời gian con trỏ còn nằm trên nút.
+   *
+   * Bản trước nghiêng một góc rồi đứng yên ở đó. Nó nói được "cái này bấm được",
+   * nhưng nói xong là hết — icon đứng im ở một tư thế nghiêng, và một emoji nghiêng
+   * bất động trông như bị lệch chứ không như đang mời.
+   *
+   * Rung thì trạng thái "đang được trỏ vào" tự nó kéo dài đúng bằng lúc con trỏ còn
+   * đó. Đây là chỗ hiếm hoi trong file này mà `infinite` là đúng, cùng lý do với vòng
+   * xoay đang tải: nó chỉ sống trong một trạng thái tạm, và nó tắt ngay khi trạng
+   * thái ấy hết.
+   *
+   * 520ms một nhịp — đủ nhanh để đọc ra là "rung", đủ chậm để không thành giật. Biên
+   * ±9° đối xứng: lệch một bên (ví dụ -12° tới +4°) thì icon vừa rung vừa trôi dần
+   * sang một phía, nhìn ra là hỏng chứ không phải là vui.
+   */
   .kg-icon-bam:hover .kg-icon-hinh {
-    transform: scale(1.3) rotate(-8deg);
+    animation: kg-icon-rung 520ms ease-in-out infinite;
   }
 
   .kg-icon-bam:hover {
@@ -908,6 +968,153 @@ body {
 .kg-icon-boc:has(:focus-visible) .kg-icon-nhan {
   opacity: 1;
   transform: translateY(0);
+}
+
+/*
+ * CÚ NẢY LÚC VỪA THẢ ICON.
+ *
+ * Rê chuột và thả icon là HAI việc khác nhau, nên chúng không được trông giống nhau.
+ * Hover đã phóng 1.3× rồi, nên nếu lúc thả cũng chỉ phóng to thì đứa trẻ vừa bấm
+ * xong nhìn xuống thấy y hệt cái nó thấy trước khi bấm — cú bấm không để lại dấu vết
+ * nào ngoài màu nền, mà màu nền thì nó đang không nhìn vào.
+ *
+ * Nên cú thả là một chuyển động: nảy vọt lên 1.5× rồi tụt xuống dưới cỡ thật một
+ * chút rồi mới về. Cái tụt xuống dưới 1 mới là thứ làm nó ra "nảy" — bỏ chặng đó đi
+ * thì còn lại là phình ra rồi xẹp, đọc ra như một lỗi vẽ.
+ *
+ * KHÔNG lặp. Một icon nhấp nháy mãi dưới game của bạn mình là thứ kéo mắt khỏi cái
+ * game, mà game mới là thứ đáng nhìn ở trang đó.
+ */
+/* Rung lúc rê chuột — xem chỗ dùng trong khối `@media (hover: hover)` ở trên. */
+@keyframes kg-icon-rung {
+  0%,
+  100% {
+    transform: scale(1.28) rotate(-9deg);
+  }
+  50% {
+    transform: scale(1.28) rotate(9deg);
+  }
+}
+
+@keyframes kg-icon-na {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.5) rotate(-10deg);
+  }
+  65% {
+    transform: scale(0.92) rotate(4deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/*
+ * Cú nảy PHẢI thắng cú rung của `:hover`, vì con trỏ vẫn đang nằm trên nút lúc nó
+ * chạy — bé vừa bấm xong thì chưa rút tay ra. Thua là cú nảy không bao giờ nhìn thấy
+ * được trên máy tính, chỉ thấy trên điện thoại.
+ *
+ * CHỌN TỬ CÓ `:hover` Ở ĐÂY LÀ BẮT BUỘC, dù nó trông thừa.
+ *
+ * Hồi hover còn là một `transform` thường thì cú nảy tự thắng: trong thang bậc CSS,
+ * giá trị do animation sinh ra đứng trên mọi khai báo thường, bất kể chọn tử. Giờ
+ * hover cũng là animation, nên thang ấy không phân xử nữa — hai animation tranh nhau
+ * thì quay về độ ưu tiên chọn tử, và cả hai bên đều là (0,3,0). Ngang nhau thì cái
+ * viết SAU trong file thắng, tức hiệu ứng đúng đang được giữ bởi thứ tự dòng: ai dời
+ * khối `@media (hover: hover)` xuống dưới là cú nảy chết, im lặng, không lỗi nào.
+ *
+ * Thêm `:hover` vào đẩy chọn tử này lên (0,4,0) — thắng bằng luật, không bằng chỗ
+ * ngồi. Vế thứ hai giữ nguyên cho điện thoại, nơi không có `:hover` nào cả.
+ */
+.kg-icon-bam:hover .kg-icon-hinh.kg-icon-na,
+.kg-icon-bam .kg-icon-hinh.kg-icon-na {
+  animation: kg-icon-na 420ms cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * ĐANG TẢI — khung chờ lúc chuyển trang, và vòng xoay trên thẻ vừa bấm
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Ô xám THỞ, không phải vệt sáng chạy ngang.
+ *
+ * Vệt sáng quét qua (kiểu "shimmer") là chuyển động đi theo một hướng, và ở cỡ cả
+ * màn hình thì nó kéo mắt chạy theo — với trang mà người đọc là trẻ con, thứ đầu tiên
+ * chúng thấy khi mở game không nên là một thứ đang chạy. Thở thì đứng yên một chỗ:
+ * nó nói "còn sống, đợi tí" mà không bảo mắt đi đâu cả.
+ *
+ * Ba giây một nhịp. Nhanh hơn là sốt ruột — một thứ nhấp nháy nhanh đọc ra như báo
+ * động, mà đây không phải báo động, đây là chuyện bình thường.
+ */
+@keyframes kg-tho {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Bản dịu, cho người xin ít chuyển động — biên độ hẹp hơn hẳn, xem khối
+   `prefers-reduced-motion` ở cuối file. */
+@keyframes kg-tho-diu {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Ô chờ nằm ĐÈ LÊN một ô chờ khác — viên thuốc, nhãn, nút chơi trên tấm ảnh của thẻ
+   game. Xem lý do ở chỗ khai báo `--color-cho-net`. */
+.kg-o-net {
+  background: var(--color-cho-net);
+  border-radius: var(--radius-card);
+  animation: kg-tho 3s ease-in-out infinite;
+}
+
+.kg-o-cho {
+  background: var(--color-cho);
+  /* Cùng bán kính bo với thẻ game và mọi khung khác trên trang, không phải một con số
+     tự chọn. Ô chờ bo 12px cạnh thẻ bo 16px thì mắt đọc ra hai hệ thống khác nhau. */
+  border-radius: var(--radius-card);
+  animation: kg-tho 3s ease-in-out infinite;
+}
+
+/*
+ * Hình tam giác mờ giữa khung game đang chờ: thở cùng nhịp với mấy ô chờ.
+ *
+ * Cùng `kg-tho` chứ không phải một bộ khung hình riêng — cả khung chờ phải thở CÙNG
+ * MỘT NHỊP. Hai nhịp lệch nhau trên một màn hình thì mắt bắt được ngay và đọc ra là
+ * hai thứ đang chạy riêng, tức đúng cái cảm giác rời rạc mà "đồng điệu" phải xoá.
+ *
+ * Lớp riêng chứ không dùng thẳng `.kg-o-cho`: cái đó còn kèm nền và bo góc, mà đây là
+ * một hình vẽ đã có màu của nó.
+ */
+.kg-o-mo {
+  animation: kg-tho 3s ease-in-out infinite;
+}
+
+@keyframes kg-xoay {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*
+ * Vòng xoay trên thẻ game vừa bấm.
+ *
+ * Một vòng tròn hở một khúc, xoay đều. Đây là chỗ HIẾM HOI mà chuyển động lặp vô hạn
+ * là đúng: nó chỉ sống trong lúc trang đang tải, và nó biến mất ngay khi trang tới —
+ * tức thời lượng của nó CHÍNH LÀ thông tin nó mang.
+ */
+.kg-xoay {
+  animation: kg-xoay 850ms linear infinite;
 }
 
 .kg-icon-hinh {
@@ -935,8 +1142,35 @@ body {
      phải cho chắc — thiếu nó là luật hover cùng độ ưu tiên vẫn thắng và cành vẫn
      rung với đúng người đã xin đừng có gì chuyển động. */
   .kg-rung-canh,
-  .kg-la-roi {
+  .kg-la-roi,
+  /* Cú nảy lúc thả icon: bỏ hẳn. Màu nền và viền vẫn đổi, nên cú bấm vẫn để lại
+     dấu vết — chỉ là dấu vết đứng yên. */
+  .kg-icon-na {
     animation: none !important;
+  }
+
+  /*
+   * HAI CÁI DƯỚI ĐÂY KHÔNG NẰM TRONG DANH SÁCH TRÊN, và đó là một lựa chọn.
+   *
+   * `kg-o-cho` và `kg-xoay` là thứ duy nhất nói "trang đang tải, chưa hỏng". Tắt
+   * chúng đi là để người xin ít chuyển động ngồi trước một màn hình xám đứng im,
+   * không phân biệt được với một trang đã chết — đúng cái mà họ ít có cách nhất để
+   * kiểm chứng. Quyền tắt chuyển động không phải là quyền bị bỏ lại trong im lặng.
+   *
+   * Đổi lại, cả hai chậm và dịu hẳn đi: ô chờ thở 6 giây một nhịp thay vì 3, và biên
+   * độ hẹp lại; vòng xoay quay một vòng 2 giây thay vì 0,85. Chúng còn chuyển động
+   * đủ để đọc ra là "đang chạy", mà không còn nhịp nào đủ nhanh để gây khó chịu.
+   */
+  .kg-o-cho,
+  .kg-o-net,
+  .kg-o-mo {
+    /* Đổi hẳn sang bộ khung hình khác chứ không chỉ đặt `opacity` ở đây: giá trị do
+       animation sinh ra đứng trên khai báo thường, nên một dòng `opacity` cạnh đây
+       không bao giờ chạm tới được thứ `kg-tho` đang vẽ. */
+    animation: kg-tho-diu 6s ease-in-out infinite !important;
+  }
+  .kg-xoay {
+    animation-duration: 2s !important;
   }
 
   /*
@@ -952,10 +1186,25 @@ body {
    */
   .kg-icon-hinh,
   .kg-icon-bam:hover,
-  .kg-icon-bam:hover .kg-icon-hinh,
   .kg-icon-boc:hover .kg-icon-nhan,
   .kg-icon-boc:has(:focus-visible) .kg-icon-nhan {
     transform: none !important;
+  }
+
+  /*
+   * ICON RÊ CHUỘT: tắt cú RUNG, nhưng GIỮ phần TO LÊN.
+   *
+   * Đây là chỗ dễ làm hỏng nhất khi thêm cú rung, và bản đầu đã hỏng đúng thế: khối
+   * trên có sẵn `.kg-icon-bam:hover .kg-icon-hinh { transform: none }`, nên vừa tắt
+   * rung là tắt luôn cả việc icon lớn lên — người xin ít chuyển động mất SẠCH dấu
+   * hiệu "cái này bấm được", vì cú nhấc nút cũng đã bị tắt ở dòng ngay trên.
+   *
+   * To lên không phải là chuyển động: nó là một trạng thái tĩnh, đứng yên suốt lúc
+   * con trỏ còn đó. Người tắt chuyển động không xin mất cái đó.
+   */
+  .kg-icon-bam:hover .kg-icon-hinh {
+    animation: none !important;
+    transform: scale(1.28) !important;
   }
 }
 

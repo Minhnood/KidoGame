@@ -74,7 +74,21 @@ node infra/e2e-bao-loi.mjs                                         # 29, cần p
 GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
 node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
+
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 39, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 16, cần psql
+node infra/contrast-check.mjs                                      # 132 phép đo màu
+node infra/a11y-check.mjs                                          # 21
 ```
+
+> **Mấy con số phía trên khối này đã cũ ở vài dòng** — chúng được ghi từ lúc bộ kiểm
+> còn nhỏ hơn, và một vài bộ đã dày lên từ đó (`e2e-nhac-viec`, `e2e-an-vs-xoa`,
+> `e2e-errorlog`, `e2e-bao-loi`). `e2e-touch` cũng **không còn cần `GAME_URL`** nữa:
+> từ `402b009` nó tự dựng game có phím cho riêng mình. Sáu dòng vừa thêm ở trên là số
+> ĐO ĐƯỢC, còn mấy dòng cũ thì chưa chạy lại nên cố ý không sửa — ghi một con số mình
+> chưa đo vào tài liệu là biến tài liệu thành thứ không tin được.
 
 **`e2e-prune-removed.mjs` phải chạy SAU `e2e-takedown.mjs`.** Lượt nào đổ giữa đường thì
 để lại một hàng trong hàng đợi yêu cầu gỡ, mà `e2e-takedown` khẳng định hàng đợi có ĐÚNG
