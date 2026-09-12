@@ -4,14 +4,100 @@
  * Điểm mấu chốt: KHÔNG chỉ kiểm nút có hiện ra, mà kiểm nó có THỰC SỰ điều khiển
  * được nhân vật — đọc toạ độ sprite trong vm trước và sau khi bấm.
  *
- * Chạy:  GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs
+ * ═══ BỘ NÀY TỰ DỰNG GAME CỦA NÓ ═══
+ *
+ * Cụm nút chỉ được sinh ra khi project thật sự dùng phím (`detectTouchKeys` đọc
+ * `KEY_OPTION` trong project.json), mà fixture chung của repo không có phím nào. Nên
+ * trước đây bộ này đòi `GAME_URL` trỏ tay vào một game NẰM SẴN TRONG DB DEV.
+ *
+ * Cách đó hỏng theo kiểu tệ nhất: dọn DB, hay chạy một bộ có xoá gia đình, là game ấy
+ * biến mất — và bộ này đỏ ở phép "không thấy nút điều khiển nào", đọc lên y hệt như
+ * sản phẩm vỡ. Bàn giao đã ghi đúng bẫy này một lần.
+ *
+ * Giờ nó tự đăng ký phụ huynh, tạo bé, và đăng một `.sb3` do `infra/tao-fixture-phim.mjs`
+ * dựng ra — file có bốn mũi tên cộng phím cách, tức bắt cả nhánh D-pad lẫn nhánh nút
+ * hành động của `detectTouchKeys`.
+ *
+ * Chạy:
+ *   MAIL_LOG=/tmp/kg-mail.log node infra/e2e-touch.mjs
+ *   GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs   # trỏ tay, vẫn được
  */
 import { chromium, devices } from 'playwright';
+import { randomBytes } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
-const GAME_URL = process.env.GAME_URL;
-if (!GAME_URL) {
-  console.error('Thiếu GAME_URL');
-  process.exit(2);
+const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
+const ROOT = path.join(import.meta.dirname, '..');
+const FIXTURE_PHIM = path.join(ROOT, 'storage', 'fixtures', 'phim.sb3');
+
+/**
+ * Dựng game riêng cho bộ này, trả về URL trang game.
+ *
+ * Tự sinh fixture nếu chưa có: file nằm dưới `storage/` nên nó KHÔNG theo repo, và
+ * một bộ kiểm đòi người chạy phải nhớ gõ một lệnh khác trước là một bộ kiểm sẽ đỏ
+ * trên máy mới vì lý do chẳng liên quan gì tới thứ nó đo.
+ */
+async function dungGame(browser) {
+  if (!existsSync(FIXTURE_PHIM)) {
+    console.log('… chưa có fixture phím, dựng bằng infra/tao-fixture-phim.mjs');
+    execFileSync('node', [path.join(ROOT, 'infra', 'tao-fixture-phim.mjs'), FIXTURE_PHIM], {
+      stdio: 'inherit',
+    });
+  }
+
+  const MAIL_LOG = batBuocMailLog('e2e-touch');
+  const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
+  const suffix = randomBytes(4).toString('hex');
+
+  const ctx = await browser.newContext({ viewport: { width: 1300, height: 1000 } });
+  const p = await ctx.newPage();
+
+  await p.goto(`${APP}/dang-ky`, { waitUntil: 'networkidle' });
+  await p.fill('#email', `e2e-touch-${suffix}@kidogame.test`);
+  await p.fill('#password', 'matkhau-dai-1234');
+  await p.click('[data-testid=auth-form] button[type=submit]');
+  await p.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
+  if (!(await bamLinkXacMinh(p))) {
+    throw new Error('Không xác minh được email phụ huynh — xem MAIL_LOG.');
+  }
+
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  await p.fill('#displayName', 'Bé Cảm Ứng');
+  await p.fill('#username', `etc${suffix}`);
+  await p.fill('#password', 'be1234');
+  await p.click('[data-testid=auth-form] button[type=submit]');
+  await p.waitForTimeout(1500);
+
+  await ctx.close();
+
+  /*
+   * PHIÊN RIÊNG cho bé, không dùng lại phiên của phụ huynh.
+   *
+   * Dùng chung thì `/be-dang-nhap` chuyển hướng đi mất — phụ huynh đang đăng nhập —
+   * và lỗi hiện ra là "hết giờ chờ #username", đọc lên như trang đăng nhập hỏng.
+   */
+  const ctxBe = await browser.newContext({ viewport: { width: 1300, height: 1000 } });
+  const b = await ctxBe.newPage();
+
+  await b.goto(`${APP}/be-dang-nhap`, { waitUntil: 'networkidle' });
+  await b.fill('#username', `etc${suffix}`);
+  await b.fill('#password', 'be1234');
+  await b.click('[data-testid=auth-form] button[type=submit]');
+  await b.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
+
+  await b.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
+  await b.fill('#title', `Game phim ${suffix}`);
+  await b.setInputFiles('#file', FIXTURE_PHIM);
+  await b.click('[data-testid=upload-form] button[type=submit]');
+  await b.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
+
+  const url = b.url();
+  await ctxBe.close();
+  if (!/\/game\//.test(url)) throw new Error(`Đăng game không thành: dừng ở ${url}`);
+  return url;
 }
 
 const results = [];
@@ -21,6 +107,10 @@ const check = (name, ok, detail = '') => {
 };
 
 const browser = await chromium.launch({ channel: 'chrome' });
+
+/* Trỏ tay vẫn được — hữu ích khi muốn soi một game thật. Không trỏ thì tự dựng. */
+const GAME_URL = process.env.GAME_URL ?? (await dungGame(browser));
+console.log(`Game đang đo: ${GAME_URL}\n`);
 
 // --- Điện thoại: phải CÓ nút ---
 {

@@ -490,6 +490,60 @@ let dauRa = '';
   );
 }
 
+// ---------- Thư tuần: lá thư DUY NHẤT gửi kể cả khi không có gì ----------
+{
+  const chayThuTuan = (args = [], env = {}) => {
+    try {
+      const out = execFileSync('pnpm', ['--filter', '@kidogame/web', 'db:thu-tuan', ...args], {
+        cwd: ROOT,
+        env: { ...process.env, ...env },
+      }).toString();
+      return { ma: 0, out };
+    } catch (e) {
+      return { ma: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
+    }
+  };
+
+  /*
+   * Chốt "đúng thứ" là thứ giữ cho bước 5 của `prune.sh` không thành thư mỗi đêm.
+   * Nó chạy mỗi đêm và tự quyết định im lặng, nên nếu chốt hỏng thì hỏng theo hướng
+   * gửi bảy lá một tuần — và không có gì khác trong repo nhìn thấy điều đó.
+   *
+   * Đặt THU_TUAN_NGAY thành một ngày KHÁC hôm nay để chốt chắc chắn phải chặn, thay
+   * vì chạy phép kiểm này và hy vọng hôm nay không phải thứ Hai.
+   */
+  const homNay = new Date().getDay();
+  const ngayKhac = (homNay + 3) % 7;
+  {
+    const { ma, out } = chayThuTuan([], { THU_TUAN_NGAY: String(ngayKhac) });
+    check('Không đúng ngày thì thư tuần im lặng', ma === 0 && /bỏ qua/.test(out), `mã ${ma}`);
+    check('… và không soạn thư nào cả', !/Tuần \d+\/\d+/.test(out));
+  }
+
+  {
+    const { ma, out } = chayThuTuan([], { THU_TUAN_NGAY: String(homNay) });
+    check('Đúng ngày thì soạn thư', ma === 0 && /Tuần \d+\/\d+\/\d+ – /.test(out), `mã ${ma}`);
+    check('Thư mang số liệu tuần, không rỗng', /game mới/.test(out) && /lượt thả icon/.test(out));
+    check('Thư đọc được hàng đợi quản trị', /Hàng đợi quản trị/.test(out));
+    /*
+     * Câu này là toàn bộ lý do lá thư tồn tại. Mất nó thì người nhận đọc đây như một
+     * bản tin nữa và không bao giờ biết rằng VẮNG nó mới là tín hiệu.
+     */
+    check(
+      'Thư nói rõ luật đọc ngược: vắng thư mới là dấu hiệu xấu',
+      /KHÔNG nhận được nó/.test(out)
+    );
+    check('Và nói cách tắt', /THU_TUAN=off/.test(out));
+    check('Chưa có --gui thì KHÔNG gửi gì', /chưa gửi gì/.test(out));
+  }
+
+  {
+    const { ma, out } = chayThuTuan(['--bat-ke-thu'], { THU_TUAN: 'off' });
+    check('THU_TUAN=off thì tắt hẳn, kể cả khi bỏ qua chốt ngày', ma === 0 && /off/.test(out));
+    check('… và tắt rồi thì không soạn thư', !/Tuần \d+\/\d+/.test(out));
+  }
+}
+
 // ---------- Dọn ----------
 sql(`delete from "TakedownRequest" where "claimantEmail" like '%-${suffix}@vidu.test'`);
 sql(`delete from "Parent" where email = '${PARENT_EMAIL}'`);

@@ -18,6 +18,7 @@
     "db:xoa-gia-dinh": "tsx prisma/xoa-gia-dinh.ts",
     "db:nhac-viec-co-han": "tsx prisma/nhac-viec-co-han.ts",
     "db:canh-gac": "tsx prisma/canh-gac.ts",
+    "db:thu-tuan": "tsx prisma/thu-tuan.ts",
     "storage:prune": "tsx prisma/prune-storage.ts",
     "db:make-admin": "tsx prisma/make-admin.ts",
     "typecheck": "tsc --noEmit",
