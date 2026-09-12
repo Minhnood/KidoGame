@@ -40,6 +40,7 @@ import {
   TAKEDOWN_SLA_WORKING_DAYS,
 } from '../src/lib/operator';
 import {
+  BAO_CAO_CHO_QUA_NGAY,
   docViecCoHan,
   NHAC_TRUOC_NGAY_LAM_VIEC,
   SAP_XOA_NGAY,
@@ -69,6 +70,7 @@ function chuDe(v: ViecCoHan): string {
   if (v.goSapToiHan.length > 0) phan.push(`${v.goSapToiHan.length} sắp tới hạn`);
   if (v.gameSapXoa.length > 0) phan.push(`${v.gameSapXoa.length} game sắp bị xoá hẳn`);
   if (v.gameQuaHanXoa.length > 0) phan.push(`${v.gameQuaHanXoa.length} game bị xoá đêm nay`);
+  if (v.baoCaoChoLau.length > 0) phan.push(`${v.baoCaoChoLau.length} báo cáo chưa ai xem`);
   return `[KidoGame] ${phan.join(', ')}`;
 }
 
@@ -120,6 +122,37 @@ function thanThu(v: ViecCoHan): string {
     );
   }
 
+  if (v.baoCaoChoLau.length > 0) {
+    /*
+     * Nhóm này khác ba nhóm trên ở một điểm đáng nói ra trong chính lá thư: không có
+     * hạn nào bị lỡ, và cũng không mất gì vĩnh viễn. Thứ đang chạy là thời gian một
+     * nội dung bị báo cáo còn nằm trước mặt trẻ con mà chưa ai nhìn qua.
+     */
+    d.push(
+      `${v.baoCaoChoLau.length} BÁO CÁO ĐÃ CHỜ QUÁ ${BAO_CAO_CHO_QUA_NGAY} NGÀY MÀ CHƯA AI XEM.`,
+      'Không hạn nào bị lỡ ở đây, và không gì mất vĩnh viễn. Nhưng mỗi cái là một người',
+      'thật đã bấm nút báo cáo một game, trên một trang mà người chơi là trẻ con.',
+      ''
+    );
+    for (const r of v.baoCaoChoLau) {
+      d.push(`  · "${r.gameTitle}" — báo ${ngayVi(r.createdAt)}, đã chờ ${r.soNgayCho} ngày`);
+      d.push(`    lý do: ${r.reason}`);
+    }
+    /* `loc=can-xem` chứ không phải một bộ lọc riêng cho báo cáo: `can-xem` đã là
+       `reportCount > 0 OR status != PUBLISHED`, tức game bị báo cáo nằm sẵn trong đó.
+       Viết `loc=bao-cao` cho gọn nghĩa thì `FILTERS.find` không khớp và rơi về mặc
+       định — cùng một trang, nhưng bằng một đường không ai kiểm và có ngày sẽ đổi. */
+    d.push('', `Xem hàng đợi: ${adminUrl('/admin?loc=can-xem')}`);
+    if (v.baoCaoDangMo > v.baoCaoChoLau.length) {
+      d.push(
+        '',
+        `(Còn ${v.baoCaoDangMo - v.baoCaoChoLau.length} báo cáo mới hơn đang mở — chưa tới ngưỡng nhắc,`,
+        'cố ý, để thư này không thành bản tin gửi mỗi đêm.)'
+      );
+    }
+    d.push('');
+  }
+
   d.push(
     `Mở bảng tổng quan: ${adminUrl('/admin/tong-quan')}`,
     `Hàng đợi bản quyền: ${adminUrl('/admin?loc=tat-ca')}`,
@@ -134,7 +167,11 @@ function thanThu(v: ViecCoHan): string {
 async function main() {
   const v = await docViecCoHan();
   const tong =
-    v.goQuaHan.length + v.goSapToiHan.length + v.gameSapXoa.length + v.gameQuaHanXoa.length;
+    v.goQuaHan.length +
+    v.goSapToiHan.length +
+    v.gameSapXoa.length +
+    v.gameQuaHanXoa.length +
+    v.baoCaoChoLau.length;
 
   console.log(guiThat ? 'Chế độ: GỬI THẬT' : 'Chế độ: chỉ in (thêm --gui để gửi thật)');
   console.log(
@@ -143,6 +180,10 @@ async function main() {
   );
   console.log(
     `Game đã gỡ: sắp xoá ${v.gameSapXoa.length}, đã quá hạn giữ ${v.gameQuaHanXoa.length}`
+  );
+  console.log(
+    `Báo cáo đang mở: ${v.baoCaoDangMo}` +
+      ` (chờ quá ${BAO_CAO_CHO_QUA_NGAY} ngày: ${v.baoCaoChoLau.length})`
   );
 
   if (tong === 0) {

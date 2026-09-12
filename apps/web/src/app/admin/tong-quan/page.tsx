@@ -5,7 +5,7 @@ import { appOrigin } from '@/lib/mail';
 import { getAdmin } from '@/lib/session';
 import { actionLabel, hanXoaHan, NGAY_GIU_GAME_DA_GO, ngayVi } from '@/lib/moderation';
 import { slaDueAt, TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
-import { coViecGap, docViecCoHan, SAP_XOA_NGAY } from '@/lib/viec-co-han';
+import { BAO_CAO_CHO_QUA_NGAY, coViecGap, docViecCoHan, SAP_XOA_NGAY } from '@/lib/viec-co-han';
 import { MAX_UNRESOLVED_GROUPS } from '@/lib/error-log';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
@@ -248,6 +248,8 @@ export default async function AdminTongQuanPage() {
     prisma.report.count({ where: { createdAt: { gte: truoc24h } } }),
   ]);
 
+  const baoCaoChoLau = viec.baoCaoChoLau.length;
+  const baoCaoDangMo = viec.baoCaoDangMo;
   const goQuaHan = viec.goQuaHan.length;
   const sapXoa = viec.gameSapXoa.length;
   const quaHanXoa = viec.gameQuaHanXoa.length;
@@ -422,7 +424,7 @@ export default async function AdminTongQuanPage() {
         <Notice tone="info" role="status">
           <span data-testid="tq-yen">
             <strong>Không có việc gấp.</strong> Không yêu cầu gỡ nào quá hạn, không game nào
-            sắp bị xoá hẳn, không nhóm lỗi nào chưa xử lý.
+            sắp bị xoá hẳn, không báo cáo nào bị bỏ quên, không nhóm lỗi nào chưa xử lý.
           </span>
         </Notice>
       )}
@@ -462,6 +464,24 @@ export default async function AdminTongQuanPage() {
               : `Còn ${SAP_XOA_NGAY} ngày hoặc ít hơn để cho hiện lại`
           }
           href="/admin?loc=da-go"
+          muc="gap"
+        />
+        {/*
+          Ô này đếm báo cáo BỊ BỎ QUÊN, không đếm báo cáo đang mở — hai con số khác
+          nhau, và ô "Báo cáo mới 24 giờ" ở nhóm dưới đã lo cái kia. Đặt ở nhóm "Việc
+          có hạn" được là nhờ cái ngưỡng: một báo cáo vừa gửi không làm ô này sáng,
+          nên nó không rơi vào đúng cái bẫy mà chú thích ở `khongCoViecGap` cảnh báo.
+        */}
+        <O
+          testId="o-bao-cao-cho-lau"
+          so={baoCaoChoLau}
+          nhan="Báo cáo bị bỏ quên"
+          phu={
+            baoCaoDangMo === 0
+              ? 'Không có báo cáo nào đang mở'
+              : `Chờ quá ${BAO_CAO_CHO_QUA_NGAY} ngày · ${baoCaoDangMo} báo cáo đang mở`
+          }
+          href="/admin?loc=can-xem"
           muc="gap"
         />
         <O

@@ -49,6 +49,15 @@ export function daySoTrang(page: number, lastPage: number): (number | null)[] {
   return ra;
 }
 
+/**
+ * Từ mấy trang thì bày ô "nhảy tới trang".
+ *
+ * Đúng bằng ngưỡng mà `daySoTrang` bắt đầu lược bớt: dưới ngưỡng đó mọi trang đều có
+ * một con số bấm thẳng được, nên một ô nhập chỉ là thêm một thứ phải đọc để làm việc
+ * mà một cú bấm đã làm xong.
+ */
+const HIEN_O_NHAY_TU = 8;
+
 export function Pager({
   page,
   lastPage,
@@ -62,6 +71,31 @@ export function Pager({
   testId: string;
   className?: string;
 }) {
+  /*
+   * TRANG KHÔNG TỒN TẠI — nói ra, đừng để một danh sách rỗng tự giải thích.
+   *
+   * Ba trang gọi thanh này đều đọc `trang` bằng `Math.max(1, Number(...) || 1)`: kẹp
+   * dưới, không kẹp trên. Gõ `?trang=999` cho một danh sách 8 trang thì `skip` vượt
+   * qua cuối bảng, truy vấn trả về rỗng, và màn hình hiện đúng cái mà "không có game
+   * nào khớp" hiện — người đọc kết luận bộ lọc sai chứ không nghĩ tới số trang.
+   *
+   * Lỗi này có sẵn từ trước, nhưng ô nhập bên dưới biến nó từ chuyện phải sửa URL
+   * bằng tay thành chuyện gõ nhầm một phím. Sửa ở đây thì cả ba danh sách cùng được,
+   * và không trang nào phải nhớ tự kẹp.
+   */
+  if (page > lastPage) {
+    return (
+      <div className={className} data-testid={`${testId}-khong-co`}>
+        <p className="text-ink-soft">
+          Không có trang {page} — danh sách chỉ có {lastPage} trang.{' '}
+          <Link href={href(lastPage)} className="font-bold text-accent-text underline">
+            Về trang {lastPage}
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
   if (lastPage <= 1) return null;
 
   return (
@@ -109,6 +143,57 @@ export function Pager({
           Trang sau →
         </Link>
       )}
+
+      {/*
+        Ô nhảy thẳng tới một trang, cho những danh sách dài tới mức dãy số đã phải
+        lược bớt. Từ trang 3 sang trang 47 thì dãy số không giúp được gì: 47 không
+        nằm trong dãy, và đi bằng mũi tên là bốn mươi tư lần bấm.
+
+        FORM GET THƯỜNG, không phải client component — cùng lý do như ô tìm kiếm ở
+        trang chủ: chạy được cả khi JS chưa tải, và kết quả nằm trong URL nên bấm
+        back hay chia sẻ link đều đúng.
+
+        Các tham số khác (`loc`, `q`, `be`) được dựng lại thành hidden từ chính
+        `href(1)`. Thanh này cố ý KHÔNG biết trang gọi nó mang những tham số gì —
+        ghi chú ở đầu file nói rõ vì sao — nên nó đọc lại từ cái URL mà trang vừa
+        đưa cho, thay vì đoán.
+      */}
+      {lastPage >= HIEN_O_NHAY_TU &&
+        (() => {
+          const mau = new URL(href(1), 'http://x');
+          const an = [...mau.searchParams.entries()].filter(([k]) => k !== 'trang');
+          return (
+            <form
+              method="get"
+              action={mau.pathname}
+              data-testid={`${testId}-nhay`}
+              className="ml-1 flex items-center gap-1.5"
+            >
+              {an.map(([k, v]) => (
+                <input key={k} type="hidden" name={k} value={v} />
+              ))}
+              <label htmlFor={`${testId}-nhay-o`} className="text-sm text-ink-soft">
+                Tới trang
+              </label>
+              <input
+                id={`${testId}-nhay-o`}
+                name="trang"
+                type="number"
+                min={1}
+                max={lastPage}
+                defaultValue={page}
+                aria-label={`Nhảy tới trang, từ 1 đến ${lastPage}`}
+                className="min-h-touch w-18 rounded-lg border border-border bg-surface px-2 text-center tabular-nums text-ink"
+              />
+              <button
+                type="submit"
+                className="min-h-touch inline-flex items-center rounded-lg border border-border bg-surface px-3 font-semibold text-ink hover:bg-bg"
+              >
+                Đi
+              </button>
+            </form>
+          );
+        })()}
     </nav>
   );
 }
