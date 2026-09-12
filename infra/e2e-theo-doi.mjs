@@ -210,6 +210,41 @@ let banGhi = null;
     'Nút đổi sang trạng thái đang theo dõi',
     (await c2.locator('[data-testid=nut-theo-doi]').getAttribute('data-dang')) === 'co'
   );
+
+  /*
+   * Ở trạng thái ĐANG THEO DÕI, nút vẫn phải phản hồi khi rê chuột vào.
+   *
+   * Nó từng không phản hồi gì cả — `hover:border-accent-text` chỉ nằm ở nhánh CHƯA
+   * theo dõi, nên nút "Đang theo dõi …" không đổi viền, không đổi nền, không gì. Mà
+   * đó đúng là nút để BỎ theo dõi: con trỏ đi qua nó như đi qua một dòng chữ.
+   *
+   * Đo ĐỘ ĐẬM của lớp phủ, không so hai chuỗi màu — "khác nhau" thì nhạt đi cũng đạt.
+   */
+  {
+    const doPhu = async () => {
+      const s = await c2
+        .locator('[data-testid=nut-theo-doi]')
+        .evaluate((e) => getComputedStyle(e).backgroundColor);
+      return Number(s.match(/\/\s*([\d.]+)\s*\)/)?.[1] ?? 1);
+    };
+    /* Đẩy chuột ra KHỎI nút trước khi đo số "trước". Playwright để con trỏ nằm
+       lại đúng chỗ vừa bấm, nên đo ngay là đo trạng thái ĐANG hover và so nó với
+       chính nó — phép kiểm đỏ trong khi sản phẩm đúng. Đã đỏ thật một lần vì đúng
+       chuyện này. */
+    await c2.mouse.move(5, 5);
+    await c2.waitForTimeout(250);
+    const truoc = await doPhu();
+    await c2.locator('[data-testid=nut-theo-doi]').hover();
+    await c2.waitForTimeout(300);
+    const sau = await doPhu();
+    check(
+      'Rê chuột vào nút ĐANG THEO DÕI thì nền đậm THÊM, không đứng im',
+      sau > truoc,
+      `${truoc} -> ${sau}`
+    );
+    await c2.mouse.move(5, 5);
+    await c2.waitForTimeout(200);
+  }
   check('Bắt được request server action để dùng lại', banGhi !== null);
 }
 

@@ -134,10 +134,20 @@ export function HangIcon({
                   dangChon
                     ? 'border-accent-text bg-accent/15 text-ink'
                     : 'border-border bg-surface text-ink',
-                  // `kg-icon-bam` là thứ bật hiệu ứng NHẤC LÊN, và chỉ nó. Cái tên
-                  // hiện ra thì treo ở lớp bọc, nên người không thả được vẫn thấy.
+                  /*
+                   * `kg-icon-bam` là thứ bật hiệu ứng NHẤC LÊN, và chỉ nó. Cái tên
+                   * hiện ra thì treo ở lớp bọc, nên người không thả được vẫn thấy.
+                   *
+                   * HAI NỀN HOVER KHÁC NHAU, và tách ra là bắt buộc chứ không phải
+                   * cho đẹp. Một `hover:bg-accent/10` dùng chung thì với nút ĐANG
+                   * CHỌN (nền sẵn `accent/15`) nó là 15% → 10%, tức rê chuột vào làm
+                   * nút NHẠT ĐI. Mà đúng nút đó là nút để GỠ — đường rút lại duy nhất
+                   * — nên phản hồi của nó không được đi lùi.
+                   */
                   thaDuoc
-                    ? 'kg-icon-bam cursor-pointer hover:border-accent-text hover:bg-accent/10'
+                    ? dangChon
+                      ? 'kg-icon-bam cursor-pointer hover:bg-accent/20'
+                      : 'kg-icon-bam cursor-pointer hover:border-accent-text hover:bg-accent/10'
                     : 'cursor-default',
                   dangGui ? 'opacity-70' : '',
                 ].join(' ')}

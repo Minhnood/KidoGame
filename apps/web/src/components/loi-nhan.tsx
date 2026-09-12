@@ -137,10 +137,20 @@ export function LoiNhan({
                   className={[
                     'inline-flex min-h-11 items-center rounded-full border px-3.5 py-1.5',
                     'text-sm font-semibold transition',
+                    /*
+                     * Câu ĐANG CHỌN phải có nền hover riêng.
+                     *
+                     * Đo được trước khi sửa: `hover:border-accent-text` dùng chung
+                     * cho cả hai trạng thái, mà câu đang chọn ĐÃ mang sẵn viền
+                     * `accent-text` — nên rê chuột vào nó thì viền lẫn nền đều **y
+                     * nguyên**, không một pixel nào đổi. Đúng cái nút đó là nút để
+                     * GỠ lời nhắn, tức đường rút lại duy nhất của bé, và nó là nút
+                     * duy nhất trong hàng trông như đã chết.
+                     */
                     dangChon
-                      ? 'border-accent-text bg-accent/15 text-ink'
-                      : 'border-border bg-surface text-ink',
-                    'cursor-pointer hover:border-accent-text',
+                      ? 'border-accent-text bg-accent/15 text-ink hover:bg-accent/20'
+                      : 'border-border bg-surface text-ink hover:border-accent-text hover:bg-accent/10',
+                    'cursor-pointer',
                     dangGui ? 'opacity-70' : '',
                   ].join(' ')}
                 >

@@ -282,6 +282,48 @@ const CAP_NEN_ALPHA = [
     alpha: 0.15,
     min: 4.5,
   },
+  /*
+   * LỚP PHỦ ĐẬM HƠN, lúc rê chuột vào một nút ĐANG CHỌN (icon, câu lời nhắn, nút
+   * theo dõi — cả ba dùng chung `bg-accent/25`).
+   *
+   * Vì sao đậm thêm chứ không phải 10% như nút chưa chọn: nút chưa chọn đi từ nền
+   * trắng lên một lớp cam mỏng, mắt thấy ngay. Nút đang chọn đã mang sẵn 15%, nên
+   * phủ 10% lên là đi LÙI — rê chuột vào làm nút nhạt đi. Mà nút đang chọn chính là
+   * nút để GỠ, đường rút lại duy nhất của bé.
+   *
+   * VÌ SAO 20% CHỨ KHÔNG PHẢI 25%: chính ba dòng dưới đây chặn lại. Bản đầu viết 25%
+   * và đo ra `ink-soft` trên lớp đó ở giao diện TỐI còn **4.40:1**, hụt ngưỡng 4.5
+   * đúng 0.1 — tức con số đếm cạnh emoji mờ đi đúng lúc con trỏ nằm trên nó. 20% thì
+   * 4.94:1. Cam đậm thêm là chữ tối trên nó tụt tương phản, nên chỗ này không được
+   * chọn bằng mắt.
+   */
+  {
+    ten: 'Chữ trên nút ĐANG CHỌN lúc rê chuột (cam 20% phủ nền thẻ)',
+    fg: 'ink',
+    nen: 'accent',
+    duoi: 'surface',
+    alpha: 0.2,
+    min: 7,
+  },
+  {
+    ten: 'Số đếm mờ trên nút đang chọn lúc rê chuột',
+    fg: 'ink-soft',
+    nen: 'accent',
+    duoi: 'surface',
+    alpha: 0.2,
+    min: 4.5,
+  },
+  /* Nút theo dõi và hàng câu lời nhắn đứng thẳng trên NỀN TRANG, không phải trong
+     thẻ — nền dưới lớp phủ vì vậy là `bg`, và nó khác `surface` đủ để phải đo riêng
+     ở giao diện tối. */
+  {
+    ten: 'Chữ trên nút ĐANG CHỌN lúc rê chuột, trên nền trang',
+    fg: 'ink',
+    nen: 'accent',
+    duoi: 'bg',
+    alpha: 0.2,
+    min: 7,
+  },
 ];
 
 /**

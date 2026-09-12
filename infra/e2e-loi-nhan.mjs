@@ -227,6 +227,42 @@ let banGhi = null;
     'Câu vừa chọn hiện là đang sáng',
     (await c2.locator('[data-testid=cau-hay-qua]').getAttribute('data-chon')) === 'co'
   );
+
+  /*
+   * Câu ĐANG SÁNG phải phản hồi khi rê chuột vào — nó là nút GỠ lời nhắn.
+   *
+   * Nó từng là nút duy nhất trong hàng tám câu không phản hồi gì: viền đã sẵn là
+   * `accent-text` nên `hover:border-accent-text` dùng chung chẳng đổi được gì. Trang
+   * còn in hẳn câu "Bấm lại câu đang sáng để bỏ lời nhắn", tức chỉ thẳng vào một nút
+   * trông như đã chết.
+   *
+   * Đo ĐỘ ĐẬM của lớp phủ, không so hai chuỗi màu — "khác nhau" thì nhạt đi cũng đạt.
+   */
+  {
+    const doPhu = async () => {
+      const s = await c2
+        .locator('[data-testid=cau-hay-qua]')
+        .evaluate((e) => getComputedStyle(e).backgroundColor);
+      return Number(s.match(/\/\s*([\d.]+)\s*\)/)?.[1] ?? 1);
+    };
+    /* Đẩy chuột ra KHỎI nút trước khi đo số "trước". Playwright để con trỏ nằm
+       lại đúng chỗ vừa bấm, nên đo ngay là đo trạng thái ĐANG hover và so nó với
+       chính nó — phép kiểm đỏ trong khi sản phẩm đúng. Đã đỏ thật một lần vì đúng
+       chuyện này. */
+    await c2.mouse.move(5, 5);
+    await c2.waitForTimeout(250);
+    const truoc = await doPhu();
+    await c2.locator('[data-testid=cau-hay-qua]').hover();
+    await c2.waitForTimeout(300);
+    const sau = await doPhu();
+    check(
+      'Rê chuột vào câu ĐANG SÁNG thì nền đậm THÊM, không đứng im',
+      sau > truoc,
+      `${truoc} -> ${sau}`
+    );
+    await c2.mouse.move(5, 5);
+    await c2.waitForTimeout(200);
+  }
   check('Bắt được request của server action để dùng lại', banGhi !== null);
   /*
    * Bản ghi phải chứa mã câu ở dạng đọc được, vì bốn phép chốt bên dưới sửa nội
