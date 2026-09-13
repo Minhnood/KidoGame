@@ -11,14 +11,38 @@
  *   node infra/e2e-check.mjs               # cửa sổ 3
  */
 import { chromium } from 'playwright';
+import { randomBytes } from 'node:crypto';
+import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const PLAYER = process.env.PLAYER_ORIGIN ?? 'http://127.0.0.1:3001';
 // Đường dẫn tới một file .sb3 thật để thử luồng upload. Bỏ trống thì bỏ qua phần đó.
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
-// Tài khoản bé do `pnpm db:seed` tạo — cần để thử luồng đăng game.
-const CHILD_USERNAME = process.env.CHILD_USERNAME ?? 'beminh';
-const CHILD_PASSWORD = process.env.CHILD_PASSWORD ?? 'be1234';
+
+/*
+ * BÉ CỦA RIÊNG BỘ NÀY, dựng mới mỗi lần chạy — không mượn `beminh` trong DB dev nữa.
+ *
+ * Bản cũ đăng nhập bằng bé do `pnpm db:seed` tạo, và là bộ DUY NHẤT trong cả bộ kiểm
+ * làm thế. Mỗi lượt chạy đăng hai game dưới tên bé đó, mà trần là 10 game mỗi bé
+ * trong cửa sổ trượt 24 giờ (`UPLOADS_PER_CHILD_PER_DAY` trong `lib/ingest.ts`). Chạy
+ * lại vài lần trong một buổi là đỏ:
+ *
+ *   ❌ File HTML đổi tên .sb3 bị từ chối — 😕 Hôm nay bé đã đăng 10 game rồi, mai quay lại nhé!
+ *
+ * Trông như sản phẩm vỡ, mà sự thật chỉ là hết suất. Tệ hơn: nó đỏ đúng ở phép kiểm
+ * "file giả bị từ chối", nên người đọc sẽ nghĩ tới lỗi bảo mật chứ không nghĩ tới hạn
+ * mức. Cùng một cái bẫy `402b009` đã sửa cho `e2e-touch`.
+ *
+ * `MAIL_LOG` chỉ bắt buộc khi có `SB3_FIXTURE`: dựng bé đòi email phụ huynh đã xác
+ * minh, mà chỉ phần đăng game mới cần bé. Chạy không có fixture thì bộ này vẫn chạy
+ * được như trước, không đòi thêm gì.
+ */
+const MAIL_LOG = FIXTURE ? batBuocMailLog('e2e-check') : '';
+const suffix = randomBytes(4).toString('hex');
+const PARENT_EMAIL = `e2e-check-${suffix}@kidogame.test`;
+const PARENT_PASS = 'matkhau-dai-1234';
+const CHILD_USERNAME = `ech${suffix}`;
+const CHILD_PASSWORD = 'be1234';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -433,13 +457,36 @@ await page.screenshot({ path: '/tmp/kidogame-home.png' });
 
 // ---------- Upload qua form: đường chấp nhận ----------
 if (FIXTURE) {
-  // Từ M2, đăng game cần phiên của bé. Dùng tài khoản do `pnpm db:seed` tạo.
+  /* Dựng phụ huynh + bé ở một context RIÊNG. Context chính mang sẵn cookie phiên giả
+     để thử rò rỉ cookie ở trên; đăng ký phụ huynh trong đó là ghi đè lên chính thứ
+     phép kiểm kia đang canh. */
+  {
+    const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
+    const parentCtx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
+    const pp = await parentCtx.newPage();
+    await pp.goto(`${APP}/dang-ky`, { waitUntil: 'networkidle' });
+    await pp.fill('#email', PARENT_EMAIL);
+    await pp.fill('#password', PARENT_PASS);
+    await pp.click('[data-testid=auth-form] button[type=submit]');
+    await pp.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
+    check('Xác minh được email phụ huynh', await bamLinkXacMinh(pp));
+
+    await pp.fill('#displayName', 'Bé Kiểm Thử');
+    await pp.fill('#username', CHILD_USERNAME);
+    await pp.fill('#password', CHILD_PASSWORD);
+    await pp.fill('#birthYear', String(new Date().getFullYear() - 9));
+    await pp.click('[data-testid=auth-form] button[type=submit]');
+    await pp.waitForTimeout(2500);
+    await parentCtx.close();
+  }
+
+  // Từ M2, đăng game cần phiên của bé.
   await page.goto(`${APP}/be-dang-nhap`, { waitUntil: 'networkidle' });
   await page.fill('#username', CHILD_USERNAME);
   await page.fill('#password', CHILD_PASSWORD);
   await page.click('[data-testid=auth-form] button[type=submit]');
   await page.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
-  check('Bé đăng nhập được bằng tài khoản seed', !/be-dang-nhap/.test(page.url()), page.url());
+  check('Bé vừa dựng đăng nhập được', !/be-dang-nhap/.test(page.url()), page.url());
 
   await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
   await page.fill('#title', 'Game kiểm thử e2e');
