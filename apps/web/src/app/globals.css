@@ -1497,3 +1497,17 @@ body {
     animation-play-state: paused !important;
   }
 }
+
+/*
+ * Hàng bộ lọc cuộn ngang trên điện thoại — xem `(trang-chu)/hang-loc.ts`.
+ *
+ * Ẩn thanh cuộn vì trên màn cảm ứng nó chỉ là một vạch xám đè lên đáy viên thuốc; thứ
+ * báo cho bé biết "còn nữa, vuốt sang" là viên thuốc cuối bị MÉP MÀN HÌNH cắt đôi, nên
+ * hàng phải tràn ra sát mép (`-mx-5 px-5`), không dừng ở lề nội dung.
+ */
+@utility kg-cuon-ngang {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

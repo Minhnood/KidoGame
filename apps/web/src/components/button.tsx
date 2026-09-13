@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { ComponentProps, ReactNode } from 'react';
 
 type Variant = 'primary' | 'ghost' | 'danger';
-type Size = 'md' | 'lg';
+type Size = 'md' | 'lg' | 'lg-tu-sm';
 
 /**
  * Nút bấm. Mọi biến thể đều cao tối thiểu `--spacing-touch` (48px) vì ngón tay
@@ -44,6 +44,14 @@ const variants: Record<Variant, string> = {
 const sizes: Record<Size, string> = {
   md: 'min-h-touch px-4 text-base sm:px-5',
   lg: 'min-h-14 px-6 text-lg sm:px-7',
+  /*
+   * `md` trên điện thoại, `lg` từ `sm` — cho nút MỜI CHÍNH ở đầu trang chủ.
+   *
+   * Hai nút `lg` ở 390px không đứng chung một hàng được, xếp chồng thành 120px, đẩy
+   * game đầu tiên xuống dưới màn hình đầu. Ở cỡ `md` cùng `px-3` thì hai nút vừa một
+   * hàng tới tận 360px. Chiều cao vẫn 48px — thứ ngón tay cần không bị đụng tới.
+   */
+  'lg-tu-sm': 'min-h-touch px-3 text-base sm:min-h-14 sm:px-7 sm:text-lg',
 };
 
 function classesFor(variant: Variant, size: Size, extra?: string) {

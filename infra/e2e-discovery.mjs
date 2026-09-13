@@ -126,6 +126,66 @@ if (!gameId) {
   await p.close();
 }
 
+// ---------- Điện thoại: game phải lọt màn hình đầu ----------
+/*
+ * Đo trước khi sửa, ở 390×800: thẻ game đầu tiên nằm ở 1001px. Bé mở web trên điện
+ * thoại thấy lời chào, ô tìm, năm hàng viên thuốc lọc — và không một game nào. Không
+ * phép kiểm nào đỏ vì tất cả đều đo ở 1300px, nơi mọi thứ vừa khít.
+ *
+ * Ngưỡng "ít nhất 100px của thẻ đầu tiên lọt màn đầu", không phải "trọn thẻ": trọn thẻ
+ * ở 360×800 cần thêm ~100px nữa, và thứ cần bảo vệ là bé THẤY có game ở dưới — một
+ * nửa ảnh thumbnail làm được việc đó.
+ */
+for (const [w, h] of [
+  [390, 844],
+  [360, 800],
+]) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true });
+  const p = await ctx.newPage();
+  await p.goto(APP, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('[data-testid=game-card]', { timeout: 30000 });
+  const m = await p.evaluate(() => {
+    const top = (el) => el.getBoundingClientRect().top + scrollY;
+    const hang = (id) => {
+      const el = document.querySelector(`[data-testid=${id}]`);
+      const dinh = new Set([...el.querySelectorAll('a')].map((a) => Math.round(top(a))));
+      return {
+        soHang: dinh.size,
+        cuonDuoc: el.scrollWidth > el.clientWidth,
+        demTren: parseFloat(getComputedStyle(el).paddingTop),
+      };
+    };
+    return {
+      the: Math.round(top(document.querySelector('[data-testid=game-card]'))),
+      tran: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      loai: hang('tag-filters'),
+      tuoi: hang('age-filters'),
+    };
+  });
+  check(`${w}px: ít nhất 100px của thẻ game đầu tiên lọt màn đầu`, m.the <= h - 100, `đỉnh thẻ ở ${m.the}px, màn cao ${h}`);
+  check(`${w}px: bộ lọc loại game nằm trên MỘT hàng cuộn ngang`, m.loai.soHang === 1 && m.loai.cuonDuoc, JSON.stringify(m.loai));
+  check(`${w}px: bộ lọc tuổi nằm trên MỘT hàng cuộn ngang`, m.tuoi.soHang === 1 && m.tuoi.cuonDuoc, JSON.stringify(m.tuoi));
+  /* Khung cuộn cắt mọi thứ tràn ra ngoài nó, kể cả vòng focus 3px + lệch 2px. */
+  check(`${w}px: hàng lọc đủ đệm cho vòng focus (≥5px)`, m.loai.demTren >= 5 && m.tuoi.demTren >= 5, `${m.loai.demTren}px`);
+  check(`${w}px: trang không tràn ngang`, m.tran === 0, `${m.tran}px`);
+  await ctx.close();
+}
+
+// Máy tính: hàng lọc KHÔNG được cuộn — ở đó đủ chỗ, và giấu lựa chọn sau mép là mất trắng.
+{
+  const p = await anon.newPage();
+  await p.goto(APP, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('[data-testid=tag-filters]');
+  const cuon = await p.evaluate(() =>
+    ['tag-filters', 'age-filters'].map((id) => {
+      const el = document.querySelector(`[data-testid=${id}]`);
+      return el.scrollWidth - el.clientWidth;
+    })
+  );
+  check('1300px: hai hàng lọc bày hết, không giấu viên nào sau mép', cuon.every((d) => d === 0), cuon.join(', '));
+  await p.close();
+}
+
 // ---------- Tìm kiếm ----------
 {
   const withMarks = await browse({ q: TITLE });
