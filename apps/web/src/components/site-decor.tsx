@@ -598,14 +598,147 @@ function CanhVien({
   );
 }
 
-function May({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
+/**
+ * Vầng trăng khuyết CÓ QUẦNG SÁNG, và đung đưa cả cụm.
+ *
+ * Quầng là BẢN SAO LÀM MỜ của chính vầng khuyết, không phải một hình tròn đặt phía sau.
+ * Bản đầu dùng hình tròn và nhìn ra là sai ngay: một đĩa xám viền cứng, mà chỗ trăng bị
+ * "cắn" lại để lộ đĩa ấy ra — thành một vầng trăng tròn xám có mảnh khuyết sáng, đọc
+ * như sơ đồ tuần trăng chứ không phải ánh sáng tỏa ra. Làm mờ đúng hình lưỡi liềm thì
+ * ánh sáng ôm theo mép trăng, chỗ bị cắn vẫn tối.
+ *
+ * `id` phải KHÁC NHAU giữa các chỗ dùng: `url(#...)` tìm theo id trên cả trang, không
+ * theo thẻ <svg> chứa nó. Hai bộ lọc trùng id thì cái sau dùng nhầm bộ lọc của cái
+ * trước — và nếu cái trước đang `display: none` (tranh bên lề trên màn hẹp) thì quầng
+ * biến mất mà không có lỗi nào.
+ *
+ * Vùng lọc nới ra 200%: mặc định chỉ chừa 10% quanh hình, và vệt mờ bị xén thành một
+ * khung chữ nhật mờ có cạnh thẳng.
+ */
+function QuangTrang({ id, d, mo }: { id: string; d: string; mo: number }) {
   return (
-    <g transform={`translate(${x} ${y}) scale(${s})`} fill="var(--color-decor-may)">
+    <g className="kg-trang-dua">
+      <filter id={id} x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation={mo} />
+      </filter>
+      <path className="kg-quang-trang" d={d} fill="var(--color-decor-troi)" filter={`url(#${id})`} />
+      {/* Trăng khuyết: một hình tròn bị một hình tròn nền "cắn" mất một miếng. */}
+      <path d={d} fill="var(--color-decor-troi)" />
+    </g>
+  );
+}
+
+/** Hình đám mây, vẽ một lần để dùng hai lần: một lớp bóng và một lớp thân. */
+function HinhMay() {
+  return (
+    <>
       <circle cx="0" cy="0" r="13" />
       <circle cx="16" cy="4" r="10" />
       <circle cx="-15" cy="5" r="9" />
       <rect x="-15" y="1" width="32" height="13" rx="6.5" />
+    </>
+  );
+}
+
+/**
+ * Đám mây hai tông: CÙNG một hình, lớp bóng hạ xuống 2.5 đơn vị, lớp thân trắng đè lên.
+ *
+ * Phần bóng lộ ra đúng ở bụng mây — chỗ mây thật tối nhất vì ánh sáng đến từ trên. Vẽ
+ * lại hình lần hai thay vì vẽ một dải bóng riêng: dải riêng thì phải khớp tay với đường
+ * cong của ba cục tròn, lệch một chút là thò ra ngoài mép thân thành một vệt xanh lạ.
+ * Cùng hình dịch xuống thì bóng tự ôm theo mép.
+ */
+function May({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <g transform="translate(0 2.5)" fill="var(--color-decor-may-bong)">
+        <HinhMay />
+      </g>
+      <g fill="var(--color-decor-may)">
+        <HinhMay />
+      </g>
     </g>
+  );
+}
+
+/**
+ * Mây của lớp trời chung: vị trí dọc, cỡ, thời gian một lượt bay, độ mờ.
+ *
+ * NĂM đám, không hơn. Mỗi đám là một hoạt ảnh vô hạn chạy suốt lúc trang mở, và bài
+ * học từ cành cây ở thẻ game vẫn còn đó: hơn trăm hoạt ảnh chạy nền là quạt máy tính
+ * bảng cũ kêu và pin tụt. Năm cái chỉ đổi `transform` thì trình duyệt đẩy hết sang
+ * GPU, không vẽ lại trang.
+ *
+ * CÀNG NHỎ CÀNG CHẬM VÀ CÀNG MỜ, và ba thứ phải đi cùng nhau. Đó là cách mắt đọc ra
+ * chiều sâu: vật ở xa thì nhỏ, nhạt và trôi qua chậm. Cho một đám nhỏ bay nhanh là nó
+ * đọc ra như một đám mây con đang chạy, không phải một đám mây ở xa.
+ *
+ * `tre` ÂM là để lúc mở trang mây ĐÃ nằm rải khắp trời. Trễ dương (hoặc không trễ) thì
+ * cả năm đám cùng xuất phát ngoài mép phải, và trong phút đầu tiên trời trống trơn —
+ * đúng phút người ta vừa mở trang ra nhìn.
+ *
+ * Trễ cũng không được là bội số chung của thời gian bay, không thì sau vài vòng hai
+ * đám trùng nhịp và dính thành một cục bay cùng nhau.
+ */
+const MAY_BAY: Array<{ tren: string; rong: string; giay: number; tre: number; mo: number }> = [
+  { tren: '9%', rong: '9rem', giay: 95, tre: -22, mo: 0.95 },
+  { tren: '27%', rong: '5rem', giay: 150, tre: -97, mo: 0.7 },
+  { tren: '46%', rong: '7rem', giay: 115, tre: -61, mo: 0.85 },
+  { tren: '66%', rong: '4.5rem', giay: 170, tre: -33, mo: 0.65 },
+  { tren: '83%', rong: '8rem', giay: 105, tre: -78, mo: 0.9 },
+];
+
+/**
+ * Lớp TRỜI chung: mây bay từ mép phải qua mép trái, ngang cả khung nhìn, ở MỌI cỡ màn.
+ *
+ * Nó thay cho mấy đám mây đứng yên từng nằm trong tranh hai bên lề và dải đất chân
+ * trang. Những đám đó chỉ đung đưa ±6px trong 34 giây — đo ra thì có chuyển động,
+ * nhìn thì không ai thấy — và chúng bị nhốt trong khung hình nhỏ của mình, nên không
+ * đám nào bay ĐI được đâu. Mây bay đi thì phải có cả bầu trời để bay qua.
+ *
+ * ĐI SAU NỘI DUNG, không bao giờ đè lên. `fixed -z-10` như `SiteDecor`, và đặt TRƯỚC
+ * `SiteDecor` trong layout: cùng một tầng z thì cái đứng trước trong DOM nằm dưới, tức
+ * mây ở xa hơn đồi, cây và cành. Thẻ game nền đục che mây; chữ nằm thẳng trên nền
+ * trang thì mây đi qua sau lưng chữ — `contrast-check` đo chữ trên màu mây.
+ *
+ * CÓ CẢ BAN NGÀY LẪN BAN ĐÊM. Ban đêm mây là mây được trăng rọi — lam nhạt, sáng hơn
+ * trời một chút — và bay qua SAU trăng sao, vì lớp này đứng trước `SiteDecor` trong DOM.
+ * Bản đầu chỉ cho ban ngày với lý do mây tối trên nền tối là vệt bẩn; đúng với màu mây
+ * cũ (tách nền 1.25:1), không còn đúng khi màu mây đêm được chỉnh riêng — xem
+ * `--toi-decor-may` trong `globals.css`.
+ *
+ * Mỗi đám đặt `left: 100%` rồi dịch sang trái đúng `100vw + bề rộng của chính nó`:
+ * xuất phát khi vừa khuất ngoài mép phải, kết thúc khi vừa khuất ngoài mép trái. Không
+ * đám nào hiện ra hay biến mất giữa trời.
+ */
+export function MayBay() {
+  return (
+    <div
+      aria-hidden="true"
+      data-kg-decor="may"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+    >
+      {MAY_BAY.map((m, i) => (
+        <svg
+          key={i}
+          viewBox="-25 -14 52 31"
+          className="kg-may-bay absolute left-full"
+          style={
+            {
+              top: m.tren,
+              width: m.rong,
+              opacity: m.mo,
+              '--kg-bay-giay': `${m.giay}s`,
+              animationDelay: `${m.tre}s`,
+            } as React.CSSProperties
+          }
+          fill="none"
+          focusable="false"
+        >
+          <May x={0} y={0} />
+        </svg>
+      ))}
+    </div>
   );
 }
 
@@ -644,8 +777,12 @@ export function SiteDecor() {
         focusable="false"
       >
         <g className="kg-ngay">
-          <circle cx="72" cy="34" r="20" fill="var(--color-decor-troi)" />
+          {/* Lõi và vòng tia là HAI nhóm riêng vì chúng chuyển động khác nhau: tia
+              xoay, lõi thì phập phồng. Gộp một nhóm là lõi tròn cũng quay theo — quay
+              một hình tròn thì không ai thấy gì, nhưng trình duyệt vẫn phải tính. */}
+          <circle className="kg-loi-nang" cx="72" cy="34" r="20" fill="var(--color-decor-troi)" />
           <g
+            className="kg-tia-nang"
             stroke="var(--color-decor-troi)"
             strokeWidth="6"
             strokeLinecap="round"
@@ -665,21 +802,16 @@ export function SiteDecor() {
             <path d="M14 84c4-5 8-5 11 0 3-5 7-5 11 0" />
             <path d="M40 104c3-4 6-4 8 0 2-4 5-4 8 0" />
           </g>
-          <g className="kg-may-troi">
-            <May x={30} y={122} s={0.9} />
-          </g>
         </g>
 
         <g className="kg-dem">
-          {/* Trăng khuyết: một hình tròn bị một hình tròn nền "cắn" mất một miếng. */}
-          <path
-            d="M84 20a22 22 0 1 0 0 34 26 26 0 0 1 0-34Z"
-            fill="var(--color-decor-troi)"
-          />
+          <QuangTrang id="kg-mo-trang-le" d="M84 20a22 22 0 1 0 0 34 26 26 0 0 1 0-34Z" mo={5} />
           <g fill="var(--color-decor-troi)" opacity="0.9">
-            <path d="M28 26l2.4 5.4 5.4 2.4-5.4 2.4L28 42l-2.4-5.8-5.4-2.4 5.4-2.4Z" />
-            <path d="M46 74l1.8 4 4 1.8-4 1.8L46 86l-1.8-4.4-4-1.8 4-1.8Z" />
-            <path d="M16 100l1.5 3.4 3.4 1.5-3.4 1.5L16 110l-1.5-3.6-3.4-1.5 3.4-1.5Z" />
+            {/* Trễ so le để ba sao không cùng sáng cùng tắt — cùng nhịp thì đọc ra như
+                một bóng đèn chứ không phải ba ngôi sao. */}
+            <path className="kg-lap-lanh" d="M28 26l2.4 5.4 5.4 2.4-5.4 2.4L28 42l-2.4-5.8-5.4-2.4 5.4-2.4Z" />
+            <path className="kg-lap-lanh" style={{ animationDelay: '-1.6s' }} d="M46 74l1.8 4 4 1.8-4 1.8L46 86l-1.8-4.4-4-1.8 4-1.8Z" />
+            <path className="kg-lap-lanh" style={{ animationDelay: '-3.1s' }} d="M16 100l1.5 3.4 3.4 1.5-3.4 1.5L16 110l-1.5-3.6-3.4-1.5 3.4-1.5Z" />
           </g>
         </g>
       </svg>
@@ -691,14 +823,10 @@ export function SiteDecor() {
         fill="none"
         focusable="false"
       >
-        <g className="kg-ngay kg-may-troi">
-          <May x={62} y={26} s={1.05} />
-          <May x={34} y={86} s={0.75} />
-        </g>
         <g className="kg-dem" fill="var(--color-decor-troi)" opacity="0.9">
-          <path d="M70 24l2.2 5 5 2.2-5 2.2L70 39l-2.2-5.6-5-2.2 5-2.2Z" />
-          <path d="M40 62l1.6 3.6 3.6 1.6-3.6 1.6L40 73l-1.6-4-3.6-1.6 3.6-1.6Z" />
-          <path d="M84 94l1.4 3.2 3.2 1.4-3.2 1.4L84 104l-1.4-3.6-3.2-1.4 3.2-1.4Z" />
+          <path className="kg-lap-lanh" style={{ animationDelay: '-0.8s' }} d="M70 24l2.2 5 5 2.2-5 2.2L70 39l-2.2-5.6-5-2.2 5-2.2Z" />
+          <path className="kg-lap-lanh" style={{ animationDelay: '-2.4s' }} d="M40 62l1.6 3.6 3.6 1.6-3.6 1.6L40 73l-1.6-4-3.6-1.6 3.6-1.6Z" />
+          <path className="kg-lap-lanh" style={{ animationDelay: '-3.7s' }} d="M84 94l1.4 3.2 3.2 1.4-3.2 1.4L84 104l-1.4-3.6-3.2-1.4 3.2-1.4Z" />
         </g>
       </svg>
 
@@ -964,8 +1092,7 @@ export function DatCuoiTrang() {
         fill="none"
         focusable="false"
       >
-        <g className="kg-ngay kg-may-troi">
-          <May x={34} y={20} s={0.85} />
+        <g className="kg-ngay">
           {/* Hai con chim, nét chữ "m" — dùng lại đúng cách vẽ của tranh bên lề. */}
           <g
             stroke="var(--color-decor-chim)"
@@ -981,10 +1108,10 @@ export function DatCuoiTrang() {
         <g className="kg-dem">
           {/* Trăng khuyết: một hình tròn bị một hình tròn nền "cắn" mất một miếng —
               cùng cách dựng như vầng trăng ở tranh bên lề. */}
-          <path d="M44 12a17 17 0 1 0 0 26 20 20 0 0 1 0-26Z" fill="var(--color-decor-troi)" />
+          <QuangTrang id="kg-mo-trang-dat" d="M44 12a17 17 0 1 0 0 26 20 20 0 0 1 0-26Z" mo={4} />
           <g fill="var(--color-decor-troi)" opacity="0.9">
-            <path d="M82 20l1.8 4 4 1.8-4 1.8L82 32l-1.8-4.4-4-1.8 4-1.8Z" />
-            <path d="M104 44l1.4 3.2 3.2 1.4-3.2 1.4L104 54l-1.4-3.6-3.2-1.4 3.2-1.4Z" />
+            <path className="kg-lap-lanh" d="M82 20l1.8 4 4 1.8-4 1.8L82 32l-1.8-4.4-4-1.8 4-1.8Z" />
+            <path className="kg-lap-lanh" style={{ animationDelay: '-2.2s' }} d="M104 44l1.4 3.2 3.2 1.4-3.2 1.4L104 54l-1.4-3.6-3.2-1.4 3.2-1.4Z" />
           </g>
         </g>
       </svg>
@@ -994,12 +1121,8 @@ export function DatCuoiTrang() {
         fill="none"
         focusable="false"
       >
-        <g className="kg-ngay kg-may-troi">
-          <May x={30} y={16} s={0.7} />
-          <May x={64} y={30} s={0.5} />
-        </g>
         <g className="kg-dem" fill="var(--color-decor-troi)" opacity="0.85">
-          <path d="M30 14l2 4.6 4.6 2-4.6 2L30 27l-2-4.4-4.6-2 4.6-2Z" />
+          <path className="kg-lap-lanh" style={{ animationDelay: '-1.3s' }} d="M30 14l2 4.6 4.6 2-4.6 2L30 27l-2-4.4-4.6-2 4.6-2Z" />
         </g>
       </svg>
 

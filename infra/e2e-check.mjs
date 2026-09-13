@@ -882,6 +882,121 @@ if (FIXTURE) {
   }
 }
 
+/*
+ * --- Trời: mây bay qua, mặt trời toả nắng, trăng toả sáng ---
+ *
+ * ĐO VỊ TRÍ THẬT theo thời gian, không đo tên class hay tên animation. Mấy đám mây cũ
+ * CÓ hoạt ảnh đàng hoàng — `animation-name` đúng, đang chạy — mà đo ra chỉ nhích ±6px
+ * trong 34 giây và màu gần như trùng nền, tức một phép kiểm đọc tên hoạt ảnh sẽ xanh
+ * trước một bầu trời trống. Nên ở đây hỏi thẳng: mây có NẰM TRONG khung nhìn không, và
+ * sau một khoảng nó có ĐI SANG TRÁI không.
+ */
+{
+  const viTriMay = (p) =>
+    p.$$eval('.kg-may-bay', (els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { x: r.x, trong: r.right > 0 && r.left < innerWidth && r.width > 0 };
+      })
+    );
+  const moTroi = async (w, colorScheme, reducedMotion = 'no-preference') => {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, colorScheme, reducedMotion });
+    const p = await ctx.newPage();
+    await p.goto(APP, { waitUntil: 'networkidle' });
+    return { ctx, p };
+  };
+
+  for (const w of [1440, 390]) {
+    const { ctx, p } = await moTroi(w, 'light');
+    const a = await viTriMay(p);
+    await p.waitForTimeout(1500);
+    const c = await viTriMay(p);
+    /* "ít nhất 3 trong 5", không phải "cả 5": độ trễ âm rải mây khắp một vòng bay dài
+       hơn bề ngang trời, nên có lúc một hai đám đang khuất ngoài mép — đúng thiết kế. */
+    check(
+      `Trời ${w}px: mây đang nằm TRONG khung nhìn, không khuất hết ngoài mép`,
+      a.filter((m) => m.trong).length >= 3,
+      `${a.filter((m) => m.trong).length}/${a.length} đám`
+    );
+    check(
+      `Trời ${w}px: mọi đám mây đều bay SANG TRÁI`,
+      a.length === 5 && a.every((m, i) => c[i].x < m.x - 1),
+      a.map((m, i) => `${Math.round(c[i].x - m.x)}px`).join(', ')
+    );
+    if (w === 1440) {
+      /* Tia nắng: đo ma trận transform ở hai thời điểm. Tám tia đối xứng, nên nhìn một
+         ảnh chụp không phân biệt được "đang xoay" với "đứng yên ở góc 45°". */
+      const t1 = await p.$eval('.kg-tia-nang', (e) => getComputedStyle(e).transform);
+      await p.waitForTimeout(800);
+      const t2 = await p.$eval('.kg-tia-nang', (e) => getComputedStyle(e).transform);
+      check('Mặt trời: vòng tia nắng đang xoay', t1 !== t2 && t1 !== 'none', `${t1} → ${t2}`);
+    }
+    await ctx.close();
+  }
+
+  {
+    const { ctx, p } = await moTroi(1440, 'dark');
+    /* Ban đêm cũng có mây bay — đo y như ban ngày: trong khung nhìn VÀ đi sang trái. Chỉ
+       hỏi "khối mây có hiện không" thì xanh cả khi mây đêm đứng im một chỗ. */
+    const dem1 = await viTriMay(p);
+    await p.waitForTimeout(1500);
+    const dem2 = await viTriMay(p);
+    check(
+      'Ban đêm mây VẪN bay: nằm trong khung nhìn và đi sang trái',
+      dem1.filter((m) => m.trong).length >= 3 && dem1.every((m, i) => dem2[i].x < m.x - 1),
+      `${dem1.filter((m) => m.trong).length}/5 đám, ${dem1.map((m, i) => `${Math.round(dem2[i].x - m.x)}px`).join(', ')}`
+    );
+    const q1 = await p.$eval('[data-kg-decor=le] .kg-quang-trang', (e) => getComputedStyle(e).opacity);
+    await p.waitForTimeout(1200);
+    const q2 = await p.$eval('[data-kg-decor=le] .kg-quang-trang', (e) => getComputedStyle(e).opacity);
+    check('Mặt trăng: quầng sáng đang thở', q1 !== q2, `opacity ${q1} → ${q2}`);
+    /*
+     * Id của bộ lọc làm mờ quầng phải DUY NHẤT trên trang. `url(#...)` tìm theo id trên
+     * cả tài liệu; hai bộ lọc trùng id thì quầng thứ hai dùng nhầm bộ lọc của cái thứ
+     * nhất, và nếu cái thứ nhất nằm trong khối đang `display: none` thì quầng biến mất
+     * không một lỗi nào.
+     */
+    const ids = await p.$$eval('filter[id]', (els) => els.map((e) => e.id));
+    check('Id bộ lọc quầng trăng không trùng nhau', ids.length >= 2 && new Set(ids).size === ids.length, ids.join(', '));
+    await ctx.close();
+  }
+
+  {
+    /*
+     * ÍT CHUYỂN ĐỘNG: mây ĐỨNG YÊN nhưng VẪN CÒN TRÊN TRỜI.
+     *
+     * Vế thứ hai là vế dễ hỏng: mỗi đám đặt ở ngoài mép phải và chỉ nhờ hoạt ảnh mới
+     * vào được trời, nên cách tắt "tự nhiên" là `animation: none` sẽ để cả năm đám nằm
+     * khuất ngoài màn hình. Quầng trăng thì phải còn là một quầng dịu, không phải vệt
+     * sáng gắt ở `opacity` mặc định 1.
+     */
+    const { ctx, p } = await moTroi(1440, 'light', 'reduce');
+    const a = await viTriMay(p);
+    await p.waitForTimeout(1500);
+    const c = await viTriMay(p);
+    check(
+      'Ít chuyển động: mây vẫn nằm trên trời',
+      a.filter((m) => m.trong).length >= 3,
+      `${a.filter((m) => m.trong).length}/${a.length} đám`
+    );
+    check(
+      '… nhưng đứng yên',
+      a.every((m, i) => Math.abs(c[i].x - m.x) < 1),
+      a.map((m, i) => `${Math.round(c[i].x - m.x)}px`).join(', ')
+    );
+    check(
+      '… tia nắng không xoay',
+      (await p.$eval('.kg-tia-nang', (e) => getComputedStyle(e).animationName)) === 'none'
+    );
+    const q = await p.evaluate(() => {
+      document.documentElement.dataset.theme = 'dark';
+      return Number(getComputedStyle(document.querySelector('[data-kg-decor=le] .kg-quang-trang')).opacity);
+    });
+    check('… và quầng trăng là quầng dịu đứng yên, không phải vệt sáng gắt', q > 0.3 && q < 0.8, `opacity ${q}`);
+    await ctx.close();
+  }
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
