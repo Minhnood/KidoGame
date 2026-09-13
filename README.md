@@ -81,7 +81,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql — xem ghi chú
 node infra/contrast-check.mjs                                      # 160 phép đo màu
-node infra/a11y-check.mjs                                          # 26
+node infra/a11y-check.mjs                                          # 27
 ```
 
 > **`e2e-discovery` cần DB dev có hơn 24 game published.** Phần phân trang của nó
@@ -173,7 +173,7 @@ mình từ `402b009` — trước đó nó mượn game trong DB dev và hỏng 
 ### Bàn phím và trình đọc màn hình
 
 ```bash
-node infra/a11y-check.mjs          # 26 kiểm tra, cần dev server
+node infra/a11y-check.mjs          # 27 kiểm tra, cần dev server
 ```
 
 Tách riêng đúng như `contrast-check.mjs`, vì đây là một chiều quan tâm khác:

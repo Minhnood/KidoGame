@@ -49,22 +49,27 @@ export default async function LoginParentPage({
         Ba đường đi khác nhau, nên xuống dòng chứ không nối bằng dấu "·".
         Nối lại thành một dòng dài thì mắt phải đọc hết cả câu mới biết có ba lựa
         chọn, mà người đang mắc ở màn hình đăng nhập thường chỉ liếc.
+
+        Vùng bấm mỗi link cao 48px (`kg-link-bam`) trên dòng 24px, tức tràn sang dòng
+        kề. Không chồng nhau chỉ vì ba link đứng ở ba khoảng ngang khác nhau (đo ở 390px:
+        20–141, 158–219, 237–298). Đổi chữ để hai link thẳng cột thì phải giãn dòng —
+        `a11y-check` đỏ ở "không chồng nhau" nếu quên.
       */}
       <div className="mb-12 space-y-1 text-ink-soft">
         <p>
-          <Link href="/quen-mat-khau" className="font-bold text-accent-text underline">
+          <Link href="/quen-mat-khau" className="kg-link-bam font-bold text-accent-text underline">
             Quên mật khẩu?
           </Link>
         </p>
         <p>
           Bé đăng nhập để đăng game?{' '}
-          <Link href="/be-dang-nhap" className="font-bold text-accent-text underline">
+          <Link href="/be-dang-nhap" className="kg-link-bam font-bold text-accent-text underline">
             Vào đây
           </Link>
         </p>
         <p>
           Chưa có tài khoản?{' '}
-          <Link href="/dang-ky" className="font-bold text-accent-text underline">
+          <Link href="/dang-ky" className="kg-link-bam font-bold text-accent-text underline">
             Đăng ký
           </Link>
         </p>

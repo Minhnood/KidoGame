@@ -401,6 +401,61 @@ console.log('\n── Thanh điều hướng nằm trọn trong màn hình ─�
       hong.length ? hong.join(' | ') : 'sạch ở 4 bề rộng'
     );
   }
+  /*
+   * CHỖ BẤM TRONG NỘI DUNG cao ≥44px, và không cái nào chồng lên cái nào.
+   *
+   * Đo ngày 13/9 ở 390px: "Quên mật khẩu?", "Vào đây", "Đăng ký", "ở đây", "Đăng nhập"
+   * và tên game trên trang bố mẹ cao 22px — mọi nút trên site 48px, riêng mấy lối rẽ
+   * của trang đăng nhập thì bằng dòng chữ. Vế "không chồng" canh cách sửa: nới vùng
+   * bấm bằng đệm âm mà các dòng vẫn sát nhau thì hai link thẳng cột đè lên nhau.
+   *
+   * Checkbox/radio đo bằng NHÃN bọc nó — bấm vào chữ là tích được. Trang điều khoản
+   * KHÔNG nằm trong danh sách: link trong đoạn văn dày chữ là chữ để đọc, nới vùng bấm
+   * ở đó thì chồng sang dòng bên cạnh (lý do ở `kg-link-bam` trong globals.css).
+   */
+  const doBam = (page) =>
+    page.evaluate(() => {
+      const hop = [...document.querySelectorAll('main a[href], main button, main input[type=checkbox], main input[type=radio]')]
+        .map((el) => {
+          const dich = el.matches('input') ? (el.closest('label') ?? el) : el;
+          return { ten: (dich.innerText || el.name || '').trim().slice(0, 20), r: dich.getBoundingClientRect() };
+        })
+        .filter(({ r }) => r.width > 1 && r.height > 1);
+      const thap = hop.filter(({ r }) => r.height < 44).map(({ ten, r }) => `"${ten}" ${Math.round(r.height)}px`);
+      const chong = [];
+      for (let i = 0; i < hop.length; i++)
+        for (let j = i + 1; j < hop.length; j++) {
+          const a = hop[i].r, b = hop[j].r;
+          const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+          const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          /* Nhãn bọc chính cái ô của nó thì chồng là đương nhiên — bỏ qua cặp cha–con. */
+          if (x > 1 && y > 1 && hop[i].ten !== hop[j].ten) chong.push(`"${hop[i].ten}"×"${hop[j].ten}" ${Math.round(y)}px`);
+        }
+      return { thap, chong };
+    });
+  const loiBam = [];
+  for (const [ctxGoc, duong] of [
+    [guest, ['/dang-nhap', '/be-dang-nhap', '/dang-ky', '/quen-mat-khau']],
+    [parent, ['/phu-huynh']],
+  ]) {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await ctx.addCookies(await ctxGoc.cookies());
+    const page = await ctx.newPage();
+    for (const d of duong) {
+      await page.goto(APP + d, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('main');
+      const { thap, chong } = await doBam(page);
+      if (thap.length) loiBam.push(`${d} thấp: ${thap.join(', ')}`);
+      if (chong.length) loiBam.push(`${d} chồng: ${chong.slice(0, 3).join(', ')}`);
+    }
+    await ctx.close();
+  }
+  check(
+    '390px: chỗ bấm trong nội dung trang đăng nhập/đăng ký/bố mẹ cao ≥44px và không chồng nhau',
+    loiBam.length === 0,
+    loiBam.length ? loiBam.join(' | ') : '5 trang sạch'
+  );
+
   await parent.close();
 }
 

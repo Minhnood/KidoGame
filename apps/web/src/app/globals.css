@@ -1511,3 +1511,23 @@ body {
     display: none;
   }
 }
+
+/*
+ * Link chữ nằm lẻ trong một câu ("Chưa có tài khoản? Đăng ký"): vùng bấm cao 46px mà
+ * dòng chữ không cao thêm pixel nào.
+ *
+ * Đo ở 390px trước khi dùng: "Quên mật khẩu?", "Vào đây", "Đăng ký", "ở đây", tên game
+ * trên trang bố mẹ — tất cả cao 22px, bằng đúng dòng chữ. Mọi nút trên site cao 48px vì
+ * ngón tay trẻ kém chính xác, riêng mấy lối rẽ quan trọng nhất của trang đăng nhập thì
+ * không. Đệm 12px trên dưới rồi bù âm đúng 12px: hộp lề của nó vẫn bằng dòng chữ nên
+ * dòng không giãn, còn phần bấm được là cả hộp đệm.
+ *
+ * `inline-block` là cái giá: link dài không gãy giữa chừng mà xuống dòng cả cụm. Chỉ
+ * dùng cho link ngắn. KHÔNG dùng trong đoạn văn nhiều dòng liền nhau (điều khoản): hai
+ * vùng bấm 46px ở hai dòng cách nhau 24px thì chồng lên nhau, bấm dòng này trúng dòng kia.
+ */
+@utility kg-link-bam {
+  display: inline-block;
+  padding-block: 0.75rem;
+  margin-block: -0.75rem;
+}

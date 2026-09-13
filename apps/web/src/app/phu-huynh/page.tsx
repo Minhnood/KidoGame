@@ -296,7 +296,7 @@ export default async function ParentDashboard({
                           }`}
                         />
                         <span className="min-w-0">
-                        <Link href={`/game/${game.id}`} className="font-semibold">
+                        <Link href={`/game/${game.id}`} className="kg-link-bam font-semibold">
                           {game.title}
                         </Link>
                         {/* Dòng riêng dưới `sm`: nối đuôi tên game thì "5 lượt" ở cuối dòng
