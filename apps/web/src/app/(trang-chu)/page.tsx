@@ -11,7 +11,7 @@ import { EmptyState, PageTitle } from '@/components/page';
 import { Pager } from '@/components/pager';
 import { demPhanUngNhieuGame } from '@/lib/phan-ung';
 import { gameMoiCuaBanBe } from '@/lib/theo-doi';
-import { HANG_LOC } from './hang-loc';
+import { HANG_LOC, LE_DUOI_LOAI, LE_DUOI_TUOI } from './hang-loc';
 
 export const dynamic = 'force-dynamic';
 
@@ -317,7 +317,7 @@ export default async function HomePage({
         hàng viên thuốc, ~270px, đứng giữa ô tìm và game đầu tiên. Cuộn ngang giữ đủ
         mọi lựa chọn trong đúng hai hàng. Lớp và lý do từng lớp: `hang-loc.ts`.
       */}
-      <div className={`mb-2 ${HANG_LOC}`} data-testid="tag-filters">
+      <div className={`${LE_DUOI_LOAI} ${HANG_LOC}`} data-testid="tag-filters">
         <Link href={linkWith({ tag: '' })} className={chip(!tagSlug)}>
           Tất cả
         </Link>
@@ -333,7 +333,7 @@ export default async function HomePage({
         ))}
       </div>
 
-      <div className={`mb-5 items-center ${HANG_LOC}`} data-testid="age-filters">
+      <div className={`${LE_DUOI_TUOI} items-center ${HANG_LOC}`} data-testid="age-filters">
         <span className="shrink-0 whitespace-nowrap text-sm text-ink-soft">Bé mấy tuổi làm?</span>
         <Link href={linkWith({ tuoi: '' })} className={chip(!bracket)}>
           Tuổi nào cũng được

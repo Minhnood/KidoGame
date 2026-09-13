@@ -1,5 +1,5 @@
 import { DauTrangCho, KhungCho, LuoiGameCho, O, Vien } from '@/components/dang-tai';
-import { HANG_LOC } from './hang-loc';
+import { HANG_LOC, LE_DUOI_LOAI, LE_DUOI_TUOI } from './hang-loc';
 
 /**
  * Khung chờ của trang chủ.
@@ -95,12 +95,12 @@ export default function DangTaiTrangChu() {
       {/* Hai hàng bộ lọc: theo loại game, rồi theo tuổi. Bề rộng các viên thuốc lệch
           nhau vì nhãn thật dài ngắn khác nhau — năm viên bằng chằn chặn đọc ra như
           một thanh điều khiển, không như một hàng nhãn chữ. */}
-      <div className={`mb-2 ${HANG_LOC}`} aria-hidden="true">
+      <div className={`${LE_DUOI_LOAI} ${HANG_LOC}`} aria-hidden="true">
         {['w-20', 'w-24', 'w-28', 'w-20', 'w-32', 'w-24'].map((w, i) => (
           <Vien key={i} className={`shrink-0 ${w}`} />
         ))}
       </div>
-      <div className={`mb-5 items-center ${HANG_LOC}`} aria-hidden="true">
+      <div className={`${LE_DUOI_TUOI} items-center ${HANG_LOC}`} aria-hidden="true">
         <O className="h-3.5 w-32 shrink-0" />
         {['w-40', 'w-24', 'w-24', 'w-24'].map((w, i) => (
           <Vien key={i} className={`shrink-0 ${w}`} />

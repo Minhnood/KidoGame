@@ -46,6 +46,27 @@ if (!FIXTURE) {
 }
 
 const browser = await chromium.launch({ channel: 'chrome' });
+
+/*
+ * Khoảng TRỐNG NHÌN THẤY giữa ô tìm, hai hàng viên thuốc và dòng đếm — đo giữa các
+ * viên thuốc, không đo lề CSS. Dưới `sm` hàng lọc có đệm trong để giữ vòng focus, nên
+ * lề CSS ở hai cỡ khác nhau mà khoảng trống phải như nhau.
+ *
+ * Có vì bản đầu của hàng cuộn ngang làm lề dưới về 0 từ 640px (`sm:my-0` đè `mb-5`):
+ * hai hàng lọc và dòng đếm dính nhau. Mọi phép kiểm khác vẫn xanh, kể cả phép so khung
+ * chờ với trang thật — khung chờ dùng chung lớp nên sai y hệt. Fen bắt bằng mắt.
+ */
+const khoangLoc = (p) =>
+  p.evaluate(() => {
+    const q = (s) => document.querySelector(s);
+    const vien = (id) => q(`[data-testid=${id}] a`).getBoundingClientRect();
+    const tim = q('[data-testid=search-form]').getBoundingClientRect();
+    const loai = vien('tag-filters');
+    const tuoi = vien('age-filters');
+    const dem = q('[data-testid=result-count]').getBoundingClientRect();
+    return [loai.top - tim.bottom, tuoi.top - loai.bottom, dem.top - tuoi.bottom].map(Math.round);
+  });
+const dungKhoang = (k) => Math.abs(k[0] - 16) <= 1 && Math.abs(k[1] - 8) <= 1 && Math.abs(k[2] - 20) <= 1;
 const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1000 } });
 
@@ -168,6 +189,10 @@ for (const [w, h] of [
   /* Khung cuộn cắt mọi thứ tràn ra ngoài nó, kể cả vòng focus 3px + lệch 2px. */
   check(`${w}px: hàng lọc đủ đệm cho vòng focus (≥5px)`, m.loai.demTren >= 5 && m.tuoi.demTren >= 5, `${m.loai.demTren}px`);
   check(`${w}px: trang không tràn ngang`, m.tran === 0, `${m.tran}px`);
+  {
+    const k = await khoangLoc(p);
+    check(`${w}px: ô tìm → hàng loại → hàng tuổi → dòng đếm cách 16 / 8 / 20px`, dungKhoang(k), k.join(' / '));
+  }
   await ctx.close();
 }
 
@@ -183,6 +208,8 @@ for (const [w, h] of [
     })
   );
   check('1300px: hai hàng lọc bày hết, không giấu viên nào sau mép', cuon.every((d) => d === 0), cuon.join(', '));
+  const k = await khoangLoc(p);
+  check('1300px: ô tìm → hàng loại → hàng tuổi → dòng đếm cách 16 / 8 / 20px', dungKhoang(k), k.join(' / '));
   await p.close();
 }
 
