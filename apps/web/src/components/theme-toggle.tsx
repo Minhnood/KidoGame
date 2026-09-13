@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 /**
  * Nút đổi giao diện sáng / tối.
@@ -52,6 +53,13 @@ function ap(chon: Chon): void {
   }
 }
 
+/** Lựa chọn này, trên máy này, ra màu TỐI hay không. "Theo máy" thì hỏi máy. */
+function raToi(chon: Chon): boolean {
+  if (chon === 'toi') return true;
+  if (chon === 'sang') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 export function ThemeToggle() {
   /*
    * Khởi tạo là null (theo máy) chứ không đọc localStorage ngay trong useState:
@@ -63,6 +71,15 @@ export function ThemeToggle() {
    * trong layout gốc đặt xong trước cả khung hình đầu tiên.
    */
   const [chon, setChon] = useState<Chon>(null);
+  /*
+   * Icon chỉ xoay khi NGƯỜI DÙNG BẤM, không phải mỗi lần nhãn đổi.
+   *
+   * Nhãn đổi cả lúc trang vừa tải: `useEffect` bên dưới đọc lựa chọn đã lưu rồi gán
+   * vào, tức từ "Theo máy" sang "Tối" mà không ai bấm gì. Xoay theo nhãn thì người đã
+   * chọn tối sẽ thấy cái mặt trăng quay một vòng MỖI LẦN MỞ TRANG — một cử động không
+   * ai gây ra, ngay trên thanh điều hướng.
+   */
+  const [vuaBam, setVuaBam] = useState(false);
 
   useEffect(() => setChon(doc()), []);
 
@@ -71,8 +88,43 @@ export function ThemeToggle() {
 
   function bam() {
     const tiep = VONG[(VONG.indexOf(chon) + 1) % VONG.length];
-    setChon(tiep);
-    ap(tiep);
+    setVuaBam(true);
+
+    /*
+     * MỜ DẦN chứ không nháy, nhưng CHỈ khi màu thật sự đổi.
+     *
+     * Vòng của nút là Theo máy → Sáng → Tối. Trên một máy đang sáng, bước "Theo máy →
+     * Sáng" không đổi một pixel màu nào; cho nó mờ dần là bắt cả trang diễn một cú
+     * chuyển cảnh từ một màn hình sang chính nó, đọc ra như trang vừa tải lại.
+     *
+     * Dùng View Transitions chứ không `transition` màu trên từng phần tử: đổi giao
+     * diện không chỉ đổi màu mà còn đổi CẢNH — mặt trời, mây, chim thành trăng và
+     * sao — mà mấy thứ đó hiện/ẩn chứ không chuyển màu, nên chuyển màu từng phần tử
+     * sẽ vẫn để cảnh nháy phựt ở giữa một trang đang mờ dần êm. View Transitions chụp
+     * cả trang cũ và mờ nó vào trang mới, cảnh đi theo cùng một nhịp.
+     *
+     * Cái giá: trong 300ms đó khung game (iframe) là ảnh chụp, tức game đang chạy đứng
+     * hình đúng ba phần mười giây. Chấp nhận được với một thao tác người ta chủ động
+     * bấm, và chỉ xảy ra khi màu đổi.
+     *
+     * Ba trường hợp đổi TỨC THÌ như trước: màu không đổi, người dùng xin ít chuyển
+     * động, và trình duyệt không có View Transitions. Không trường hợp nào hỏng gì.
+     */
+    const doiMau = raToi(chon) !== raToi(tiep);
+    const itChuyenDong = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!doiMau || itChuyenDong || !('startViewTransition' in document)) {
+      setChon(tiep);
+      ap(tiep);
+      return;
+    }
+
+    document.startViewTransition(() => {
+      /* `flushSync`: trình duyệt chụp trang MỚI ngay khi hàm này trả về. Để React tự
+         cập nhật như thường thì nhãn trên nút đổi SAU lúc chụp, và giữa cú mờ dần cái
+         nút vẫn còn ghi "Sáng" trên một trang đã tối hẳn. */
+      flushSync(() => setChon(tiep));
+      ap(tiep);
+    });
   }
 
   return (
@@ -92,8 +144,24 @@ export function ThemeToggle() {
          kéo cả module sang bundle của client. */
       className="min-h-touch inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 font-semibold text-chrome-ink/80 transition-colors hover:bg-chrome-lift hover:text-chrome-ink sm:px-3"
     >
-      <span aria-hidden="true">{nhan.icon}</span>
-      <span className="hidden text-sm sm:inline">{nhan.chu}</span>
+      {/* `key` theo lựa chọn để span được GẮN LẠI mỗi lần đổi — trình duyệt chỉ chạy
+          animation khi lớp được gắn vào, không phải khi nó đang có sẵn. */}
+      <span key={key} aria-hidden="true" className={vuaBam ? 'kg-doi-icon' : undefined}>
+        {nhan.icon}
+      </span>
+      {/*
+        BỀ RỘNG GIỮ CHỖ theo nhãn dài nhất ("Theo máy"), để nút không co giãn theo chữ.
+
+        Đo được trước khi sửa: nút rộng 113 → 83 → 70px qua ba nhãn, nên "Bé đăng nhập"
+        và "Bố mẹ" bên trái nhảy 30px rồi 13px mỗi lần bấm. Hồi đổi giao diện còn nháy
+        tức thì thì cú nhảy lẫn vào cú nháy; có mờ dần thì nó lộ ra thành BÓNG ĐÔI —
+        trang cũ và trang mới chồng lên nhau với hai nút ở hai chỗ lệch nhau, trông
+        như thanh điều hướng bị vỡ.
+
+        `text-left`: chữ ngắn nằm sát icon, phần giữ chỗ dồn về bên phải. Căn giữa thì
+        khoảng cách giữa icon và chữ đổi theo nhãn, và mắt lại thấy nó xê dịch.
+      */}
+      <span className="hidden text-left text-sm sm:inline-block sm:min-w-16">{nhan.chu}</span>
     </button>
   );
 }

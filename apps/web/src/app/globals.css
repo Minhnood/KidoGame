@@ -1096,6 +1096,59 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+ * ĐỔI GIAO DIỆN SÁNG / TỐI — mờ dần, không nháy
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Trang cũ mờ vào trang mới trong 300ms. Cơ chế nằm ở `theme-toggle.tsx`
+ * (`startViewTransition`); ở đây chỉ chỉnh NHỊP.
+ *
+ * 300ms chứ không phải mặc định 250ms, và không dài hơn. Ngắn hơn thì trên màn hình
+ * lớn nó vẫn đọc ra là một cú nháy — cả trang đổi từ kem sang tím đêm là một thay
+ * đổi độ sáng rất lớn, mắt cần thêm một chút để thấy nó "chuyển". Dài hơn thì bắt đầu
+ * thấy trang chờ mình: người ta bấm một cái nút trên thanh điều hướng, không phải xem
+ * một đoạn phim.
+ *
+ * `ease-out` chứ không `ease-in-out`: phản hồi phải bắt đầu NGAY lúc bấm rồi chậm lại ở
+ * cuối. Chậm ở đầu là 100ms đầu tiên trông như chưa có gì xảy ra.
+ *
+ * Không cần khối ít-chuyển-động riêng cho phần này: `theme-toggle.tsx` không gọi
+ * `startViewTransition` khi người dùng xin ít chuyển động, nên không có gì để tắt.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 300ms;
+  animation-timing-function: ease-out;
+}
+
+/*
+ * Icon trên nút xoay nửa vòng và lớn dần lên chỗ của nó: ☀️ đi, 🌙 tới.
+ *
+ * Nó là thứ duy nhất trên trang THẬT SỰ chuyển động trong cú đổi này — phần còn lại
+ * chỉ mờ. Nên nó phải trả lời được câu "cái gì vừa xảy ra" ngay tại chỗ ngón tay vừa
+ * chạm: cả trang đổi màu là hệ quả, còn icon quay là nguyên nhân.
+ *
+ * `inline-block` là bắt buộc: `transform` không có tác dụng trên phần tử inline, và
+ * thiếu nó thì animation vẫn "chạy" (DevTools vẫn báo) mà trên màn hình không nhúc
+ * nhích một pixel.
+ */
+.kg-doi-icon {
+  display: inline-block;
+  animation: kg-doi-icon 320ms cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+@keyframes kg-doi-icon {
+  from {
+    opacity: 0;
+    transform: rotate(-150deg) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
  * ĐANG TẢI — khung chờ lúc chuyển trang, và vòng xoay trên thẻ vừa bấm
  * ═══════════════════════════════════════════════════════════════════════ */
 
@@ -1207,7 +1260,9 @@ body {
   .kg-la-roi,
   /* Cú nảy lúc thả icon: bỏ hẳn. Màu nền và viền vẫn đổi, nên cú bấm vẫn để lại
      dấu vết — chỉ là dấu vết đứng yên. */
-  .kg-icon-na {
+  .kg-icon-na,
+  /* Icon trên nút đổi giao diện: đổi thẳng sang mặt trăng, không xoay. */
+  .kg-doi-icon {
     animation: none !important;
   }
 

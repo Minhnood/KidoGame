@@ -570,8 +570,28 @@ if (FIXTURE) {
       };
     });
 
-  const mo = async (colorScheme) => {
-    const ctx = await browser.newContext({ colorScheme, viewport: { width: 1100, height: 900 } });
+  const mo = async (colorScheme, reducedMotion = 'no-preference') => {
+    const ctx = await browser.newContext({
+      colorScheme,
+      reducedMotion,
+      viewport: { width: 1100, height: 900 },
+    });
+    /*
+     * Đếm số lần trang GỌI mờ dần. Bọc hàm thật chứ không thay: nó vẫn chạy như cũ,
+     * chỉ để lại một con số. Đo lời gọi thay vì chụp ảnh giữa cú mờ, vì 300ms là quá
+     * ngắn để chụp đúng lúc một cách đáng tin — và điều cần canh là QUYẾT ĐỊNH có mờ
+     * hay không, chứ trình duyệt vẽ cú mờ ra sao thì không phải việc của trang.
+     */
+    await ctx.addInitScript(() => {
+      window.__kgMoDan = 0;
+      const that = document.startViewTransition?.bind(document);
+      if (that) {
+        document.startViewTransition = (cb) => {
+          window.__kgMoDan += 1;
+          return that(cb);
+        };
+      }
+    });
     const p = await ctx.newPage();
     /*
      * Lệch hydration hiện ra ở console.error, KHÔNG phải `pageerror`. Đáng canh
@@ -613,13 +633,64 @@ if (FIXTURE) {
 
   // Nút đổi giao diện: ba trạng thái, và lựa chọn của người dùng thắng cài đặt máy.
   const nut = toi.p.locator('[data-testid=theme-toggle]');
+  const soMoDan = () => toi.p.evaluate(() => window.__kgMoDan);
+
+  /* Icon KHÔNG xoay lúc trang vừa mở. Nhãn có đổi khi `useEffect` đọc lựa chọn đã
+     lưu, nên nếu cú xoay đi theo nhãn thì người đã chọn tối thấy mặt trăng quay một
+     vòng mỗi lần mở trang — một cử động không ai gây ra. */
+  check(
+    'Mở trang: icon đổi giao diện đứng yên, không tự xoay',
+    (await nut.locator('.kg-doi-icon').count()) === 0
+  );
+
   const vong = [];
+  const dem = [];
+  const rong = [];
   for (let i = 0; i < 3; i++) {
     await nut.click();
     await toi.p.waitForTimeout(200);
     vong.push(await nut.getAttribute('data-theme-choice'));
+    dem.push(await soMoDan());
+    rong.push(Math.round((await nut.boundingBox()).width));
   }
   check('Nút đổi giao diện xoay đủ ba trạng thái rồi về chỗ cũ', vong.join('>') === 'sang>toi>may', vong.join(' > '));
+
+  /*
+   * MỜ DẦN ĐÚNG LÚC — và KHÔNG mờ khi màu không đổi.
+   *
+   * Máy của context này đang TỐI. Ba cú bấm: Theo máy(tối) → Sáng đổi màu, Sáng → Tối
+   * đổi màu, Tối → Theo máy(tối) KHÔNG đổi một pixel nào. Vế thứ ba là vế đáng giá:
+   * mờ dần một trang sang chính nó đọc ra như trang vừa tải lại, và một phép kiểm chỉ
+   * hỏi "có mờ dần không" sẽ xanh cả khi mọi cú bấm đều mờ.
+   */
+  check(
+    'Đổi sang màu khác thì trang MỜ DẦN, không nháy',
+    dem[0] === 1 && dem[1] === 2,
+    `số lần mờ dần sau từng cú bấm: ${dem.join(', ')}`
+  );
+  check(
+    '… nhưng Tối → Theo máy trên một máy đang tối thì KHÔNG mờ (màu không đổi)',
+    dem[2] === 2,
+    `${dem[1]} → ${dem[2]}`
+  );
+  /*
+   * Nút KHÔNG co giãn theo nhãn. Trước khi giữ chỗ, nó rộng 113 → 83 → 70px qua ba
+   * nhãn, và "Bé đăng nhập" bên trái nhảy theo. Có mờ dần thì cú nhảy ấy thành bóng
+   * đôi: trang cũ và trang mới chồng lên nhau với hai nút ở hai chỗ lệch nhau. Đo ở
+   * màn 1100px — dưới `sm` nhãn chữ bị ẩn nên không có gì để lệch.
+   */
+  check(
+    'Nút đổi giao diện giữ nguyên bề rộng qua cả ba nhãn (thanh điều hướng không nhảy)',
+    new Set(rong).size === 1,
+    rong.map((r) => `${r}px`).join(' → ')
+  );
+  check(
+    'Bấm thì icon trên nút xoay sang biểu tượng mới',
+    (await nut
+      .locator('span[aria-hidden]')
+      .first()
+      .evaluate((e) => getComputedStyle(e).animationName)) === 'kg-doi-icon'
+  );
 
   await nut.click(); // -> sáng, trong khi máy đang ở chế độ tối
   await toi.p.waitForTimeout(200);
@@ -643,6 +714,38 @@ if (FIXTURE) {
     sang.loi.length === 0 && toi.loi.length === 0,
     [...sang.loi, ...toi.loi].join(' | ') || 'sạch'
   );
+
+  /*
+   * Người xin ÍT CHUYỂN ĐỘNG: đổi tức thì, không mờ dần, icon không xoay — nhưng màu
+   * VẪN PHẢI ĐỔI. Vế cuối là thứ dễ làm hỏng nhất khi thêm nhánh tắt hoạt ảnh: một
+   * `return` đặt sai chỗ là tắt luôn cả việc đổi giao diện, với đúng người ấy.
+   */
+  {
+    const it = await mo('light', 'reduce');
+    const nutIt = it.p.locator('[data-testid=theme-toggle]');
+    await nutIt.click(); // Theo máy(sáng) → Sáng: không đổi màu
+    await nutIt.click(); // Sáng → Tối: đổi màu
+    await it.p.waitForTimeout(200);
+    const dIt = await doc(it.p);
+    check(
+      'Ít chuyển động: KHÔNG mờ dần',
+      (await it.p.evaluate(() => window.__kgMoDan)) === 0,
+      `${await it.p.evaluate(() => window.__kgMoDan)} lần`
+    );
+    check(
+      '… nhưng giao diện VẪN đổi sang tối',
+      dIt.theme === 'dark' && dIt.bgSang < 0.06,
+      `${dIt.theme} / ${dIt.bg}`
+    );
+    check(
+      '… và icon đổi thẳng, không xoay',
+      (await nutIt
+        .locator('span[aria-hidden]')
+        .first()
+        .evaluate((e) => getComputedStyle(e).animationName)) === 'none'
+    );
+    await it.ctx.close();
+  }
 
   await sang.ctx.close();
   await toi.ctx.close();
