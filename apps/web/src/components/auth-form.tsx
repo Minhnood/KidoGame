@@ -72,6 +72,7 @@ export function AuthForm({
   busyLabel,
   children,
   successMessage,
+  rong = 'vua',
 }: {
   action: (prev: FormState, form: FormData) => Promise<FormState>;
   submitLabel: string;
@@ -79,6 +80,17 @@ export function AuthForm({
   children: ReactNode;
   /** Hiện khi action thành công mà không điều hướng đi đâu. */
   successMessage?: string;
+  /**
+   * `vua` (mặc định): cột 500px — cho trang CHỈ có một cái form, như đăng nhập, đăng
+   * ký. Ở đó form là cả trang, và một form trải hết 1024px thì mỗi ô nhập dài bằng cả
+   * câu văn, mắt phải chạy ngang một quãng để tìm nút.
+   *
+   * `day`: trải hết bề ngang, các ô xếp HAI CỘT từ `sm`. Cho form nằm DƯỚI những khối
+   * khác đã trải hết bề ngang — hiện là trang bố mẹ. Đo trước khi có tuỳ chọn này: form
+   * rộng 500px dạt trái dưới hai khối rộng 984px, bên phải trống hơn 480px, và cả trang
+   * đọc ra là lệch hẳn về một bên.
+   */
+  rong?: 'vua' | 'day';
 }) {
   const [state, formAction, pending] = useActionState(action, null);
 
@@ -121,10 +133,28 @@ export function AuthForm({
       data-testid="auth-form"
       action={formAction}
       onInput={ghiLai}
-      className={`max-w-125 ${THE_FORM}`}
+      className={`${rong === 'day' ? '' : 'max-w-125'} ${THE_FORM}`}
     >
       <GocCo />
-      {children}
+      {rong === 'day' ? (
+        /*
+         * Hai cột, và Ô NHẬP PHẢI THẲNG HÀNG giữa hai cột dù dòng gợi ý dài ngắn khác nhau.
+         *
+         * Grid tự kéo hai ô cùng hàng cao bằng nhau; mỗi `Field` thành cột flex và dòng
+         * gợi ý (`p`) được `grow`, nên phần thừa dồn vào dưới gợi ý và ô nhập luôn nằm
+         * sát đáy ô lưới. Không có mẹo này thì "Tên hiển thị" gợi ý hai dòng, "Tên đăng
+         * nhập" một dòng, và hai ô nhập cạnh nhau lệch nhau một dòng chữ.
+         *
+         * `mt-0` cho mọi `Field`: `Field` tự có `mt-5 first:mt-0` để xếp dọc, mà trong
+         * lưới thì ô thứ hai của hàng đầu KHÔNG phải `first` — nó bị đẩy xuống 20px so
+         * với ô bên cạnh. Khoảng cách dọc giao cho `gap-y`.
+         */
+        <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2 [&>div]:mt-0 [&>div]:flex [&>div]:flex-col [&>div>p]:grow">
+          {children}
+        </div>
+      ) : (
+        children
+      )}
 
       {state && 'error' in state && (
         <Notice tone="error" role="alert">

@@ -142,6 +142,50 @@ const parentCtx = await newSession();
 
   // Mật khẩu quá ngắn phải bị từ chối.
   await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+
+  /*
+   * FORM TẠO BÉ TRẢI HẾT BỀ NGANG, bốn ô xếp hai cột THẲNG HÀNG.
+   *
+   * Nó từng là cột 500px dạt trái nằm dưới hai khối rộng hết cỡ, bên phải trống một
+   * khoảng lớn — fen chụp màn hình và nói giao diện xấu. `AuthForm` dùng chung với mọi
+   * trang đăng nhập, nơi cột 500px là đúng, nên sửa nhầm chỗ là trang bố mẹ dạt lại mà
+   * không gì đỏ.
+   *
+   * Đo ở khung nhìn mặc định của bộ này (từ `sm` trở lên mới có hai cột). So với khối
+   * ghi chú phía trên chứ không so một con số px: bề rộng thật đổi theo khung nhìn.
+   */
+  {
+    const d = await p.evaluate(() => {
+      const r = (el) => el.getBoundingClientRect();
+      const form = r(document.querySelector('[data-testid=auth-form]'));
+      const o = Object.fromEntries(['displayName', 'username', 'password', 'birthYear'].map((id) => [id, r(document.getElementById(id))]));
+      return {
+        formW: Math.round(form.width),
+        /* Bề rộng VÙNG NỘI DUNG của thẻ cha, trừ lề trong. Bản đầu lấy cả hộp (1024px)
+           rồi so với form 984px và đỏ, trong khi form đã trải đúng hết chỗ: thẻ cha là
+           `Wrap` có `px-5`. */
+        cotW: (() => {
+          const cha = document.querySelector('[data-testid=auth-form]').parentElement;
+          const cs = getComputedStyle(cha);
+          return Math.round(cha.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+        })(),
+        hang1: [Math.round(o.displayName.top), Math.round(o.username.top)],
+        hang2: [Math.round(o.password.top), Math.round(o.birthYear.top)],
+        haiCot: o.username.left > o.displayName.right,
+        vw: innerWidth,
+      };
+    });
+    check(
+      'Form tạo bé trải hết bề ngang cột nội dung, không dạt về cột 500px',
+      d.formW >= d.cotW - 2,
+      `form ${d.formW}px / cột ${d.cotW}px, khung nhìn ${d.vw}px`
+    );
+    check(
+      '… và bốn ô xếp hai cột thẳng hàng',
+      d.haiCot && d.hang1[0] === d.hang1[1] && d.hang2[0] === d.hang2[1],
+      `hàng 1 y=${d.hang1.join('/')}, hàng 2 y=${d.hang2.join('/')}`
+    );
+  }
   await p.fill('#displayName', 'Bé Test');
   await p.fill('#username', CHILD_USER);
   await p.fill('#password', '123');

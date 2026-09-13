@@ -771,6 +771,29 @@ body {
   animation: kg-may-bay var(--kg-bay-giay, 110s) linear infinite;
 }
 
+/*
+ * BAN ĐÊM MÂY MỜ HƠN HẲN — cả lớp, không phải từng đám.
+ *
+ * Mây ngày là mảng trắng trên nền sáng: nhẹ tự nhiên. Mây đêm là mảng lam đặc trên nền
+ * gần đen, và ở đúng độ đậm ban ngày nó đọc ra là CỤC ĐÁ, không phải mây — fen chụp màn
+ * hình trang bố mẹ và đám mây là thứ nặng nhất trên cả trang. Mờ đi thì nó thành một làn
+ * sương có hình, vẫn thấy rõ đang trôi.
+ *
+ * Đặt `opacity` trên KHỐI BỌC, vì từng đám đã có `opacity` riêng nội tuyến (độ xa gần);
+ * hai lớp nhân với nhau nên đám xa vẫn mờ hơn đám gần đúng tỉ lệ cũ.
+ *
+ * Viết hai lần, cùng lý do với `.kg-ngay` / `.kg-dem`: chọn tối trên máy sáng, và chọn
+ * theo máy trên máy tối.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) [data-kg-decor='may'] {
+    opacity: 0.5;
+  }
+}
+:root[data-theme='dark'] [data-kg-decor='may'] {
+  opacity: 0.5;
+}
+
 @keyframes kg-may-bay {
   from {
     transform: translateX(0);

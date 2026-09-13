@@ -285,6 +285,7 @@ export default async function ParentDashboard() {
         submitLabel="Tạo tài khoản"
         busyLabel="Đang tạo…"
         successMessage="Đã tạo tài khoản cho bé. Tải lại trang để thấy trong danh sách."
+        rong="day"
       >
         <Field
           id="displayName"
