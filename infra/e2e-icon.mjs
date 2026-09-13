@@ -192,6 +192,59 @@ const child1Ctx = await newSession();
     'Nút KHÔNG nhấc lên với khách (không hứa bấm được)',
     !(await p.locator('[data-testid=icon-tim]').evaluate((e) => e.classList.contains('kg-icon-bam')))
   );
+  check(
+    '… và emoji KHÔNG rung với khách',
+    (await p
+      .locator('[data-testid=icon-tim] .kg-icon-hinh')
+      .evaluate((e) => getComputedStyle(e).animationName)) === 'none'
+  );
+
+  /*
+   * KHÁCH VẪN PHẢI CÓ MỘT PHẢN HỒI — chỉ là phản hồi TĨNH.
+   *
+   * "Không hứa bấm được" từng bị hiểu thành "không trả lời gì": trước đây rê chuột
+   * qua cả hàng với tư cách khách thì ngoài cái tên ra không một pixel nào đổi, và
+   * hàng icon đọc ra như một dãy hình dán. Giờ viền sáng lên.
+   *
+   * Đổi MÀU chứ không phải chuyển động, và ranh giới đó là cả điểm của phép kiểm
+   * này: cái gì nhúc nhích dưới con trỏ là một lời hứa "bấm được", mà khách bấm vào
+   * chỉ nhận lại câu mời đăng nhập. Nên hai phép kiểm dưới đây đi thành CẶP — một
+   * cái đòi có phản hồi, cái kia đòi phản hồi ấy đứng yên.
+   *
+   * `mouse.move` ra góc trước khi đo số "trước": Playwright để con trỏ nằm lại chỗ
+   * cũ, nên không đẩy đi là đang so trạng thái hover với chính nó.
+   */
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(250);
+  const vienTim = () =>
+    p.locator('[data-testid=icon-tim]').evaluate((e) => getComputedStyle(e).borderTopColor);
+  const vienThuong = await vienTim();
+  await p.locator('[data-testid=icon-tim]').hover();
+  await p.waitForTimeout(350);
+  const vienHover = await vienTim();
+  check(
+    'Khách rê chuột thì VIỀN sáng lên, không phải đứng im',
+    vienThuong !== vienHover,
+    `${vienThuong} → ${vienHover}`
+  );
+  check(
+    '… nhưng nút KHÔNG dịch đi một pixel nào (không hứa bấm được)',
+    (await p
+      .locator('[data-testid=icon-tim]')
+      .evaluate((e) => getComputedStyle(e).transform)) === 'none'
+  );
+
+  /* Đuôi nhọn của bong bóng tên: không có nó thì một viên thuốc lơ lửng phía trên
+     năm nút cách nhau 8px, và mắt phải đoán nó đang gọi tên nút nào. Đo màu viền
+     trên của `::after` — trong suốt nghĩa là không vẽ ra tam giác nào cả. */
+  check(
+    'Bong bóng tên có đuôi chỉ xuống đúng nút nó gọi tên',
+    (await nhanCuaTim.evaluate((e) => getComputedStyle(e, '::after').borderTopColor)) !==
+      'rgba(0, 0, 0, 0)',
+    await nhanCuaTim.evaluate((e) => getComputedStyle(e, '::after').borderTopColor)
+  );
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(200);
 
   /*
    * Phép "bấm thì được nói vì sao" KHÔNG đặt ở đây, cố ý. Lúc này hàng icon còn
@@ -239,7 +292,106 @@ check(
   await c1.locator('[data-testid=icon-tim]').evaluate((e) => e.classList.contains('kg-icon-bam'))
 );
 
+/*
+ * RÊ CHUỘT THÌ EMOJI TO LÊN VÀ RUNG, suốt lúc con trỏ còn nằm đó.
+ *
+ * Đo hai vế, vì mỗi vế hỏng một kiểu:
+ *   · tên hoạt ảnh  -> luật CSS có khớp không
+ *   · transform có ĐỔI THEO THỜI GIAN không -> nó có thật sự chạy không
+ *
+ * Vế thứ hai mới là vế khó bịa. Một `animation-name` đúng vẫn có thể đứng hình
+ * (`animation-play-state: paused`, thời lượng 0, khung hình đầu trùng khung cuối), và
+ * lúc đó phép kiểm chỉ đọc tên sẽ xanh trước một icon bất động.
+ */
+{
+  const hinh = c1.locator('[data-testid=icon-tim] .kg-icon-hinh');
+  await c1.locator('[data-testid=icon-tim]').hover();
+  await c1.waitForTimeout(250);
+  const ten = await hinh.evaluate((e) => getComputedStyle(e).animationName);
+  const a = await hinh.evaluate((e) => getComputedStyle(e).transform);
+  await c1.waitForTimeout(140);
+  const b = await hinh.evaluate((e) => getComputedStyle(e).transform);
+  check('Rê chuột vào thì emoji RUNG (và to lên)', ten === 'kg-icon-rung' && a !== b, `${ten}, transform ${a === b ? 'đứng yên' : 'đang đổi'}`);
+
+  /* BÓNG dưới nút, phần còn thiếu của cú nhấc. Nhấc 2px mà không có bóng thì mắt
+     đọc ra là hình bị xê dịch chứ không phải vật được nâng lên — không có khoảng
+     cách nào giữa nút và nền để nhìn thấy. */
+  const bong = await c1
+    .locator('[data-testid=icon-tim]')
+    .evaluate((e) => getComputedStyle(e).boxShadow);
+  check('… và nút đổ BÓNG, để cú nhấc đọc ra là được nâng lên', bong !== 'none', bong);
+
+  await c1.mouse.move(5, 5);
+  await c1.waitForTimeout(200);
+}
+
+/*
+ * CÚ NẢY LÚC VỪA THẢ — đo bằng cách BẮT SỰ KIỆN, không bằng cách chụp đúng lúc.
+ *
+ * Hoạt ảnh dài 420ms, mà hàm `thaIcon` phía dưới còn hỏi DB một vòng trước khi trả
+ * về, nên lúc phép kiểm nhìn tới thì hoạt ảnh có thể đã chạy xong và lớp `kg-icon-na`
+ * đã tự gỡ. Kiểm bằng "lớp đó còn trên phần tử không" là một phép kiểm chập chờn —
+ * xanh hay đỏ tuỳ máy hôm nay nhanh chậm thế nào, tức không đo gì cả.
+ *
+ * `animationstart` thì chỉ bắn một lần và ta hứng được nó, dù nó kết thúc lúc nào.
+ */
+const batDauGhiNa = () =>
+  c1.evaluate(() => {
+    window.__na = { lop: false, chay: [] };
+    document.addEventListener('animationstart', (e) => window.__na.chay.push(e.animationName), true);
+    /*
+     * Ghi RIÊNG việc React gắn lớp, ngoài việc trình duyệt chạy hoạt ảnh.
+     *
+     * Hai vế hỏng vì hai lý do khác hẳn nhau — React không gắn lớp, hay CSS không
+     * chạy — mà một phép kiểm gộp thì báo đỏ y như nhau và ta lại phải đi dò từ đầu.
+     * Đây là lần thứ hai trong phiên này một phép kiểm đỏ mà không nói được nó đỏ ở
+     * đâu, nên lần này tách sẵn.
+     */
+    new MutationObserver((ds) => {
+      for (const d of ds) {
+        if (d.target instanceof Element && d.target.classList.contains('kg-icon-na')) {
+          window.__na.lop = true;
+        }
+      }
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
+const docNa = () => c1.evaluate(() => window.__na);
+
+/**
+ * Chờ cú nảy bắn ra, tối đa `hanMs`.
+ *
+ * CHỜ CHỨ KHÔNG ĐỌC MỘT PHÁT, và đây là chỗ đã đỏ oan ba lần liền trước khi tìm ra.
+ * `thaIcon()` trả về ngay khi DB đổi — có thể chỉ ~70ms sau cú bấm — trong khi
+ * `animationstart` chỉ bắn ở khung hình kế tiếp. Đọc một phát là bốc thăm: máy hôm nay
+ * nhanh thì đỏ, chậm thì xanh.
+ *
+ * Ba giả thuyết đã loại bằng đo, ghi lại để lần sau khỏi đi lại:
+ *   · "React không gắn lớp"      -> MutationObserver thấy lớp được gắn, mọi lần.
+ *   · "tab ở nền nên Chrome tắt hoạt ảnh" -> `visibilityState=visible`, `hasFocus=true`.
+ *   · "CSS không khớp chọn tử"   -> computed `animation-name: kg-icon-na`, `0.42s`,
+ *                                   phần tử còn trong DOM, không bật ít-chuyển-động.
+ * Cả ba đều đúng, tức sản phẩm chưa bao giờ sai — chỉ có phép đo nhìn quá sớm.
+ */
+async function choNay(hanMs = 2000) {
+  for (let i = 0; i < hanMs / 50; i++) {
+    const na = await docNa();
+    if (na.chay.includes('kg-icon-na')) return na;
+    await c1.waitForTimeout(50);
+  }
+  return docNa();
+}
+
+await batDauGhiNa();
 check('Thả được icon tim', await thaIcon(c1, 'tim'));
+
+{
+  const na = await choNay();
+  check(
+    'Thả icon thì emoji NẢY lên một cái',
+    na.lop && na.chay.includes('kg-icon-na'),
+    `React gắn lớp: ${na.lop ? 'có' : 'KHÔNG'} · hoạt ảnh chạy: ${na.chay.join(',') || 'KHÔNG'}`
+  );
+}
 check(
   'Ghi đúng một hàng, đúng mã icon',
   dem(`select count(*) from "Reaction" where "gameId"='${GAME_ID}' and icon='tim'`) === 1
@@ -298,7 +450,25 @@ check(
 );
 
 // ---------- Bấm lại là gỡ ----------
+/* Dọn sổ trước khi GỠ, để phép ngay dưới chỉ nói về cú bấm gỡ này. */
+await batDauGhiNa();
 check('Bấm lại đúng icon đang chọn thì GỠ', await thaIcon(c1, 'vui'));
+{
+  /*
+   * Phép PHỦ ĐỊNH này chờ CỨNG một khoảng, không dùng `choNay`.
+   *
+   * `choNay` thoát sớm khi thấy cú nảy — đúng cho phép khẳng định, sai hoàn toàn ở
+   * đây: chờ-tới-khi-thấy mà chẳng bao giờ thấy thì nó chỉ đốt hết 2 giây rồi trả về,
+   * và ta không phân biệt được "đúng là không nảy" với "nhìn quá sớm". 600ms > 420ms
+   * của hoạt ảnh, nên nếu có nảy thì chắc chắn đã bắn xong trước khi đọc.
+   */
+  await c1.waitForTimeout(600);
+  const na = await docNa();
+  check(
+    'GỠ thì KHÔNG nảy — ăn mừng một cú rút lại thì đọc ra như trêu',
+    !na.lop && !na.chay.includes('kg-icon-na')
+  );
+}
 check('Không còn hàng nào của bé này', soTrongDb(GAME_ID) === 0);
 check(
   'Không nút nào còn sáng',
@@ -396,6 +566,47 @@ const child2Ctx = await newSession();
       `select count(*) from "Reaction" where "gameId"='${GAME_ID}' and icon not in ('tim','vui','bat-ngo','dep','gioi')`
     ) === 0
   );
+}
+
+// ---------- Người xin ÍT CHUYỂN ĐỘNG: vẫn phải biết icon bấm được ----------
+{
+  /*
+   * TẮT RUNG NHƯNG GIỮ TO LÊN, và đây là chỗ dễ làm hỏng nhất khi thêm cú rung.
+   *
+   * Khối `prefers-reduced-motion` trong `globals.css` có sẵn một dòng
+   * `.kg-icon-bam:hover .kg-icon-hinh { transform: none }` từ hồi hover còn là một
+   * `transform` tĩnh. Cứ thế mà tắt rung là tắt luôn cả việc icon lớn lên — mà cú
+   * nhấc nút cũng đã bị tắt ở dòng ngay trên, nên người ấy mất SẠCH mọi dấu hiệu
+   * "cái này bấm được". Hỏng kiểu đó không đỏ ở đâu cả: giao diện vẫn vẽ ra đủ năm
+   * nút, chỉ là không nút nào phản ứng gì.
+   *
+   * To lên không phải chuyển động — nó là một trạng thái tĩnh, đứng yên suốt lúc con
+   * trỏ còn đó. Người tắt chuyển động không xin mất cái đó.
+   */
+  const ctx = await browser.newContext({
+    viewport: { width: 1300, height: 1000 },
+    reducedMotion: 'reduce',
+  });
+  const p = await ctx.newPage();
+  await p.goto(`${APP}/be-dang-nhap`, { waitUntil: 'networkidle' });
+  await p.fill('#username', CHILD1_USER);
+  await p.fill('#password', CHILD_PASS);
+  await p.click('[data-testid=auth-form] button[type=submit]');
+  await p.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
+  await p.goto(`${APP}/game/${GAME_ID}`, { waitUntil: 'networkidle' });
+
+  const hinh = p.locator('[data-testid=icon-tim] .kg-icon-hinh');
+  await p.locator('[data-testid=icon-tim]').hover();
+  await p.waitForTimeout(300);
+  const ten = await hinh.evaluate((e) => getComputedStyle(e).animationName);
+  const tf = await hinh.evaluate((e) => getComputedStyle(e).transform);
+  check('Ít chuyển động: emoji KHÔNG rung', ten === 'none', ten);
+  check(
+    '… nhưng VẪN to lên, nên vẫn biết là bấm được',
+    tf !== 'none' && tf.startsWith('matrix(1.28'),
+    tf
+  );
+  await ctx.close();
 }
 
 // ---------- Xoá bé thì icon đi theo ----------

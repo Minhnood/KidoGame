@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { KHUNG_THE } from './card';
 import { Hoa, La } from './site-decor';
+import { TheDangMo } from './the-dang-mo';
 
 /**
  * Năm tông nền thẻ, chọn theo MÃ GAME.
@@ -413,6 +414,11 @@ export function GameCard({ game }: { game: GameCardData }) {
           </span>
 
           <NhanLoai labels={game.tagLabels} />
+
+          {/* Phản hồi cho chính cú chạm vừa rồi — xem `the-dang-mo.tsx`. Đặt TRONG
+              khung ảnh (không phải trong cả thẻ) để lớp phủ bo đúng góc ảnh và không
+              đè lên tên game — tên game là thứ giúp bé biết mình có bấm nhầm không. */}
+          <TheDangMo />
         </div>
 
         <div className="px-1.5 pb-1 pt-2.5">

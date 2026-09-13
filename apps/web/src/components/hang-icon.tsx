@@ -35,6 +35,18 @@ export function HangIcon({
   const [loi, setLoi] = useState<string | null>(null);
   /** Đã bấm mà không thả được -> nói vì sao. Không phải lỗi, nên không đỏ. */
   const [nhac, setNhac] = useState(false);
+  /**
+   * Mã icon VỪA được thả, để chạy cú nảy — rồi tự xoá khi hết hoạt ảnh.
+   *
+   * Phải tự xoá, không được giữ: lớp `kg-icon-na` còn nằm trên phần tử thì lần thả
+   * sau vào CÙNG icon đó sẽ không chạy lại hoạt ảnh nào cả (trình duyệt chỉ khởi
+   * động animation khi lớp được GẮN vào, không phải khi nó đang có sẵn). Bé gỡ tim
+   * rồi thả tim lại — lần thứ hai im re.
+   *
+   * Chỉ đặt lúc THẢ hoặc ĐỔI, không đặt lúc GỠ: gỡ là rút lại, mà ăn mừng một cú rút
+   * lại thì đọc ra như trêu.
+   */
+  const [vuaTha, setVuaTha] = useState<string | null>(null);
   const [dangGui, startTransition] = useTransition();
 
   function bam(ma: string) {
@@ -60,7 +72,9 @@ export function HangIcon({
     const dem = { ...tomTat.dem };
     if (cu === ma) {
       dem[ma] = Math.max(0, (dem[ma] ?? 1) - 1);
+      setVuaTha(null);
     } else {
+      setVuaTha(ma);
       if (cu) dem[cu] = Math.max(0, (dem[cu] ?? 1) - 1);
       dem[ma] = (dem[ma] ?? 0) + 1;
     }
@@ -148,11 +162,31 @@ export function HangIcon({
                     ? dangChon
                       ? 'kg-icon-bam cursor-pointer hover:bg-accent/20'
                       : 'kg-icon-bam cursor-pointer hover:border-accent-text hover:bg-accent/10'
-                    : 'cursor-default',
+                    : /*
+                       * `kg-icon-xem`: phản hồi TĨNH cho người không thả được — viền
+                       * sáng lên, không nhấc, không rung. Trước đó nhánh này không có
+                       * lớp hover nào cả, nên khách rê chuột qua cả hàng mà không một
+                       * pixel nào đổi; đo bằng hai ảnh chụp thì chúng giống nhau từng
+                       * pixel. Vì sao là màu chứ không phải chuyển động: ghi ở chỗ
+                       * khai báo `.kg-icon-xem` trong `globals.css`.
+                       */
+                      'kg-icon-xem cursor-default',
                   dangGui ? 'opacity-70' : '',
                 ].join(' ')}
               >
-                <span className="kg-icon-hinh" aria-hidden="true">
+                <span
+                  className={`kg-icon-hinh${vuaTha === icon.ma ? ' kg-icon-na' : ''}`}
+                  /* Gỡ lớp ngay khi hoạt ảnh kết thúc, để lần thả sau vào cùng icon
+                     này còn chạy lại được. `onAnimationEnd` chứ không phải
+                     `setTimeout(420)`: hết giờ là đoán theo một con số chép tay từ
+                     CSS, và hai bên sẽ lệch ngay lần đầu ai đó chỉnh nhịp bên kia.
+
+                     Với người xin ít chuyển động thì `animation: none` nên sự kiện
+                     này KHÔNG bao giờ bắn, và lớp nằm lại vĩnh viễn. Vô hại, cố ý:
+                     lớp đó lúc ấy không vẽ ra gì cả. */
+                  onAnimationEnd={() => setVuaTha((v) => (v === icon.ma ? null : v))}
+                  aria-hidden="true"
+                >
                   {icon.ky_tu}
                 </span>
                 {/* Số 0 KHÔNG hiện. Một hàng năm con số 0 dưới game của một đứa trẻ

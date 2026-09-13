@@ -9,7 +9,7 @@ import { MAT_THE } from '@/components/card';
 import { Button } from '@/components/button';
 import { TextInput } from '@/components/field';
 import { ChildLockButton, DeleteFamilyButton } from '../admin-controls';
-import { Pager } from '../pager';
+import { Pager } from '@/components/pager';
 
 export const dynamic = 'force-dynamic';
 

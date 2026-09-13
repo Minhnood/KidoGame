@@ -114,6 +114,10 @@ const PAGES = [
   ['/dieu-khoan', 'khách'],
   ['/bao-cao-ban-quyen', 'khách'],
   ['/upload', 'bé'],
+  /* Trang 404 — chưa từng được quét ở đây, dù nó là trang mà người dùng rơi vào
+     đúng lúc đang bối rối nhất, và là trang DUY NHẤT không ai chủ động mở. Đường
+     dẫn này cố ý vô nghĩa: nó phải không bao giờ tồn tại. */
+  ['/khong-co-duong-nay-a11y', 'khách'],
 ];
 
 console.log('\n── Từng trang ──────────────────────────────────────────────');

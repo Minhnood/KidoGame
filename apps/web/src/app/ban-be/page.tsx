@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PageTitle, EmptyState } from '@/components/page';
 import { Notice } from '@/components/notice';
-import { getActor } from '@/lib/session';
+import { getActorTrongLuotRender as getActor } from '@/lib/session';
 import { docDangTheoDoi } from '@/lib/theo-doi';
 import { NutBoTheoDoi } from './nut-bo-theo-doi';
 

@@ -165,6 +165,40 @@ const CAP = [
    * mọi phép đo chữ vẫn xanh — cặp hỏng là cặp NỀN-TRÊN-NỀN, mà lúc đó chưa ai đo
    * nó. Bốn dòng dưới đây có mặt để lần sau không phải chụp ảnh mới biết.
    */
+  /*
+   * Ô CHỜ lúc đang tải phải nổi khỏi thứ nằm dưới nó — cùng loại "không phải chữ" như
+   * hai cặp thẻ ở trên, ngưỡng 1.15.
+   *
+   * Bốn cặp vì ô chờ xuất hiện ở hai chỗ có nền khác nhau: đứng thẳng trên nền trang
+   * (khung chờ của trang game), và nằm trong thẻ (ô chờ ảnh, tên game ở lưới trang
+   * chủ). Cặp CHẶN nằm ở GIAO DIỆN SÁNG, trên hai đầu dải nền của màn hình hẹp:
+   * 1.18:1, sát ngưỡng nhất trong cả tám phép. Giao diện tối rộng rãi hơn (thấp nhất
+   * 1.25). Ai nhìn con số 1.38 của nền trang ở giao diện tối rồi kết luận "còn nhiều
+   * đất để làm nhạt đi" là nhìn sai cột — và cũng sai cả giao diện.
+   *
+   * Ô chờ chìm vào nền thì cả khung chờ thành một khoảng trắng — tức trở về đúng cái
+   * màn hình im lặng mà nó sinh ra để xoá, chỉ khác là lần này không ai biết.
+   */
+  { ten: 'Ô chờ nổi trên nền trang', fg: 'cho', bg: 'bg', min: 1.15 },
+  { ten: 'Ô chờ nổi trên thẻ/khung', fg: 'cho', bg: 'surface', min: 1.15 },
+  { ten: 'Ô chờ nổi trên chặng trời của nền', fg: 'cho', bg: 'bg-troi', min: 1.15 },
+  { ten: 'Ô chờ nổi trên chặng đất của nền', fg: 'cho', bg: 'bg-dat', min: 1.15 },
+  /*
+   * Tông thứ hai của khung chờ, cho những hình nằm ĐÈ LÊN một ô chờ khác — viên
+   * thuốc số, nhãn loại, nút chơi trên tấm ảnh của thẻ game.
+   *
+   * Cặp đầu là cặp thật sự đáng đo: cùng một màu đặt lên nhau thì không có mép nào,
+   * và bốn chi tiết ấy sẽ nằm trong DOM mà không ai nhìn thấy — khung chờ trông vẫn
+   * "chạy", chỉ là nó vẽ ra một cái thẻ khác với cái sắp tới.
+   *
+   * Cặp thứ hai canh chiều ngược lại: tông này cũng không được đậm tới mức thành một
+   * mảng tối giữa thẻ sáng. Ngưỡng 3 là TRẦN, không phải sàn — đây là chỗ duy nhất
+   * trong file dùng `max`, vì mọi cặp khác đều muốn tương phản càng cao càng tốt còn
+   * cặp này thì không: bốn hình đó là chi tiết phụ của một khung chờ, chúng không
+   * được giành mắt với thứ sắp hiện ra.
+   */
+  { ten: 'Hình nổi trên ô chờ (viên thuốc, nút chơi)', fg: 'cho-net', bg: 'cho', min: 1.2 },
+  { ten: 'Hình nổi trên ô chờ KHÔNG được quá đậm', fg: 'cho-net', bg: 'surface', min: 1.2, max: 3 },
   { ten: 'Bong bóng tên icon trên nền trang', fg: 'nhan-bg', bg: 'bg', min: 2.5 },
   { ten: 'Bong bóng tên icon trên thẻ/khung', fg: 'nhan-bg', bg: 'surface', min: 2.5 },
   { ten: 'Bong bóng tên icon trên chặng trời', fg: 'nhan-bg', bg: 'bg-troi', min: 2.5 },
@@ -324,6 +358,37 @@ const CAP_NEN_ALPHA = [
     alpha: 0.2,
     min: 7,
   },
+  /*
+   * VÒNG XOAY trên thẻ game vừa bấm, nằm trên lớp phủ `bg-chrome/60`.
+   *
+   * `duoi: 'surface'` là TRƯỜNG HỢP XẤU NHẤT, không phải trường hợp điển hình. Dưới
+   * lớp phủ là ảnh game của một đứa trẻ — ảnh gì thì không đoán được, nên không đo
+   * được cái ảnh. Nhưng đo được hai đầu: ảnh càng SÁNG thì lớp phủ càng nhạt đi và
+   * vòng xoay sáng càng chìm, nên màu sáng nhất trong bảng là mốc chặn. Ảnh tối chỉ
+   * làm mọi thứ dễ hơn.
+   *
+   * Đây chính là lý do lớp phủ đậm tới 60% chứ không phải một lớp mờ nhẹ cho "đẹp":
+   * ảnh game của các bé phần lớn là nền pastel rất sáng, và một vòng xoay trắng đặt
+   * lên đó mà không có lớp phủ thì vô hình ở đa số thẻ. Bản đầu để 45% và ĐỎ ở đây —
+   * 2.64:1, dưới ngưỡng.
+   *
+   * Con số 60 chọn rộng hơn cả cái phép đo này đòi, cố ý: ảnh có thể TRẮNG TINH
+   * (#ffffff), sáng hơn mọi token trong bảng, mà script này chỉ đọc được token nên
+   * nó không diễn đạt được trường hợp ấy. Tính tay ra 4.08:1 trên trắng tinh ở mức
+   * 60%, so với 3.03:1 ở mức 50% — tức 50% vừa đủ qua phép đo dưới đây rồi hụt ở
+   * ngoài đời. Chỗ nào hàng rào không với tới thì phải chừa biên bằng tay.
+   *
+   * Ngưỡng 3 chứ không phải 4.5: vòng xoay không phải chữ, nó là hình báo trạng thái
+   * — WCAG 1.4.11, cùng ngưỡng với viền ô nhập và vòng focus.
+   */
+  {
+    ten: 'Vòng xoay trên thẻ vừa bấm (phủ 60% trên nền sáng nhất)',
+    fg: 'chrome-ink',
+    nen: 'chrome',
+    duoi: 'surface',
+    alpha: 0.6,
+    min: 3,
+  },
 ];
 
 /**
@@ -345,9 +410,18 @@ for (const [nhan, toi] of [
   console.log(`\n=== Giao diện ${nhan} ===`);
   for (const c of CAP) {
     const r = ratio(mau(c.fg, toi), mau(c.bg, toi));
-    const ok = r >= c.min;
+    /*
+     * `max` là TRẦN, và nó chỉ có ở đúng một cặp trong file.
+     *
+     * Mọi cặp khác ở đây đều muốn tương phản càng cao càng tốt, nên chỉ cần sàn. Tông
+     * thứ hai của khung chờ thì ngược: nó phải nổi khỏi ô chờ bên dưới (sàn) mà không
+     * được đậm tới mức thành mảng tối giữa một cái thẻ sáng (trần). Không có trần thì
+     * "cho nó rõ hơn tí" là một hướng đi không bao giờ bị chặn lại.
+     */
+    const ok = r >= c.min && (c.max === undefined || r <= c.max);
     if (!ok) hong++;
-    console.log(`${ok ? '✅' : '❌'} ${r.toFixed(2)}:1 (cần ${c.min}) — ${c.ten}`);
+    const nguong = c.max === undefined ? `cần ${c.min}` : `cần ${c.min}–${c.max}`;
+    console.log(`${ok ? '✅' : '❌'} ${r.toFixed(2)}:1 (${nguong}) — ${c.ten}`);
   }
   for (const c of CAP_ALPHA) {
     const bg = mau(c.bg, toi);

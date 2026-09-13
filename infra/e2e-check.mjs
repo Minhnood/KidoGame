@@ -11,14 +11,38 @@
  *   node infra/e2e-check.mjs               # cửa sổ 3
  */
 import { chromium } from 'playwright';
+import { randomBytes } from 'node:crypto';
+import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const PLAYER = process.env.PLAYER_ORIGIN ?? 'http://127.0.0.1:3001';
 // Đường dẫn tới một file .sb3 thật để thử luồng upload. Bỏ trống thì bỏ qua phần đó.
 const FIXTURE = process.env.SB3_FIXTURE ?? '';
-// Tài khoản bé do `pnpm db:seed` tạo — cần để thử luồng đăng game.
-const CHILD_USERNAME = process.env.CHILD_USERNAME ?? 'beminh';
-const CHILD_PASSWORD = process.env.CHILD_PASSWORD ?? 'be1234';
+
+/*
+ * BÉ CỦA RIÊNG BỘ NÀY, dựng mới mỗi lần chạy — không mượn `beminh` trong DB dev nữa.
+ *
+ * Bản cũ đăng nhập bằng bé do `pnpm db:seed` tạo, và là bộ DUY NHẤT trong cả bộ kiểm
+ * làm thế. Mỗi lượt chạy đăng hai game dưới tên bé đó, mà trần là 10 game mỗi bé
+ * trong cửa sổ trượt 24 giờ (`UPLOADS_PER_CHILD_PER_DAY` trong `lib/ingest.ts`). Chạy
+ * lại vài lần trong một buổi là đỏ:
+ *
+ *   ❌ File HTML đổi tên .sb3 bị từ chối — 😕 Hôm nay bé đã đăng 10 game rồi, mai quay lại nhé!
+ *
+ * Trông như sản phẩm vỡ, mà sự thật chỉ là hết suất. Tệ hơn: nó đỏ đúng ở phép kiểm
+ * "file giả bị từ chối", nên người đọc sẽ nghĩ tới lỗi bảo mật chứ không nghĩ tới hạn
+ * mức. Cùng một cái bẫy `402b009` đã sửa cho `e2e-touch`.
+ *
+ * `MAIL_LOG` chỉ bắt buộc khi có `SB3_FIXTURE`: dựng bé đòi email phụ huynh đã xác
+ * minh, mà chỉ phần đăng game mới cần bé. Chạy không có fixture thì bộ này vẫn chạy
+ * được như trước, không đòi thêm gì.
+ */
+const MAIL_LOG = FIXTURE ? batBuocMailLog('e2e-check') : '';
+const suffix = randomBytes(4).toString('hex');
+const PARENT_EMAIL = `e2e-check-${suffix}@kidogame.test`;
+const PARENT_PASS = 'matkhau-dai-1234';
+const CHILD_USERNAME = `ech${suffix}`;
+const CHILD_PASSWORD = 'be1234';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -433,13 +457,36 @@ await page.screenshot({ path: '/tmp/kidogame-home.png' });
 
 // ---------- Upload qua form: đường chấp nhận ----------
 if (FIXTURE) {
-  // Từ M2, đăng game cần phiên của bé. Dùng tài khoản do `pnpm db:seed` tạo.
+  /* Dựng phụ huynh + bé ở một context RIÊNG. Context chính mang sẵn cookie phiên giả
+     để thử rò rỉ cookie ở trên; đăng ký phụ huynh trong đó là ghi đè lên chính thứ
+     phép kiểm kia đang canh. */
+  {
+    const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
+    const parentCtx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
+    const pp = await parentCtx.newPage();
+    await pp.goto(`${APP}/dang-ky`, { waitUntil: 'networkidle' });
+    await pp.fill('#email', PARENT_EMAIL);
+    await pp.fill('#password', PARENT_PASS);
+    await pp.click('[data-testid=auth-form] button[type=submit]');
+    await pp.waitForURL(/phu-huynh/, { timeout: 20000 }).catch(() => {});
+    check('Xác minh được email phụ huynh', await bamLinkXacMinh(pp));
+
+    await pp.fill('#displayName', 'Bé Kiểm Thử');
+    await pp.fill('#username', CHILD_USERNAME);
+    await pp.fill('#password', CHILD_PASSWORD);
+    await pp.fill('#birthYear', String(new Date().getFullYear() - 9));
+    await pp.click('[data-testid=auth-form] button[type=submit]');
+    await pp.waitForTimeout(2500);
+    await parentCtx.close();
+  }
+
+  // Từ M2, đăng game cần phiên của bé.
   await page.goto(`${APP}/be-dang-nhap`, { waitUntil: 'networkidle' });
   await page.fill('#username', CHILD_USERNAME);
   await page.fill('#password', CHILD_PASSWORD);
   await page.click('[data-testid=auth-form] button[type=submit]');
   await page.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
-  check('Bé đăng nhập được bằng tài khoản seed', !/be-dang-nhap/.test(page.url()), page.url());
+  check('Bé vừa dựng đăng nhập được', !/be-dang-nhap/.test(page.url()), page.url());
 
   await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
   await page.fill('#title', 'Game kiểm thử e2e');
@@ -523,8 +570,28 @@ if (FIXTURE) {
       };
     });
 
-  const mo = async (colorScheme) => {
-    const ctx = await browser.newContext({ colorScheme, viewport: { width: 1100, height: 900 } });
+  const mo = async (colorScheme, reducedMotion = 'no-preference') => {
+    const ctx = await browser.newContext({
+      colorScheme,
+      reducedMotion,
+      viewport: { width: 1100, height: 900 },
+    });
+    /*
+     * Đếm số lần trang GỌI mờ dần. Bọc hàm thật chứ không thay: nó vẫn chạy như cũ,
+     * chỉ để lại một con số. Đo lời gọi thay vì chụp ảnh giữa cú mờ, vì 300ms là quá
+     * ngắn để chụp đúng lúc một cách đáng tin — và điều cần canh là QUYẾT ĐỊNH có mờ
+     * hay không, chứ trình duyệt vẽ cú mờ ra sao thì không phải việc của trang.
+     */
+    await ctx.addInitScript(() => {
+      window.__kgMoDan = 0;
+      const that = document.startViewTransition?.bind(document);
+      if (that) {
+        document.startViewTransition = (cb) => {
+          window.__kgMoDan += 1;
+          return that(cb);
+        };
+      }
+    });
     const p = await ctx.newPage();
     /*
      * Lệch hydration hiện ra ở console.error, KHÔNG phải `pageerror`. Đáng canh
@@ -566,13 +633,64 @@ if (FIXTURE) {
 
   // Nút đổi giao diện: ba trạng thái, và lựa chọn của người dùng thắng cài đặt máy.
   const nut = toi.p.locator('[data-testid=theme-toggle]');
+  const soMoDan = () => toi.p.evaluate(() => window.__kgMoDan);
+
+  /* Icon KHÔNG xoay lúc trang vừa mở. Nhãn có đổi khi `useEffect` đọc lựa chọn đã
+     lưu, nên nếu cú xoay đi theo nhãn thì người đã chọn tối thấy mặt trăng quay một
+     vòng mỗi lần mở trang — một cử động không ai gây ra. */
+  check(
+    'Mở trang: icon đổi giao diện đứng yên, không tự xoay',
+    (await nut.locator('.kg-doi-icon').count()) === 0
+  );
+
   const vong = [];
+  const dem = [];
+  const rong = [];
   for (let i = 0; i < 3; i++) {
     await nut.click();
     await toi.p.waitForTimeout(200);
     vong.push(await nut.getAttribute('data-theme-choice'));
+    dem.push(await soMoDan());
+    rong.push(Math.round((await nut.boundingBox()).width));
   }
   check('Nút đổi giao diện xoay đủ ba trạng thái rồi về chỗ cũ', vong.join('>') === 'sang>toi>may', vong.join(' > '));
+
+  /*
+   * MỜ DẦN ĐÚNG LÚC — và KHÔNG mờ khi màu không đổi.
+   *
+   * Máy của context này đang TỐI. Ba cú bấm: Theo máy(tối) → Sáng đổi màu, Sáng → Tối
+   * đổi màu, Tối → Theo máy(tối) KHÔNG đổi một pixel nào. Vế thứ ba là vế đáng giá:
+   * mờ dần một trang sang chính nó đọc ra như trang vừa tải lại, và một phép kiểm chỉ
+   * hỏi "có mờ dần không" sẽ xanh cả khi mọi cú bấm đều mờ.
+   */
+  check(
+    'Đổi sang màu khác thì trang MỜ DẦN, không nháy',
+    dem[0] === 1 && dem[1] === 2,
+    `số lần mờ dần sau từng cú bấm: ${dem.join(', ')}`
+  );
+  check(
+    '… nhưng Tối → Theo máy trên một máy đang tối thì KHÔNG mờ (màu không đổi)',
+    dem[2] === 2,
+    `${dem[1]} → ${dem[2]}`
+  );
+  /*
+   * Nút KHÔNG co giãn theo nhãn. Trước khi giữ chỗ, nó rộng 113 → 83 → 70px qua ba
+   * nhãn, và "Bé đăng nhập" bên trái nhảy theo. Có mờ dần thì cú nhảy ấy thành bóng
+   * đôi: trang cũ và trang mới chồng lên nhau với hai nút ở hai chỗ lệch nhau. Đo ở
+   * màn 1100px — dưới `sm` nhãn chữ bị ẩn nên không có gì để lệch.
+   */
+  check(
+    'Nút đổi giao diện giữ nguyên bề rộng qua cả ba nhãn (thanh điều hướng không nhảy)',
+    new Set(rong).size === 1,
+    rong.map((r) => `${r}px`).join(' → ')
+  );
+  check(
+    'Bấm thì icon trên nút xoay sang biểu tượng mới',
+    (await nut
+      .locator('span[aria-hidden]')
+      .first()
+      .evaluate((e) => getComputedStyle(e).animationName)) === 'kg-doi-icon'
+  );
 
   await nut.click(); // -> sáng, trong khi máy đang ở chế độ tối
   await toi.p.waitForTimeout(200);
@@ -596,6 +714,38 @@ if (FIXTURE) {
     sang.loi.length === 0 && toi.loi.length === 0,
     [...sang.loi, ...toi.loi].join(' | ') || 'sạch'
   );
+
+  /*
+   * Người xin ÍT CHUYỂN ĐỘNG: đổi tức thì, không mờ dần, icon không xoay — nhưng màu
+   * VẪN PHẢI ĐỔI. Vế cuối là thứ dễ làm hỏng nhất khi thêm nhánh tắt hoạt ảnh: một
+   * `return` đặt sai chỗ là tắt luôn cả việc đổi giao diện, với đúng người ấy.
+   */
+  {
+    const it = await mo('light', 'reduce');
+    const nutIt = it.p.locator('[data-testid=theme-toggle]');
+    await nutIt.click(); // Theo máy(sáng) → Sáng: không đổi màu
+    await nutIt.click(); // Sáng → Tối: đổi màu
+    await it.p.waitForTimeout(200);
+    const dIt = await doc(it.p);
+    check(
+      'Ít chuyển động: KHÔNG mờ dần',
+      (await it.p.evaluate(() => window.__kgMoDan)) === 0,
+      `${await it.p.evaluate(() => window.__kgMoDan)} lần`
+    );
+    check(
+      '… nhưng giao diện VẪN đổi sang tối',
+      dIt.theme === 'dark' && dIt.bgSang < 0.06,
+      `${dIt.theme} / ${dIt.bg}`
+    );
+    check(
+      '… và icon đổi thẳng, không xoay',
+      (await nutIt
+        .locator('span[aria-hidden]')
+        .first()
+        .evaluate((e) => getComputedStyle(e).animationName)) === 'none'
+    );
+    await it.ctx.close();
+  }
 
   await sang.ctx.close();
   await toi.ctx.close();

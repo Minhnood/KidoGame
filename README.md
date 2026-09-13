@@ -40,9 +40,10 @@ Bốn bộ không cần server:
 
 ```bash
 pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
-node infra/contrast-check.mjs              # 108 cặp màu, cả hai giao diện
+node infra/contrast-check.mjs              # 144 phép đo màu, cả hai giao diện
 node infra/caddy-config-check.mjs          # 15 phép, +4 nữa nếu có Docker
-cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 46
+cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49
+cd apps/web && pnpm exec tsx ../../infra/scrypt-cap-check.ts    # 9
 ```
 
 Hai bộ cuối canh cùng một loại lỗi: thứ **chỉ hỏng sau khi deploy**. Cấu hình Caddy chỉ
@@ -59,22 +60,38 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 node infra/e2e-check.mjs                          # 66 kiểm tra
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 75 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 76
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 15
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 39, cần >24 game
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 28, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 24, DỌN THẬT
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 50, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 36, DỌN THẬT
 node infra/e2e-bieu-do.mjs                                         # 21, không cần gì thêm
-node infra/e2e-bao-loi.mjs                                         # 29, cần psql
-GAME_URL=http://localhost:3000/game/<id> node infra/e2e-touch.mjs  # 14, chạy riêng
-node infra/e2e-errorlog.mjs                                        # 33, không cần .sb3
+node infra/e2e-bao-loi.mjs                                         # 30, cần psql
+node infra/e2e-touch.mjs                                           # 14, tự dựng game có phím
+node infra/e2e-errorlog.mjs                                        # 38, không cần .sb3
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
+
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 19, cần psql
+node infra/contrast-check.mjs                                      # 144 phép đo màu
+node infra/a11y-check.mjs                                          # 22
 ```
+
+> **`e2e-discovery` cần DB dev có hơn 24 game published.** Phần phân trang của nó
+> không kiểm được gì trên một danh sách một trang, nên thay vì báo xanh nó báo ĐỎ kèm
+> câu "không phải lỗi sản phẩm" — một phép kiểm phân trang xanh trên dữ liệu không đủ
+> để phân trang là một phép kiểm nói dối.
+
+> **Mọi con số trong khối trên là số ĐO ĐƯỢC ngày 13/9/2026**, cả 25 bộ chạy lại trong
+> một lượt theo đúng thứ tự dưới đây. Sửa một bộ thì sửa luôn con số của nó — ghi một
+> con số chưa đo vào tài liệu là biến tài liệu thành thứ không tin được.
 
 **`e2e-prune-removed.mjs` phải chạy SAU `e2e-takedown.mjs`.** Lượt nào đổ giữa đường thì
 để lại một hàng trong hàng đợi yêu cầu gỡ, mà `e2e-takedown` khẳng định hàng đợi có ĐÚNG
@@ -118,7 +135,10 @@ bé khi email phụ huynh chưa xác minh, mà đường duy nhất để xác m
 thư. Logic đọc link nằm ở `infra/e2e-mail.mjs` dùng chung — và nó có một điều kiện dùng:
 phải khởi tạo bộ đọc **trước** khi đăng ký phụ huynh, xem chú thích trong file.
 
-`e2e-check.mjs` không cần `MAIL_LOG` vì nó dùng bé `beminh` do seed tạo sẵn.
+`e2e-check.mjs` cần `MAIL_LOG` khi có `SB3_FIXTURE`: nó tự dựng phụ huynh + bé cho
+riêng mình. Bản cũ mượn bé `beminh` trong DB dev, đốt hai suất trong trần 10 game/bé/24h
+mỗi lượt chạy, và đỏ ở đúng phép kiểm "file giả bị từ chối" — trông như lỗi bảo mật
+trong khi chỉ là hết suất.
 `e2e-errorlog.mjs` không cần cả `MAIL_LOG` lẫn `SB3_FIXTURE` — nó không tạo tài khoản
 nào, chỉ dùng admin demo và bé `beminh`. Đặt nó CUỐI trong một lượt chạy: bước cuối
 của bài là bắn hơn 40 báo cáo lỗi để kiểm trần chống lụt, và trần tính theo phút.
@@ -141,8 +161,8 @@ APP_ORIGIN=http://localhost:3100 PLAYER_ORIGIN=http://127.0.0.1:3002 \
   SB3_FIXTURE=... node infra/e2e-check.mjs
 ```
 
-`e2e-touch.mjs` cần một game CÓ dùng phím (mũi tên hoặc phím cách), không thì
-không có nút nào để kiểm.
+`e2e-touch.mjs` tự dựng một game CÓ dùng phím (mũi tên hoặc phím cách) cho riêng
+mình từ `402b009` — trước đó nó mượn game trong DB dev và hỏng khi game ấy biến mất.
 
 ### Bàn phím và trình đọc màn hình
 

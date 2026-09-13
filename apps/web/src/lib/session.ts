@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { prisma } from './db';
 
@@ -270,3 +271,18 @@ export async function revokeAllSessions(
   const result = await prisma.session.deleteMany({ where: owner });
   return result.count;
 }
+
+/**
+ * `getActor` nhớ trong MỘT lượt render — CHỈ dùng trong layout và page, không bao giờ
+ * trong server action.
+ *
+ * Có nó vì một route giờ phải hỏi phiên HAI lần: `layout.tsx` hỏi để quyết định chuyển
+ * hướng hay 404 TRƯỚC khi khung chờ gửi dòng 200 đi (lý do dài ở
+ * `app/(trang-chu)/loading.tsx`), rồi `page.tsx` hỏi lại để render. Không nhớ thì mỗi
+ * lần mở trang tốn thêm một truy vấn `Session` chỉ để lấy lại đúng câu trả lời vừa có.
+ *
+ * KHÔNG thay `getActor` bằng bản này cho cả app. Server action đăng nhập ĐẶT cookie rồi
+ * đọc lại phiên trong cùng một request; bản có nhớ sẽ trả về cái null đã nhớ từ trước
+ * khi cookie được đặt, và người vừa đăng nhập thành công bị coi như chưa đăng nhập.
+ */
+export const getActorTrongLuotRender = cache(getActor);
