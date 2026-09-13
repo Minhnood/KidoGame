@@ -21,6 +21,8 @@ import { chromium } from 'playwright';
 const APP = process.env.APP ?? 'http://localhost:3000';
 const CHILD_USER = process.env.DEMO_CHILD ?? 'beminh';
 const CHILD_PASSWORD = process.env.DEMO_CHILD_PASSWORD ?? 'be1234';
+const PARENT_EMAIL = process.env.DEMO_EMAIL ?? 'demo@kidogame.local';
+const PARENT_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo1234ab';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -342,6 +344,64 @@ console.log('\n── Tràn ngang trên máy nhỏ ─────────�
       chuLanLe.length ? chuLanLe.join(' | ') : `${duong.length} trang sạch`
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Thanh điều hướng nằm TRỌN trong màn hình, cho cả ba vai
+// ---------------------------------------------------------------------------
+/*
+ * VÌ SAO mục trên không đủ: ngày 13/9 phụ huynh đăng nhập ở 390px thì nút đổi giao
+ * diện nằm ở 375–411px, tức 21px ngoài màn hình; ở 360px nửa nút "Đăng xuất" cũng ra
+ * theo. Trang KHÔNG tràn ngang — khung ngoài cắt phần thừa — nên "không trang nào phải
+ * vuốt ngang" vẫn xanh, trong khi nút ấy không ai bấm được. Và mục trên chỉ đo khách:
+ * nhãn dài nhất ("Trang của bố mẹ") chỉ hiện khi phụ huynh đã đăng nhập.
+ *
+ * Đo hộp của từng chỗ bấm trong <header>, không đo `scrollWidth`.
+ */
+console.log('\n── Thanh điều hướng nằm trọn trong màn hình ────────────────');
+{
+  const parent = await browser.newContext({ ignoreHTTPSErrors: true });
+  {
+    const p = await parent.newPage();
+    await p.goto(`${APP}/dang-nhap`, { waitUntil: 'domcontentloaded' });
+    await p.fill('input[name=email]', PARENT_EMAIL);
+    await p.fill('input[name=password]', PARENT_PASSWORD);
+    await p.locator('main button[type=submit]').first().click();
+    await p.waitForURL((u) => !u.pathname.includes('dang-nhap'), { timeout: 20000 }).catch(() => {});
+    check('Phụ huynh demo đăng nhập được (để đo thanh điều hướng)', !p.url().includes('dang-nhap'), p.url());
+    await p.close();
+  }
+
+  for (const [vai, ctxGoc] of [
+    ['khách', guest],
+    ['bé', child],
+    ['phụ huynh', parent],
+  ]) {
+    const hong = [];
+    const cookies = await ctxGoc.cookies();
+    for (const width of [320, 360, 390, 414]) {
+      const ctx = await browser.newContext({ viewport: { width, height: 780 }, ignoreHTTPSErrors: true });
+      await ctx.addCookies(cookies);
+      const page = await ctx.newPage();
+      await page.goto(APP, { waitUntil: 'domcontentloaded' });
+      const ra = await page.evaluate(() => {
+        const W = document.documentElement.clientWidth;
+        return [...document.querySelectorAll('header a, header button')]
+          .map((el) => ({ el, r: el.getBoundingClientRect() }))
+          .filter(({ r }) => r.width > 1 && r.height > 1)
+          .filter(({ r }) => r.left < -0.5 || r.right > W + 0.5)
+          .map(({ el, r }) => `"${(el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 18)}" ${Math.round(r.left)}–${Math.round(r.right)}`);
+      });
+      if (ra.length) hong.push(`${width}px: ${ra.join(', ')}`);
+      await ctx.close();
+    }
+    check(
+      `Thanh điều hướng của ${vai}: mọi chỗ bấm nằm trọn trong màn 320–414px`,
+      hong.length === 0,
+      hong.length ? hong.join(' | ') : 'sạch ở 4 bề rộng'
+    );
+  }
+  await parent.close();
 }
 
 await browser.close();

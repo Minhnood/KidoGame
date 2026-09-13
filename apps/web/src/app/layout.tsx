@@ -234,7 +234,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <SiteLogo />
             <div className="ml-auto flex items-center gap-0.5 sm:gap-2">
               <SiteNav />
-              <ThemeToggle />
+              <ThemeToggle viTri="nav" />
             </div>
           </Wrap>
           {/*

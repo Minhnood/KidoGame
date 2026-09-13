@@ -677,7 +677,7 @@ if (FIXTURE) {
    * Nút KHÔNG co giãn theo nhãn. Trước khi giữ chỗ, nó rộng 113 → 83 → 70px qua ba
    * nhãn, và "Bé đăng nhập" bên trái nhảy theo. Có mờ dần thì cú nhảy ấy thành bóng
    * đôi: trang cũ và trang mới chồng lên nhau với hai nút ở hai chỗ lệch nhau. Đo ở
-   * màn 1100px — dưới `sm` nhãn chữ bị ẩn nên không có gì để lệch.
+   * màn 1100px — dưới `sm` nút này ẩn hẳn, nút ở chân trang thay chỗ (đo bên dưới).
    */
   check(
     'Nút đổi giao diện giữ nguyên bề rộng qua cả ba nhãn (thanh điều hướng không nhảy)',
@@ -745,6 +745,59 @@ if (FIXTURE) {
         .evaluate((e) => getComputedStyle(e).animationName)) === 'none'
     );
     await it.ctx.close();
+  }
+
+  /*
+   * ĐIỆN THOẠI: nút rời thanh điều hướng, xuống chân trang, có chữ.
+   *
+   * Lý do dời: ở 360px nút trên thanh nằm 9px ngoài màn hình (bé đăng nhập), và trên
+   * thanh nó chỉ còn cái icon 🖥️. Canh ba thứ: đúng MỘT nút hiện ở mỗi cỡ, nút ở chân
+   * trang tự nói mình là gì, và hai nút cùng nhãn khi xoay màn hình — mỗi nút giữ
+   * `useState` riêng, nên thiếu sự kiện đồng bộ là nút kia vẫn ghi "Sáng" trên trang tối.
+   */
+  {
+    const dt = await mo('light');
+    await dt.p.setViewportSize({ width: 390, height: 844 });
+    const nutNav = dt.p.locator('[data-testid=theme-toggle]');
+    const nutChan = dt.p.locator('[data-testid=theme-toggle-chan-trang]');
+    check(
+      '390px: nút đổi giao diện KHÔNG nằm trên thanh điều hướng',
+      !(await nutNav.isVisible()),
+      `nav hiện: ${await nutNav.isVisible()}`
+    );
+    const chuChan = (await nutChan.innerText()).replace(/\s+/g, ' ').trim();
+    const hopChan = await nutChan.boundingBox();
+    check(
+      '390px: nút ở chân trang hiện, CÓ CHỮ nói nó là gì, cao đủ tầm tay',
+      (await nutChan.isVisible()) && /Giao diện: Theo máy/.test(chuChan) && hopChan.height >= 44,
+      `"${chuChan}" cao ${Math.round(hopChan?.height ?? 0)}px`
+    );
+    await nutChan.click(); // Theo máy(sáng) -> Sáng
+    await nutChan.click(); // Sáng -> Tối
+    await dt.p.waitForTimeout(400);
+    const dChan = await doc(dt.p);
+    check(
+      '390px: bấm nút ở chân trang đổi được sang tối',
+      dChan.theme === 'dark' && dChan.bgSang < 0.06,
+      `${dChan.theme} / ${dChan.bg}`
+    );
+    await dt.p.setViewportSize({ width: 1100, height: 900 });
+    check(
+      'Kéo lên 1100px: nút chân trang ẩn, nút trên thanh hiện VÀ cùng nhãn "Tối"',
+      !(await nutChan.isVisible()) &&
+        (await nutNav.isVisible()) &&
+        (await nutNav.getAttribute('data-theme-choice')) === 'toi',
+      `nav=${await nutNav.getAttribute('data-theme-choice')}`
+    );
+    await nutNav.click(); // Tối -> Theo máy
+    await dt.p.waitForTimeout(400);
+    await dt.p.setViewportSize({ width: 390, height: 844 });
+    check(
+      '… bấm trên thanh rồi thu về 390px: nút chân trang cũng đổi theo',
+      (await nutChan.getAttribute('data-theme-choice')) === 'may',
+      `chân trang=${await nutChan.getAttribute('data-theme-choice')}`
+    );
+    await dt.ctx.close();
   }
 
   await sang.ctx.close();
@@ -822,10 +875,17 @@ if (FIXTURE) {
          * Và chốt thêm: mọi điểm tab trong chân trang đều phải là link có `href`. Bắt
          * được một `button` hay một `tabindex` lạ lọt vào chân trang — thứ mà phép kiểm
          * trên không thấy nếu nó nằm ngoài khối trang trí.
+         *
+         * Trừ ĐÚNG MỘT ngoại lệ, gọi tên bằng testid: nút đổi giao diện của điện thoại
+         * (lý do dời xuống đây ở `ThemeToggle`). Nó có mặt trong DOM ở mọi cỡ, chỉ ẩn
+         * từ `sm`. Chừa theo testid chứ không chừa "mọi button": một nút lạ thứ hai lọt
+         * vào vẫn đỏ như trước.
          */
-        tabChan: document.querySelectorAll(
-          'footer a, footer button, footer [tabindex]:not([tabindex="-1"])'
-        ).length,
+        tabChan: [
+          ...document.querySelectorAll(
+            'footer a, footer button, footer [tabindex]:not([tabindex="-1"])'
+          ),
+        ].filter((e) => e.dataset.testid !== 'theme-toggle-chan-trang').length,
         linkChan: document.querySelectorAll('footer a[href]').length,
         /*
          * Nền: có dải chuyển sắc hay không, VÀ màu đặc lót dưới còn không.
