@@ -314,6 +314,12 @@ if (gameUrl) {
  * kiểm chẳng liên quan gì tới phân trang. Bản sao dùng lại file của game vừa upload
  * (cùng sha), và `createdAt` lùi về QUÁ KHỨ để game thật vẫn đứng đầu danh sách — phép
  * kiểm "Ẩn game" phía trên bấm vào nút đầu tiên và phải trúng đúng game của nó.
+ *
+ * Lùi từ `createdAt` CỦA GAME GỐC, KHÔNG từ `now()`. Prisma ghi giờ UTC vào cột
+ * `timestamp` không múi giờ, còn `now()` của Postgres dev ra giờ Asia/Ho_Chi_Minh — bản
+ * đầu viết `now() - n giờ` và mỗi lượt chạy đặt 13 game ở TƯƠNG LAI 7 tiếng. Sau vài
+ * lượt, 51 game tương lai chiếm trọn trang 1 trang chủ, game vừa đăng thật của các bộ
+ * khác rơi sang trang 2, và `e2e-dang-tai` đổ vì không tìm thấy thẻ của chính nó.
  */
 if (gameUrl) {
   const envPath = path.join(import.meta.dirname, '..', 'apps', 'web', '.env');
@@ -322,9 +328,16 @@ if (gameUrl) {
   execFileSync('psql', [dbUrl, '-q', '-c', `
     insert into "Game" (id, "childId", title, "sb3Sha256", "sb3Size", "htmlSha256", "thumbSha256", "createdAt", "updatedAt")
     select 'e2eph' || n || '${suffix}', "childId", 'Game phân trang ' || n, "sb3Sha256", "sb3Size", "htmlSha256", "thumbSha256",
-           now() - (n || ' hours')::interval, now()
+           "createdAt" - (n || ' hours')::interval, "updatedAt"
     from "Game", generate_series(1, 13) as n
     where id = '${gameId}'`]);
+
+  {
+    const tuongLai = execFileSync('psql', [dbUrl, '-tAc', `
+      select count(*) from "Game" g, "Game" goc
+      where g.id like 'e2eph%${suffix}' and goc.id = '${gameId}' and g."createdAt" >= goc."createdAt"`]).toString().trim();
+    check('Game dựng bằng SQL đều CŨ HƠN game vừa đăng thật (không nằm ở tương lai)', tuongLai === '0', `${tuongLai}/13 không cũ hơn`);
+  }
 
   const p = await parentCtx.newPage();
   await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
