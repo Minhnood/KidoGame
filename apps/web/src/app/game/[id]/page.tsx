@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
-import { getActor } from '@/lib/session';
 import { objectUrl } from '@/lib/storage';
 import { gameDangBiKhieuNai } from '@/lib/takedown';
 /*
@@ -17,6 +16,7 @@ import { PageTitle } from '@/components/page';
 import { PlayCounter } from './play-counter';
 import { ReportForm } from './report-form';
 import { StageFrame } from './stage-frame';
+import { docGameDuocXem } from './quyen-xem';
 import { HangIcon } from '@/components/hang-icon';
 import { demPhanUngNhieuGame, docPhanUng } from '@/lib/phan-ung';
 import { LoiNhan } from '@/components/loi-nhan';
@@ -34,81 +34,13 @@ interface Warning {
 export default async function GamePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const game = await prisma.game.findUnique({
-    where: { id },
-    include: {
-      // `parentId` để biết người đang xem có phải bố mẹ của bé này không.
-      child: { select: { displayName: true, parentId: true } },
-      tags: { include: { tag: { select: { slug: true, label: true } } } },
-    },
-  });
-
-  /*
-   * Game bị ẩn hoặc gỡ thì coi như không tồn tại với người xem thường.
-   *
-   * Ngoại lệ DUY NHẤT là admin: nếu không có ngoại lệ này thì admin phải quyết định
-   * gỡ hẳn hay cho hiện lại mà không hề nhìn thấy nội dung game — bấm vào tên game
-   * từ trang /admin cũng nhận 404. Kiểm duyệt mù như vậy còn tệ hơn không kiểm duyệt.
-   *
-   * Lưu ý phạm vi: đây CHỈ nới cho admin. Phụ huynh vẫn không xem được game đã ẩn
-   * của con mình qua đường này.
-   */
-  /*
-   * DỰA VÀO PHIÊN SITE + cờ isAdmin, KHÔNG dùng `getAdmin()` — và đây là một quyết
-   * định có chủ ý, không phải chỗ bị bỏ sót khi tách origin.
-   *
-   * Trang này nằm trên app origin, nên cookie phiên quản trị (host-only trên admin
-   * origin) không tới được đây. Dùng `getAdmin()` ở đây thì luôn là null và người
-   * kiểm duyệt mất hẳn khả năng NHÌN THẤY nội dung mình đang quyết định — đúng cái
-   * mà đoạn trên vừa gọi là kiểm duyệt mù.
-   *
-   * Phân biệt ĐỌC với GHI, và cái giá của hai bên khác nhau hẳn:
-   *
-   *  - GHI (ẩn, gỡ hẳn, khoá tài khoản) đòi phiên quản trị. Đó là những việc không
-   *    đảo lại được và là những việc một lỗ XSS sẽ muốn gọi tới.
-   *  - ĐỌC một game đã bị ẩn thì chỉ cần phiên site có isAdmin. Nếu ai đó khai thác
-   *    được XSS trên app origin bằng phiên của một admin, thứ họ thêm được là xem
-   *    một game đã bị ẩn — mà nội dung đó chính họ vừa upload cũng xem được. Không
-   *    đáng đánh đổi bằng việc làm người kiểm duyệt không thấy gì.
-   *
-   * Nghĩa là người kiểm duyệt đăng nhập ở HAI cửa: cửa site để xem game, cửa quản
-   * trị để bấm nút. Phiên site sống 30 ngày nên trong thực tế đó là một lần.
-   */
-  const actor = await getActor();
-  const isAdmin = actor?.kind === 'parent' && actor.isAdmin;
-
-  /*
-   * LIMITED chơi được với MỌI người — đó là toàn bộ ý nghĩa của ẩn mềm. Game chỉ
-   * biến mất khỏi trang chủ, tìm kiếm và các danh sách; ai có link vẫn vào được.
-   */
-  const xemDuoc = game?.status === 'PUBLISHED' || game?.status === 'LIMITED';
-
-  /**
-   * Người đang xem có phải bố mẹ của bé làm ra game này không.
-   *
-   * `parentId` là khoá ngoại thật trong DB, không phải suy ra từ gì cả — nên đây là
-   * đúng câu hỏi "game này có phải của nhà mình không", cùng điều kiện mà
-   * `setGameHiddenAction` kiểm ở tầng server (`child: { parentId }`). Hai chỗ hỏi
-   * cùng một câu là cố ý: nút chỉ hiện ra ở đúng những trang mà bấm vào sẽ chạy.
-   */
-  const laChuNhan = actor?.kind === 'parent' && game?.child.parentId === actor.id;
-
-  /*
-   * Bố mẹ xem được game ĐANG ẨN của con mình. Bàn giao cũ ghi ngược lại điều này,
-   * và nó đúng cho tới khi có nút "Ẩn game" trên chính trang này — không nới thì
-   * phụ huynh bấm ẩn xong là trang tự trả 404 ngay dưới tay họ, tức một cái nút
-   * làm đúng việc của nó mà trông y như vừa làm hỏng cái gì.
-   *
-   * Chỉ nới tới HIDDEN, KHÔNG nới REMOVED: HIDDEN là quyết định của chính phụ
-   * huynh và họ đảo lại được, còn REMOVED là phán quyết của đội kiểm duyệt mà họ
-   * không tự lật được — cho xem lại nội dung đó ở đây là mở một cửa mà chính
-   * `setGameHiddenAction` đang đóng.
-   *
-   * Không ảnh hưởng gì tới người lạ: điều kiện đòi đúng `parentId` của bé.
-   */
-  const chuNhanXemGameAn = laChuNhan && game?.status === 'HIDDEN';
-
-  if (!game || (!xemDuoc && !isAdmin && !chuNhanXemGameAn)) notFound();
+  /* Luật "ai được xem" nằm ở `quyen-xem.ts`, và `layout.tsx` đã gọi nó rồi `notFound()`
+     TRƯỚC khung chờ — lý do ở đầu file đó. Gọi lại ở đây chỉ để lấy dữ liệu; `cache()`
+     trả về đúng kết quả layout vừa có, không hỏi DB lần hai. `notFound()` giữ lại
+     phòng khi ai đó xoá layout: thà một 404 sai mã còn hơn render một game đã ẩn. */
+  const duocXem = await docGameDuocXem(id);
+  if (!duocXem) notFound();
+  const { game, actor, isAdmin, laChuNhan, chuNhanXemGameAn, xemDuoc } = duocXem;
 
   /*
    * Icon: đọc SAU `notFound()` để không tốn một truy vấn cho trang 404, và truyền

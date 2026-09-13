@@ -3,6 +3,24 @@ import { DauTrangCho, KhungCho, LuoiGameCho, O, Vien } from '@/components/dang-t
 /**
  * Khung chờ của trang chủ.
  *
+ * FILE NÀY PHẢI NẰM TRONG NHÓM `(trang-chu)`, KHÔNG ĐƯỢC ĐƯA VỀ `app/loading.tsx`.
+ *
+ * Nó từng nằm ở gốc app, và `loading.tsx` ở gốc không bọc riêng trang chủ — nó bọc
+ * MỌI TRANG. Có khung chờ thì Next gửi dòng trạng thái 200 đi ngay để kịp vẽ khung,
+ * nên mọi `redirect()` và `notFound()` ở bất cứ đâu bên dưới đều chạy SAU khi mã
+ * trạng thái đã rời máy chủ. Đo được khi còn ở gốc:
+ *
+ *   admin.localhost/admin, không cookie   -> 200 (đúng ra 307 sang đăng nhập)
+ *   /game/<id> đã bị phụ huynh ẩn         -> 200 (đúng ra 404)
+ *
+ * Nội dung không lộ — body chỉ có khung chờ và một `NEXT_REDIRECT` để JavaScript chuyển
+ * hướng hộ. Nhưng việc chặn cửa khu quản trị thành ra do trình duyệt tự nguyện làm, và
+ * game đã ẩn trả 200 cho mọi bot, bộ nhớ đệm, phần mềm kiểm link. Sáu bộ kiểm đỏ cùng
+ * lúc vì đúng một file này.
+ *
+ * Nhóm route không đổi URL — trang vẫn là `/` — nhưng giới hạn khung chờ về đúng một
+ * trang, và trang chủ không có `redirect` hay `notFound` nào để làm hỏng.
+ *
  * Trang chủ là chỗ trẻ quay về sau mỗi game, nên nó được mở nhiều lần trong một buổi
  * — và mỗi lần quay về là một lần chờ.
  *
