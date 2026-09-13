@@ -304,7 +304,7 @@ if (gameUrl) {
   await anon.close();
 }
 
-// ---------- Danh sách game của bé trên trang bố mẹ: phân trang theo từng bé ----------
+// ---------- Danh sách game của bé trên trang bố mẹ: 5 game, "Xem tất cả", phân trang ----------
 /*
  * Trước đây danh sách in hết một lượt: bé Minh trong DB dev có 26 game, thẻ của bé cao
  * hơn 2.000px và form tạo bé bị đẩy xuống tận đáy.
@@ -344,11 +344,36 @@ if (gameUrl) {
   const the = p.locator(`#be-${CHILD_USER}`);
   const hrefs = () => the.locator('a[href^="/game/"]').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
 
+  /*
+   * MẶC ĐỊNH 5 game mới nhất, bấm "Xem tất cả" mới ra 10 game một trang có phân trang
+   * — yêu cầu của fen. Trước đó trang mở ra thẳng 10 dòng một trang.
+   */
+  const t0 = await hrefs();
+  const tieuDe0 = (await p.locator(`[data-testid=tieu-de-game-be-${CHILD_USER}]`).innerText({ timeout: 3000 }).catch(() => '')).replace(/\s+/g, ' ');
+  check('Trang bố mẹ: mặc định mỗi bé chỉ bày 5 game', t0.length === 5, `${t0.length} dòng`);
+  /* Đếm TỔNG, không đếm dòng đang bày — nếu không một bé 14 game hiện "(5)". */
+  check('… tiêu đề vẫn đếm TỔNG và nói đây là 5 game mới nhất', /\(14\)/.test(tieuDe0) && /5 game mới nhất/.test(tieuDe0), tieuDe0);
+  const xemTatCa = p.locator(`[data-testid=xem-tat-ca-be-${CHILD_USER}]`);
+  check(
+    '… không có thanh phân trang, chỉ có link "Xem tất cả" kèm con số',
+    (await p.locator(`[data-testid=pager-be-${CHILD_USER}]`).count()) === 0 &&
+      /Xem tất cả 14 game/.test(await xemTatCa.innerText().catch(() => ''))
+  );
+
+  /* Không có link thì các phép trên đã đỏ; mở thẳng URL để phần còn lại vẫn đo được,
+     đừng để `click()` treo 30 giây rồi làm đổ cả bộ — lần thử phá đầu tiên đổ đúng vậy. */
+  if (await xemTatCa.count()) await xemTatCa.click();
+  else await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&xem=tat-ca#be-${CHILD_USER}`);
+  await p.waitForURL(/xem=tat-ca/, { timeout: 20000 });
+  await p.waitForSelector(`[data-testid=pager-be-${CHILD_USER}]`, { timeout: 10000 }).catch(() => {});
   const t1 = await hrefs();
-  const tieuDe = await the.locator('p.mt-5').first().innerText();
-  check('Trang bố mẹ: mỗi bé chỉ bày 10 game một trang', t1.length === 10, `${t1.length} dòng`);
-  /* Đếm TỔNG, không đếm dòng đang bày — nếu không một bé 14 game hiện "(10)". */
-  check('… nhưng tiêu đề đếm TỔNG game của bé', /\(14\)/.test(tieuDe) && /trang 1\/2/.test(tieuDe), tieuDe.replace(/\s+/g, ' '));
+  const tieuDe = await p.locator(`[data-testid=tieu-de-game-be-${CHILD_USER}]`).innerText({ timeout: 3000 }).catch(() => '');
+  check('Bấm "Xem tất cả": 10 game một trang', t1.length === 10, `${t1.length} dòng`);
+  check(
+    '… năm game mặc định chính là năm game ĐẦU của trang 1 (cùng thứ tự mới nhất)',
+    t0.every((h, i) => t1[i] === h)
+  );
+  check('… tiêu đề chuyển sang "trang 1/2"', /\(14\)/.test(tieuDe) && /trang 1\/2/.test(tieuDe), tieuDe.replace(/\s+/g, ' '));
 
   await p.locator(`[data-testid=pager-be-${CHILD_USER}-sau]`).click();
   await p.waitForURL(/trang=2/, { timeout: 20000 });
@@ -361,21 +386,43 @@ if (gameUrl) {
     `${t2.length} dòng, ${t2.filter((h) => t1.includes(h)).length} trùng`
   );
   check(
-    '… URL chỉ đúng bé đó và neo về thẻ của bé (không nhảy về đầu trang)',
-    u.searchParams.get('be') === CHILD_USER && u.searchParams.get('trang') === '2' && u.hash === `#be-${CHILD_USER}`,
+    '… URL giữ "xem tất cả", chỉ đúng bé đó và neo về thẻ của bé',
+    u.searchParams.get('be') === CHILD_USER &&
+      u.searchParams.get('xem') === 'tat-ca' &&
+      u.searchParams.get('trang') === '2' &&
+      u.hash === `#be-${CHILD_USER}`,
     u.search + u.hash
   );
 
-  /* Lật trang của MỘT bé khác không được kéo bé này đi theo: `?be=` chỉ bé khác thì bé
-     này vẫn ở trang 1. Không có bé thứ hai thật trong bộ này, nhưng luật được đo đúng
-     ở chỗ nó quyết định — tên trong `be` không khớp thì là trang 1. */
-  await p.goto(`${APP}/phu-huynh?be=bekhac&trang=2`, { waitUntil: 'networkidle' });
+  const thuGon = p.locator(`[data-testid=thu-gon-be-${CHILD_USER}]`);
+  if (await thuGon.count()) await thuGon.click();
+  else await p.goto(`${APP}/phu-huynh#be-${CHILD_USER}`);
+  await p.waitForURL((x) => !x.search.includes('xem'), { timeout: 20000 });
+  await p.waitForTimeout(800);
   check(
-    'Lật trang của bé khác không kéo bé này sang trang 2',
-    (await p.locator(`[data-testid=pager-be-${CHILD_USER}-so-1]`).getAttribute('aria-current')) === 'page'
+    'Bấm "Thu gọn": về lại 5 game, hết thanh phân trang, vẫn neo ở thẻ của bé',
+    (await hrefs()).length === 5 &&
+      (await p.locator(`[data-testid=pager-be-${CHILD_USER}]`).count()) === 0 &&
+      new URL(p.url()).hash === `#be-${CHILD_USER}`,
+    new URL(p.url()).search + new URL(p.url()).hash
   );
 
-  await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&trang=9`, { waitUntil: 'networkidle' });
+  /* Xem tất cả của MỘT bé khác không được kéo bé này mở theo: `?be=` chỉ bé khác thì bé
+     này vẫn thu gọn. Không có bé thứ hai thật trong bộ này, nhưng luật được đo đúng ở
+     chỗ nó quyết định — tên trong `be` không khớp thì là thu gọn. */
+  await p.goto(`${APP}/phu-huynh?be=bekhac&xem=tat-ca&trang=2`, { waitUntil: 'networkidle' });
+  check(
+    'Xem tất cả / lật trang của bé khác không kéo bé này mở ra',
+    (await hrefs()).length === 5 && (await p.locator(`[data-testid=pager-be-${CHILD_USER}]`).count()) === 0
+  );
+
+  /* Link lật trang CŨ (trước khi có "Xem tất cả") không có `xem` — vẫn phải ra đúng trang
+     nó ghi, không phải 5 game đầu. */
+  await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&trang=2`, { waitUntil: 'networkidle' });
+  const tCu = await hrefs();
+  check('Link cũ ?be=…&trang=2 (không có xem=) vẫn mở đúng trang 2', tCu.length === 4 && tCu.every((h) => t2.includes(h)), `${tCu.length} dòng`);
+
+  await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&xem=tat-ca&trang=9`, { waitUntil: 'networkidle' });
   check(
     'Trang vượt quá cuối nói ra, không giả vờ "Bé chưa đăng game nào"',
     (await p.locator(`[data-testid=pager-be-${CHILD_USER}-khong-co]`).count()) === 1 &&

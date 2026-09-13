@@ -34,10 +34,20 @@ export const dynamic = 'force-dynamic';
  */
 const GAME_MOI_TRANG = 10;
 
+/**
+ * Năm game mới nhất khi CHƯA bấm "Xem tất cả" — yêu cầu của fen.
+ *
+ * Mở trang bố mẹ là để liếc xem dạo này con đăng gì, không phải để rà cả kho. Mười dòng
+ * mỗi bé ở trạng thái mặc định thì một nhà hai bé đã là hai màn hình danh sách trước
+ * khi tới form tạo tài khoản. Muốn rà hết thì bấm "Xem tất cả": lúc đó mới là mười dòng
+ * một trang, có phân trang như cũ.
+ */
+const GAME_THU_GON = 5;
+
 export default async function ParentDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ be?: string; trang?: string }>;
+  searchParams: Promise<{ be?: string; trang?: string; xem?: string }>;
 }) {
   const sp = await searchParams;
   /*
@@ -54,6 +64,15 @@ export default async function ParentDashboard({
    */
   const beLat = sp.be ?? '';
   const trangLat = Math.max(1, Number(sp.trang) || 1);
+  /*
+   * "Xem tất cả" cũng theo TỪNG bé và chỉ một bé một lúc, cùng lý do với phân trang.
+   *
+   * Có `trang` mà thiếu `xem=tat-ca` vẫn tính là đang xem tất cả: link lật trang cũ còn
+   * nằm trong lịch sử trình duyệt và trong thư ai đó tự gửi cho mình, và mở `?trang=2`
+   * mà ra năm game đầu tiên, không có thanh phân trang nào, là nói sai với chính URL.
+   */
+  const moRong = (username: string) =>
+    username === beLat && (sp.xem === 'tat-ca' || sp.trang !== undefined);
 
   const actor = await getActor();
   if (!actor) redirect('/dang-nhap');
@@ -81,12 +100,13 @@ export default async function ParentDashboard({
     cacBe.map(async (child) => {
       const tongGame = child._count.games;
       const soTrang = Math.max(1, Math.ceil(tongGame / GAME_MOI_TRANG));
-      const trang = child.username === beLat ? trangLat : 1;
+      const xemTatCa = moRong(child.username);
+      const trang = xemTatCa ? trangLat : 1;
       const games = await prisma.game.findMany({
         where: { childId: child.id },
         orderBy: { createdAt: 'desc' },
-        skip: (trang - 1) * GAME_MOI_TRANG,
-        take: GAME_MOI_TRANG,
+        skip: xemTatCa ? (trang - 1) * GAME_MOI_TRANG : 0,
+        take: xemTatCa ? GAME_MOI_TRANG : GAME_THU_GON,
         select: {
           id: true,
           title: true,
@@ -96,13 +116,13 @@ export default async function ParentDashboard({
           thumbSha256: true,
         },
       });
-      return { ...child, games, tongGame, soTrang, trang };
+      return { ...child, games, tongGame, soTrang, trang, xemTatCa };
     })
   );
 
   /** Link sang trang `p` của một bé, kèm neo về đúng thẻ của bé đó. */
   const hrefTrangBe = (username: string) => (p: number) => {
-    const params = new URLSearchParams({ be: username });
+    const params = new URLSearchParams({ be: username, xem: 'tat-ca' });
     if (p > 1) params.set('trang', String(p));
     /* Neo `#be-...`: thẻ của bé nằm giữa trang, dưới khối ghi chú. Không có neo thì mỗi
        lần sang trang trình duyệt nhảy về đầu, và bố mẹ phải cuộn lại xuống tìm đúng bé
@@ -244,13 +264,19 @@ export default async function ParentDashboard({
 
               {/* Đếm TỔNG game của bé, không đếm số dòng đang bày. Đếm dòng thì một bé có 26
                   game hiện "Game đã đăng (10)" — một con số sai về chính con mình. */}
-              <p className="mt-5 font-semibold">
+              <p className="mt-5 font-semibold" data-testid={`tieu-de-game-be-${child.username}`}>
                 Game đã đăng ({child.tongGame})
-                {child.soTrang > 1 && (
-                  <span className="ml-2 text-sm font-normal text-ink-soft">
-                    · trang {Math.min(child.trang, child.soTrang)}/{child.soTrang}
-                  </span>
-                )}
+                {child.xemTatCa
+                  ? child.soTrang > 1 && (
+                      <span className="ml-2 text-sm font-normal text-ink-soft">
+                        · trang {Math.min(child.trang, child.soTrang)}/{child.soTrang}
+                      </span>
+                    )
+                  : child.tongGame > GAME_THU_GON && (
+                      <span className="ml-2 text-sm font-normal text-ink-soft">
+                        · {GAME_THU_GON} game mới nhất
+                      </span>
+                    )}
               </p>
               {child.tongGame === 0 ? (
                 <p className="text-ink-soft">Bé chưa đăng game nào.</p>
@@ -367,13 +393,39 @@ export default async function ParentDashboard({
                   trang, và bộ kiểm phải chỉ đúng được thanh của bé nào. Trang vượt quá
                   cuối danh sách thì `Pager` tự nói ra thay vì để một danh sách rỗng giả
                   vờ là "Bé chưa đăng game nào". */}
-              <Pager
-                page={child.trang}
-                lastPage={child.soTrang}
-                href={hrefTrangBe(child.username)}
-                testId={`pager-be-${child.username}`}
-                className="mt-4"
-              />
+              {child.xemTatCa ? (
+                <>
+                  <Pager
+                    page={child.trang}
+                    lastPage={child.soTrang}
+                    href={hrefTrangBe(child.username)}
+                    testId={`pager-be-${child.username}`}
+                    className="mt-4"
+                  />
+                  {/* Thu gọn về đúng thẻ của bé này, không về đầu trang. */}
+                  {child.tongGame > GAME_THU_GON && (
+                    <Link
+                      href={`/phu-huynh#be-${child.username}`}
+                      data-testid={`thu-gon-be-${child.username}`}
+                      className="mt-3 inline-flex min-h-touch items-center font-semibold text-accent-text"
+                    >
+                      Thu gọn
+                    </Link>
+                  )}
+                </>
+              ) : (
+                child.tongGame > GAME_THU_GON && (
+                  /* Nói luôn con số: "Xem tất cả" trần không cho biết bấm vào là thêm 1
+                     game hay thêm 200. */
+                  <Link
+                    href={hrefTrangBe(child.username)(1)}
+                    data-testid={`xem-tat-ca-be-${child.username}`}
+                    className="mt-3 inline-flex min-h-touch items-center font-semibold text-accent-text"
+                  >
+                    Xem tất cả {child.tongGame} game →
+                  </Link>
+                )
+              )}
             </li>
           ))}
         </ul>
