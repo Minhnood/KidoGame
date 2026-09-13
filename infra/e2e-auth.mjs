@@ -304,6 +304,73 @@ if (gameUrl) {
   await anon.close();
 }
 
+// ---------- Danh sách game của bé trên trang bố mẹ: phân trang theo từng bé ----------
+/*
+ * Trước đây danh sách in hết một lượt: bé Minh trong DB dev có 26 game, thẻ của bé cao
+ * hơn 2.000px và form tạo bé bị đẩy xuống tận đáy.
+ *
+ * DỰNG GAME BẰNG SQL, không bằng upload: cần hơn 10 game cho MỘT bé, mà trần là 10 game
+ * mỗi bé trong 24 giờ — upload thật thì chính bộ này tự chạm trần, và đỏ ở một phép
+ * kiểm chẳng liên quan gì tới phân trang. Bản sao dùng lại file của game vừa upload
+ * (cùng sha), và `createdAt` lùi về QUÁ KHỨ để game thật vẫn đứng đầu danh sách — phép
+ * kiểm "Ẩn game" phía trên bấm vào nút đầu tiên và phải trúng đúng game của nó.
+ */
+if (gameUrl) {
+  const envPath = path.join(import.meta.dirname, '..', 'apps', 'web', '.env');
+  const dbUrl = (fs.readFileSync(envPath, 'utf8').match(/DATABASE_URL="([^"]+)"/)?.[1] ?? '').split('?')[0];
+  const gameId = gameUrl.split('/game/')[1];
+  execFileSync('psql', [dbUrl, '-q', '-c', `
+    insert into "Game" (id, "childId", title, "sb3Sha256", "sb3Size", "htmlSha256", "thumbSha256", "createdAt", "updatedAt")
+    select 'e2eph' || n || '${suffix}', "childId", 'Game phân trang ' || n, "sb3Sha256", "sb3Size", "htmlSha256", "thumbSha256",
+           now() - (n || ' hours')::interval, now()
+    from "Game", generate_series(1, 13) as n
+    where id = '${gameId}'`]);
+
+  const p = await parentCtx.newPage();
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  const the = p.locator(`#be-${CHILD_USER}`);
+  const hrefs = () => the.locator('a[href^="/game/"]').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+
+  const t1 = await hrefs();
+  const tieuDe = await the.locator('p.mt-5').first().innerText();
+  check('Trang bố mẹ: mỗi bé chỉ bày 10 game một trang', t1.length === 10, `${t1.length} dòng`);
+  /* Đếm TỔNG, không đếm dòng đang bày — nếu không một bé 14 game hiện "(10)". */
+  check('… nhưng tiêu đề đếm TỔNG game của bé', /\(14\)/.test(tieuDe) && /trang 1\/2/.test(tieuDe), tieuDe.replace(/\s+/g, ' '));
+
+  await p.locator(`[data-testid=pager-be-${CHILD_USER}-sau]`).click();
+  await p.waitForURL(/trang=2/, { timeout: 20000 });
+  await p.waitForSelector(`#be-${CHILD_USER} a[href^="/game/"]`);
+  const t2 = await hrefs();
+  const u = new URL(p.url());
+  check(
+    'Sang trang 2 của bé ra 4 game KHÁC, không lặp trang 1',
+    t2.length === 4 && t2.every((h) => !t1.includes(h)),
+    `${t2.length} dòng, ${t2.filter((h) => t1.includes(h)).length} trùng`
+  );
+  check(
+    '… URL chỉ đúng bé đó và neo về thẻ của bé (không nhảy về đầu trang)',
+    u.searchParams.get('be') === CHILD_USER && u.searchParams.get('trang') === '2' && u.hash === `#be-${CHILD_USER}`,
+    u.search + u.hash
+  );
+
+  /* Lật trang của MỘT bé khác không được kéo bé này đi theo: `?be=` chỉ bé khác thì bé
+     này vẫn ở trang 1. Không có bé thứ hai thật trong bộ này, nhưng luật được đo đúng
+     ở chỗ nó quyết định — tên trong `be` không khớp thì là trang 1. */
+  await p.goto(`${APP}/phu-huynh?be=bekhac&trang=2`, { waitUntil: 'networkidle' });
+  check(
+    'Lật trang của bé khác không kéo bé này sang trang 2',
+    (await p.locator(`[data-testid=pager-be-${CHILD_USER}-so-1]`).getAttribute('aria-current')) === 'page'
+  );
+
+  await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&trang=9`, { waitUntil: 'networkidle' });
+  check(
+    'Trang vượt quá cuối nói ra, không giả vờ "Bé chưa đăng game nào"',
+    (await p.locator(`[data-testid=pager-be-${CHILD_USER}-khong-co]`).count()) === 1 &&
+      (await the.locator('text=Bé chưa đăng game nào').count()) === 0
+  );
+  await p.close();
+}
+
 // ---------- Khoá tài khoản là thu hồi phiên đang mở ----------
 if (gameUrl) {
   const p = await parentCtx.newPage();

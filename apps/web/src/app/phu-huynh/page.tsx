@@ -18,10 +18,43 @@ import {
 } from './child-controls';
 import { VerifyEmailButton } from './verify-email-button';
 import { NGAY_GIU_GAME_DA_GO } from '@/lib/moderation';
+import { Pager } from '@/components/pager';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ParentDashboard() {
+/**
+ * Mười game mỗi trang, cho TỪNG bé.
+ *
+ * Trước đây danh sách in hết một lượt. Đo trong DB dev: bé Minh có 26 game, mỗi dòng
+ * cao khoảng 84px, tức hơn 2.000px chỉ riêng một bé — form "Tạo tài khoản cho bé" bị
+ * đẩy xuống tận đáy, và bé thứ hai nằm ngoài tầm cuộn của hầu hết mọi người.
+ *
+ * Mười chứ không nhiều hơn: trang này là chỗ bố mẹ RÀ SOÁT, đọc từng dòng để quyết định
+ * ẩn hay xoá, không phải chỗ lướt. Mười dòng vừa một màn hình máy tính.
+ */
+const GAME_MOI_TRANG = 10;
+
+export default async function ParentDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ be?: string; trang?: string }>;
+}) {
+  const sp = await searchParams;
+  /*
+   * PHÂN TRANG THEO TỪNG BÉ, và chỉ MỘT bé được lật trang tại một thời điểm.
+   *
+   * Một nhà có thể có nhiều bé, mỗi bé một danh sách. `?be=<tên đăng nhập>&trang=N` lật
+   * đúng danh sách của bé đó; mọi bé khác đứng ở trang 1. Không làm mỗi bé một tham số
+   * riêng (`trang-beminh=2`): `Pager` dựng ô "nhảy tới trang" bằng một ô tên `trang`, nên
+   * tham số tự đặt tên khác sẽ bị ô ấy ghi đè thành một `trang` không thuộc bé nào.
+   * `be` cũng là đúng tên khu quản trị đang dùng cho cùng ý nghĩa.
+   *
+   * Đổi lại: đang ở trang 3 của bé A mà lật sang trang 2 của bé B thì bé A về trang 1.
+   * Chấp nhận — rà hai danh sách xen kẽ nhau không phải cách người ta dùng trang này.
+   */
+  const beLat = sp.be ?? '';
+  const trangLat = Math.max(1, Number(sp.trang) || 1);
+
   const actor = await getActor();
   if (!actor) redirect('/dang-nhap');
   if (actor.kind !== 'parent') redirect('/');
@@ -31,12 +64,29 @@ export default async function ParentDashboard() {
     select: { emailVerifiedAt: true },
   });
 
-  const children = await prisma.child.findMany({
+  const cacBe = await prisma.child.findMany({
     where: { parentId: actor.id },
     orderBy: { createdAt: 'asc' },
-    include: {
-      games: {
+    include: { _count: { select: { games: true } } },
+  });
+
+  /*
+   * Mỗi bé MỘT truy vấn game, chỉ lấy đúng trang đang xem.
+   *
+   * Không gộp được vào `include` ở trên: `skip` của bé đang lật khác `skip` của mọi bé
+   * còn lại, mà một `include` chỉ nhận một `skip`. Số bé mỗi nhà nhỏ (thường một hai),
+   * nên vài truy vấn song song vẫn rẻ hơn hẳn việc kéo cả trăm dòng game về chỉ để cắt.
+   */
+  const children = await Promise.all(
+    cacBe.map(async (child) => {
+      const tongGame = child._count.games;
+      const soTrang = Math.max(1, Math.ceil(tongGame / GAME_MOI_TRANG));
+      const trang = child.username === beLat ? trangLat : 1;
+      const games = await prisma.game.findMany({
+        where: { childId: child.id },
         orderBy: { createdAt: 'desc' },
+        skip: (trang - 1) * GAME_MOI_TRANG,
+        take: GAME_MOI_TRANG,
         select: {
           id: true,
           title: true,
@@ -45,9 +95,20 @@ export default async function ParentDashboard() {
           createdAt: true,
           thumbSha256: true,
         },
-      },
-    },
-  });
+      });
+      return { ...child, games, tongGame, soTrang, trang };
+    })
+  );
+
+  /** Link sang trang `p` của một bé, kèm neo về đúng thẻ của bé đó. */
+  const hrefTrangBe = (username: string) => (p: number) => {
+    const params = new URLSearchParams({ be: username });
+    if (p > 1) params.set('trang', String(p));
+    /* Neo `#be-...`: thẻ của bé nằm giữa trang, dưới khối ghi chú. Không có neo thì mỗi
+       lần sang trang trình duyệt nhảy về đầu, và bố mẹ phải cuộn lại xuống tìm đúng bé
+       đang rà — mười game một lần, cuộn lại một lần. */
+    return `/phu-huynh?${params.toString()}#be-${username}`;
+  };
 
   /*
    * Game nào đang bị một yêu cầu gỡ bản quyền giữ ẩn. Cần để nói trước cho phụ huynh
@@ -129,7 +190,9 @@ export default async function ParentDashboard() {
       ) : (
         <ul className="mb-9 list-none space-y-4 p-0">
           {children.map((child) => (
-            <li key={child.id} className={`p-5 ${MAT_THE}`}>
+            /* `scroll-mt-6`: neo `#be-...` đưa thẻ lên sát mép trên, và không có khoảng này
+               thì tên bé dính sát vào mép cửa sổ trình duyệt. */
+            <li key={child.id} id={`be-${child.username}`} className={`scroll-mt-6 p-5 ${MAT_THE}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-lg font-bold">
@@ -150,10 +213,17 @@ export default async function ParentDashboard() {
 
               <ResetPasswordForm childId={child.id} />
 
+              {/* Đếm TỔNG game của bé, không đếm số dòng đang bày. Đếm dòng thì một bé có 26
+                  game hiện "Game đã đăng (10)" — một con số sai về chính con mình. */}
               <p className="mt-5 font-semibold">
-                Game đã đăng ({child.games.length})
+                Game đã đăng ({child.tongGame})
+                {child.soTrang > 1 && (
+                  <span className="ml-2 text-sm font-normal text-ink-soft">
+                    · trang {Math.min(child.trang, child.soTrang)}/{child.soTrang}
+                  </span>
+                )}
               </p>
-              {child.games.length === 0 ? (
+              {child.tongGame === 0 ? (
                 <p className="text-ink-soft">Bé chưa đăng game nào.</p>
               ) : (
                 <ul className="mt-2 list-none space-y-2 p-0">
@@ -258,6 +328,17 @@ export default async function ParentDashboard() {
                   ))}
                 </ul>
               )}
+              {/* `testId` riêng từng bé: một nhà nhiều bé thì trang có nhiều thanh phân
+                  trang, và bộ kiểm phải chỉ đúng được thanh của bé nào. Trang vượt quá
+                  cuối danh sách thì `Pager` tự nói ra thay vì để một danh sách rỗng giả
+                  vờ là "Bé chưa đăng game nào". */}
+              <Pager
+                page={child.trang}
+                lastPage={child.soTrang}
+                href={hrefTrangBe(child.username)}
+                testId={`pager-be-${child.username}`}
+                className="mt-4"
+              />
             </li>
           ))}
         </ul>
