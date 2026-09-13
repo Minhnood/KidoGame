@@ -701,8 +701,11 @@ const MAY_BAY: Array<{ tren: string; rong: string; giay: number; tre: number; mo
  * mây ở xa hơn đồi, cây và cành. Thẻ game nền đục che mây; chữ nằm thẳng trên nền
  * trang thì mây đi qua sau lưng chữ — `contrast-check` đo chữ trên màu mây.
  *
- * CHỈ CÓ BAN NGÀY (`kg-ngay`). Ban đêm trời có trăng sao ở chỗ của nó; mây màu tối
- * trôi qua nền tối thì chỉ là mấy vệt bẩn di động.
+ * CÓ CẢ BAN NGÀY LẪN BAN ĐÊM. Ban đêm mây là mây được trăng rọi — lam nhạt, sáng hơn
+ * trời một chút — và bay qua SAU trăng sao, vì lớp này đứng trước `SiteDecor` trong DOM.
+ * Bản đầu chỉ cho ban ngày với lý do mây tối trên nền tối là vệt bẩn; đúng với màu mây
+ * cũ (tách nền 1.25:1), không còn đúng khi màu mây đêm được chỉnh riêng — xem
+ * `--toi-decor-may` trong `globals.css`.
  *
  * Mỗi đám đặt `left: 100%` rồi dịch sang trái đúng `100vw + bề rộng của chính nó`:
  * xuất phát khi vừa khuất ngoài mép phải, kết thúc khi vừa khuất ngoài mép trái. Không
@@ -713,7 +716,7 @@ export function MayBay() {
     <div
       aria-hidden="true"
       data-kg-decor="may"
-      className="kg-ngay pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
     >
       {MAY_BAY.map((m, i) => (
         <svg

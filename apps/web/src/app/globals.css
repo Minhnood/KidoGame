@@ -381,8 +381,13 @@
   --toi-decor-co: #356641;
   /* Ban đêm "mặt trời" là mặt TRĂNG — xem `.kg-ngay` / `.kg-dem` ở cuối file. */
   --toi-decor-troi: #d8d3c0;
-  --toi-decor-may: #262636;
-  --toi-decor-may-bong: #1c1c2a;
+  /* Mây ĐÊM là mây được trăng rọi: sáng hơn trời một chút và ngả lam, không phải vệt
+     tối. Màu cũ `#262636` chỉ tách nền 1.25:1 — hồi mây còn đứng yên thì đủ, nay mây bay
+     ngang cả trời thì nó thành mấy vệt bẩn di động. `#2e3150` tách 1.50. Không sáng hơn
+     nữa được, và bị chặn từ phía CHỮ: `#353a5c` đẩy chữ phụ trên mây xuống 4.78,
+     `#3c4266` xuống 4.23 — hụt ngưỡng. Nay chữ phụ trên thân mây 5.47. */
+  --toi-decor-may: #2e3150;
+  --toi-decor-may-bong: #22243c;
   --toi-decor-doi: #1e3b28;
   --toi-decor-hoa-hong: #6b3d51;
   --toi-decor-hoa-vang: #7a6634;

@@ -936,9 +936,15 @@ if (FIXTURE) {
 
   {
     const { ctx, p } = await moTroi(1440, 'dark');
+    /* Ban đêm cũng có mây bay — đo y như ban ngày: trong khung nhìn VÀ đi sang trái. Chỉ
+       hỏi "khối mây có hiện không" thì xanh cả khi mây đêm đứng im một chỗ. */
+    const dem1 = await viTriMay(p);
+    await p.waitForTimeout(1500);
+    const dem2 = await viTriMay(p);
     check(
-      'Ban đêm KHÔNG có mây (trời đêm có trăng sao ở chỗ của nó)',
-      (await p.$eval('[data-kg-decor=may]', (e) => e.getClientRects().length)) === 0
+      'Ban đêm mây VẪN bay: nằm trong khung nhìn và đi sang trái',
+      dem1.filter((m) => m.trong).length >= 3 && dem1.every((m, i) => dem2[i].x < m.x - 1),
+      `${dem1.filter((m) => m.trong).length}/5 đám, ${dem1.map((m, i) => `${Math.round(dem2[i].x - m.x)}px`).join(', ')}`
     );
     const q1 = await p.$eval('[data-kg-decor=le] .kg-quang-trang', (e) => getComputedStyle(e).opacity);
     await p.waitForTimeout(1200);
