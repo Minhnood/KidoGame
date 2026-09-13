@@ -209,7 +209,18 @@
   --color-decor-than-sang: #c68f52;
   --color-decor-co: #8ecb95;
   --color-decor-troi: #ffc861;
-  --color-decor-may: #eef0f4;
+  /* Mây HAI TÔNG: thân trắng, bụng xanh nhạt. Đo được với một tông `#eef0f4` cũ: trên
+     nền trời xanh của màn hẹp chỉ 1.001:1 — giống hệt màu nền, tàng hình theo nghĩa
+     đen — và trên nền kem 1.06. Trắng tinh riêng mình vẫn yếu trên nền kem (1.07);
+     phải có vệt bóng ở bụng thì đám mây mới có mép để mắt bắt được ở cả hai nền.
+
+     Bóng KHÔNG được đậm hơn `#dde7f3`, và con số này bị chặn từ phía CHỮ chứ không từ
+     phía mây. Mây bay sau lưng chữ, mà link cam nằm thẳng trên nền trang: bản đầu
+     `#d6e2f0` tách nền tốt hơn (1.23 trên kem) nhưng cam trên bụng mây chỉ 4.30:1, hụt
+     ngưỡng 4.5. Nay cam 4.52; mép bóng còn 1.17 trên kem, 1.10 trên trời xanh.
+     `contrast-check` canh cả hai phía. */
+  --color-decor-may: #ffffff;
+  --color-decor-may-bong: #dde7f3;
   --color-decor-doi: #a8d9ac;
   --color-decor-hoa-hong: #f2a0be;
   --color-decor-hoa-vang: #ffd979;
@@ -371,6 +382,7 @@
   /* Ban đêm "mặt trời" là mặt TRĂNG — xem `.kg-ngay` / `.kg-dem` ở cuối file. */
   --toi-decor-troi: #d8d3c0;
   --toi-decor-may: #262636;
+  --toi-decor-may-bong: #1c1c2a;
   --toi-decor-doi: #1e3b28;
   --toi-decor-hoa-hong: #6b3d51;
   --toi-decor-hoa-vang: #7a6634;
@@ -437,6 +449,7 @@
     --color-decor-co: var(--toi-decor-co);
     --color-decor-troi: var(--toi-decor-troi);
     --color-decor-may: var(--toi-decor-may);
+    --color-decor-may-bong: var(--toi-decor-may-bong);
     --color-decor-doi: var(--toi-decor-doi);
     --color-decor-hoa-hong: var(--toi-decor-hoa-hong);
     --color-decor-hoa-vang: var(--toi-decor-hoa-vang);
@@ -492,6 +505,7 @@
   --color-decor-co: var(--toi-decor-co);
   --color-decor-troi: var(--toi-decor-troi);
   --color-decor-may: var(--toi-decor-may);
+  --color-decor-may-bong: var(--toi-decor-may-bong);
   --color-decor-doi: var(--toi-decor-doi);
   --color-decor-hoa-hong: var(--toi-decor-hoa-hong);
   --color-decor-hoa-vang: var(--toi-decor-hoa-vang);
@@ -703,16 +717,6 @@ body {
   }
 }
 
-@keyframes kg-troi {
-  0%,
-  100% {
-    transform: translateX(-6px);
-  }
-  50% {
-    transform: translateX(6px);
-  }
-}
-
 .kg-dua {
   transform-origin: 50% 100%;
   animation: kg-du-dua 8s ease-in-out infinite;
@@ -743,8 +747,112 @@ body {
   }
 }
 
-.kg-may-troi {
-  animation: kg-troi 34s ease-in-out infinite;
+.kg-may-bay {
+  /*
+   * Mây bay từ mép phải qua mép trái — xem `MayBay` trong `site-decor.tsx`.
+   *
+   * `linear` chứ không `ease`: mây trôi theo gió, không tăng tốc rồi hãm lại. Có
+   * `ease` là giữa trời đám mây chậm dần như sắp dừng, rồi vòng sau lại vọt lên.
+   *
+   * `100%` trong `translateX` là bề rộng của CHÍNH đám mây, nên điểm cuối là vừa khuất
+   * hẳn khỏi mép trái, dù đám to hay nhỏ. Viết cứng `-100vw` thì đám to còn lòi một nửa
+   * ở mép trái rồi biến phựt đi để quay lại từ đầu.
+   *
+   * Tốc độ tính theo khung nhìn nên màn rộng thì mây bay nhanh hơn theo pixel: cùng 95
+   * giây, trên màn 390px đám to đi 6px mỗi giây, trên màn 1920px là 21px. Chấp nhận:
+   * trên màn rộng đám mây cũng nhỏ đi so với cả trời, nên cảm giác vẫn là trôi chậm.
+   */
+  will-change: transform;
+  animation: kg-may-bay var(--kg-bay-giay, 110s) linear infinite;
+}
+
+@keyframes kg-may-bay {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100vw - 100%));
+  }
+}
+
+/*
+ * MẶT TRỜI: vòng tia xoay, lõi phập phồng.
+ *
+ * `transform-box: fill-box` là bắt buộc, cùng lý do đã ghi ở `.kg-dua-canh`: thiếu nó
+ * thì `transform-origin: center` tính theo cả thẻ <svg> chứ không theo nhóm tia, gốc
+ * quay rơi ra giữa khung, và cả vòng tia quét thành một vòng tròn to quanh chỗ trống.
+ * Vòng tia đối xứng quanh tâm lõi (72, 34) nên tâm hộp bao của nó đúng là tâm mặt trời.
+ *
+ * 40 giây một vòng. Tám tia đối xứng nên cứ 45° là trông y như cũ — tức thứ mắt thấy là
+ * một nhịp 5 giây, đủ chậm để là "nắng đang toả" chứ không phải cái chong chóng.
+ */
+.kg-tia-nang {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kg-tia-nang 40s linear infinite;
+}
+
+@keyframes kg-tia-nang {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kg-loi-nang {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kg-loi-nang 5s ease-in-out infinite;
+}
+
+@keyframes kg-loi-nang {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+/*
+ * MẶT TRĂNG: quầng sáng thở, vầng trăng đung đưa.
+ *
+ * `opacity` nền 0.6 khai ở đây, không để hoạt ảnh tự lo. Người xin ít chuyển động bị tắt
+ * hoạt ảnh, và lúc đó quầng rơi về `opacity` mặc định là 1 — vệt mờ sáng gắt ngang
+ * chính vầng trăng. Có nền thì tắt hoạt ảnh quầng vẫn là một quầng dịu, đứng yên.
+ *
+ * Nhịp quầng (6s) và nhịp đung đưa (11s) cố ý không chia hết cho nhau, để hai chuyển
+ * động không bao giờ khớp thành một cử động máy móc lặp lại.
+ */
+.kg-quang-trang {
+  opacity: 0.6;
+  animation: kg-quang-trang 6s ease-in-out infinite;
+}
+
+@keyframes kg-quang-trang {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.kg-trang-dua {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kg-trang-dua 11s ease-in-out infinite;
+}
+
+@keyframes kg-trang-dua {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
 }
 
 /*
@@ -1251,8 +1359,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .kg-dua,
   .kg-dua-canh,
-  .kg-may-troi,
   .kg-lap-lanh,
+  .kg-tia-nang,
+  .kg-loi-nang,
+  .kg-quang-trang,
+  .kg-trang-dua,
   /* Hai cái này còn phải THẮNG luật `:hover` ở trên, nên `!important` ở đây không
      phải cho chắc — thiếu nó là luật hover cùng độ ưu tiên vẫn thắng và cành vẫn
      rung với đúng người đã xin đừng có gì chuyển động. */
@@ -1338,5 +1449,23 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /*
+   * MÂY: DỪNG TẠI CHỖ, không tắt hoạt ảnh.
+   *
+   * Mỗi đám đứng ở `left: 100%`, tức NGOÀI mép phải — chính hoạt ảnh là thứ đưa nó vào
+   * trời. `animation: none` thì cả năm đám nằm khuất ngoài màn hình, và người xin ít
+   * chuyển động mất sạch mây chứ không phải được mây đứng yên.
+   *
+   * Tạm dừng thì mỗi đám đóng băng đúng ở chỗ độ trễ âm của nó đặt vào lúc mở trang:
+   * năm đám rải khắp trời, đứng im. Phải trả lại thời lượng thật, vì dòng `*` bên trên
+   * ép mọi hoạt ảnh về 0.01ms, và độ trễ −61 giây trên một hoạt ảnh dài 0.01ms thì rơi
+   * vào một khung hình chẳng ai đoán được. Chọn tử lớp (0,1,0) thắng chọn tử `*` giữa
+   * hai khai báo `!important`, bất kể đứng trước hay sau.
+   */
+  .kg-may-bay {
+    animation-duration: var(--kg-bay-giay, 110s) !important;
+    animation-play-state: paused !important;
   }
 }

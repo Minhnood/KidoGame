@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 import { SiteNav } from '@/components/site-nav';
 import { SiteLogo } from '@/components/site-logo';
 import { NavDecor } from '@/components/nav-decor';
-import { DayLeoVien, SiteDecor } from '@/components/site-decor';
+import { DayLeoVien, MayBay, SiteDecor } from '@/components/site-decor';
 import { SiteFooter } from '@/components/site-footer';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Wrap } from '@/components/page';
@@ -181,6 +181,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Tranh trang trí hai bên lề. Đặt TRƯỚC <header> nhưng nó `fixed` nên vị trí
             trong cây DOM không ảnh hưởng gì tới bố cục — điều đáng quan tâm là nó
             không chen vào thứ tự Tab, và nó không hề focus được. */}
+        {/* Mây bay ngang cả khung nhìn — TRƯỚC `SiteDecor` vì cùng tầng z thì cái đứng
+            trước trong DOM nằm dưới: mây ở xa hơn đồi, cây và cành. */}
+        <MayBay />
         <SiteDecor />
         {/* Dây leo hai mép, cho màn hình hẹp — cùng lý do đặt ở đây như `SiteDecor`:
             nó `fixed` nên chỗ trong cây DOM không ảnh hưởng bố cục, và nó không hề

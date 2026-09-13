@@ -40,7 +40,7 @@ Bốn bộ không cần server:
 
 ```bash
 pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
-node infra/contrast-check.mjs              # 144 phép đo màu, cả hai giao diện
+node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
 node infra/caddy-config-check.mjs          # 15 phép, +4 nữa nếu có Docker
 cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49
 cd apps/web && pnpm exec tsx ../../infra/scrypt-cap-check.ts    # 9
@@ -60,7 +60,7 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 75 kiểm tra
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 87 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 25
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 76
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
@@ -80,7 +80,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 19, cần psql
-node infra/contrast-check.mjs                                      # 144 phép đo màu
+node infra/contrast-check.mjs                                      # 160 phép đo màu
 node infra/a11y-check.mjs                                          # 22
 ```
 

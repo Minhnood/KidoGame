@@ -141,6 +141,31 @@ const CAP = [
   { ten: 'Chữ phụ trên chặng đất của nền', fg: 'ink-soft', bg: 'bg-dat', min: 4.5 },
   { ten: 'Link cam trên chặng đất của nền', fg: 'accent-text', bg: 'bg-dat', min: 4.5 },
   /*
+   * CHỮ TRÊN MÂY. Mây bay ngang cả khung nhìn, SAU lưng nội dung (`MayBay` trong
+   * `site-decor.tsx`), nên chữ nằm thẳng trên nền trang có lúc nằm trên thân mây, có
+   * lúc trên vệt bóng ở bụng mây.
+   *
+   * Cặp CHẶN là cam trên bụng mây. Bản đầu `--color-decor-may-bong: #d6e2f0` cho 4.30:1
+   * — hụt, trong khi chữ chính trên cùng màu đó còn 12.8. Nhìn cột `ink` là kết luận
+   * sai được ngay rằng bóng còn đậm thêm được.
+   */
+  { ten: 'Chữ chính trên thân mây', fg: 'ink', bg: 'decor-may', min: 7 },
+  { ten: 'Chữ phụ trên thân mây', fg: 'ink-soft', bg: 'decor-may', min: 4.5 },
+  { ten: 'Link cam trên thân mây', fg: 'accent-text', bg: 'decor-may', min: 4.5 },
+  { ten: 'Chữ chính trên bụng mây', fg: 'ink', bg: 'decor-may-bong', min: 7 },
+  { ten: 'Chữ phụ trên bụng mây', fg: 'ink-soft', bg: 'decor-may-bong', min: 4.5 },
+  { ten: 'Link cam trên bụng mây', fg: 'accent-text', bg: 'decor-may-bong', min: 4.5 },
+  /*
+   * VÀ PHÍA NGƯỢC LẠI: mây không được tàng hình. Hai cặp này không phải chữ, ngưỡng
+   * 1.05 là của riêng dự án (cùng mức với cặp "thẻ nổi khỏi nền" bên dưới).
+   *
+   * Không có cặp này thì cách "sửa" dễ nhất cho cặp cam bên trên là làm bóng nhạt dần
+   * về màu nền — cam xanh ngay, và mây quay về đúng 1.001:1 của bản trước, tức một
+   * tính năng biến mất mà không phép kiểm nào đỏ.
+   */
+  { ten: 'Bụng mây tách khỏi chặng trời của nền', fg: 'decor-may-bong', bg: 'bg-troi', min: 1.05 },
+  { ten: 'Bụng mây tách khỏi nền trang', fg: 'decor-may-bong', bg: 'bg', min: 1.05 },
+  /*
    * THẺ CÒN PHẢI NỔI LÊN KHỎI NỀN — hai cặp không phải chữ, ngưỡng 1.05 là của riêng
    * dự án.
    *
