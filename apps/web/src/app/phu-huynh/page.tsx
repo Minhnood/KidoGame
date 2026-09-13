@@ -183,10 +183,39 @@ export default async function ParentDashboard({
         </div>
       )}
 
-      <h2 className="mb-3 mt-9 text-xl font-bold">Tài khoản của các bé</h2>
+      {/*
+        Link "Thêm tài khoản cho bé" đứng NGAY CẠNH tiêu đề danh sách.
+
+        Form tạo tài khoản nằm dưới cùng trang, sau toàn bộ game của mọi bé. Đo ở 390px
+        với một bé 26 game: tiêu đề form ở 2.761px, gần bốn màn hình cuộn. Phụ huynh muốn
+        thêm đứa thứ hai thì không có gì trên màn đầu nói rằng việc đó làm được ở trang
+        này. Không dời form lên trên: phụ huynh vào đây hằng ngày để xem game của con, còn
+        tạo tài khoản là việc làm một hai lần — đặt form lên đầu là bắt việc hằng ngày
+        cuộn qua việc hiếm.
+      */}
+      <div className="mb-3 mt-9 flex flex-wrap items-center justify-between gap-x-4">
+        <h2 className="text-xl font-bold">Tài khoản của các bé</h2>
+        {children.length > 0 && (
+          <a
+            href="#tao-tai-khoan"
+            data-testid="nhay-tao-tai-khoan"
+            /* `-my-2.5`: vùng bấm vẫn 48px, nhưng hàng tiêu đề giữ nguyên cao 28px của
+               thẻ h2 — không có nó thì cả trang máy tính tụt 20px chỉ vì một link. */
+            className="min-h-touch -my-2.5 inline-flex items-center font-semibold text-accent-text"
+          >
+            + Thêm tài khoản cho bé
+          </a>
+        )}
+      </div>
 
       {children.length === 0 ? (
-        <EmptyState>Chưa có bé nào. Tạo tài khoản cho bé ở khung bên dưới nhé.</EmptyState>
+        <EmptyState>
+          Chưa có bé nào.{' '}
+          <a href="#tao-tai-khoan" className="font-bold text-accent-text underline">
+            Tạo tài khoản cho bé
+          </a>{' '}
+          ở khung bên dưới nhé.
+        </EmptyState>
       ) : (
         <ul className="mb-9 list-none space-y-4 p-0">
           {children.map((child) => (
@@ -230,7 +259,11 @@ export default async function ParentDashboard({
                   {child.games.map((game) => (
                     <li
                       key={game.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-border px-3.5 py-2.5"
+                      /* Trên điện thoại: `gap-2 py-2` và ảnh bìa 64×48. Hai nút cao 48px không
+                         đứng chung dòng với tên game được ở 390px (cần 211px, dòng còn 280px
+                         kể cả ảnh), nên dòng luôn thành hai tầng; thứ bớt được là chiều cao
+                         mỗi tầng. Đo trước khi sửa: 142px một dòng. */
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-field border border-border px-3.5 py-2 sm:gap-3 sm:py-2.5"
                     >
                       {/*
                         Ảnh bìa, và nó KHÔNG phải là link.
@@ -241,7 +274,7 @@ export default async function ParentDashboard({
                         nhà bốn game thì thành tám lần. Nên `alt=""`: ảnh ở đây để
                         nhận ra game bằng mắt, nghĩa thì nằm ở cái tên.
 
-                        `w-20 h-15` giữ đúng khổ 4:3 của sân khấu Scratch (480×360),
+                        `w-20 h-15` (và `w-16 h-12` trên điện thoại) giữ đúng khổ 4:3 của sân khấu Scratch (480×360),
                         và khai cứng để dòng không nhảy khi ảnh vừa tải xong.
 
                         Mờ đi khi game không còn hiện: trạng thái đang được nói bằng
@@ -256,7 +289,7 @@ export default async function ParentDashboard({
                           height={60}
                           loading="lazy"
                           data-testid="anh-bia-game"
-                          className={`h-15 w-20 shrink-0 rounded-field border border-border bg-surface object-cover ${
+                          className={`h-12 w-16 shrink-0 rounded-field sm:h-15 sm:w-20 border border-border bg-surface object-cover ${
                             game.status === 'PUBLISHED' && !biKhieuNai.has(game.id)
                               ? ''
                               : 'opacity-50'
@@ -266,7 +299,9 @@ export default async function ParentDashboard({
                         <Link href={`/game/${game.id}`} className="font-semibold">
                           {game.title}
                         </Link>
-                        <span className="ml-2 text-sm text-ink-soft">
+                        {/* Dòng riêng dưới `sm`: nối đuôi tên game thì "5 lượt" ở cuối dòng
+                            một còn "chơi" rớt xuống dòng hai, đọc như hai mảnh vỡ. */}
+                        <span className="block text-sm text-ink-soft sm:ml-2 sm:inline">
                           {game.playCount} lượt chơi
                           {biKhieuNai.has(game.id)
                             ? ' · tạm ẩn vì có yêu cầu gỡ bản quyền đang chờ xử lý'
@@ -344,7 +379,9 @@ export default async function ParentDashboard({
         </ul>
       )}
 
-      <h2 className="mb-3 mt-9 text-xl font-bold">Tạo tài khoản cho bé</h2>
+      <h2 id="tao-tai-khoan" className="mb-3 mt-9 scroll-mt-6 text-xl font-bold">
+        Tạo tài khoản cho bé
+      </h2>
 
       {/*
         Chưa xác minh thì KHÔNG render form, thay bằng lời giải thích.

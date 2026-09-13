@@ -369,6 +369,55 @@ if (gameUrl) {
       (await the.locator('text=Bé chưa đăng game nào').count()) === 0
   );
   await p.close();
+
+  /*
+   * ĐIỆN THOẠI 390px: form tạo bé phải TÌM ĐƯỢC từ màn đầu, và dòng game không phình.
+   *
+   * Đo trước khi sửa, bé 26 game: tiêu đề form ở 2.761px, không gì trên màn đầu nói
+   * rằng thêm bé làm ở trang này; mỗi dòng game cao 142px. Dòng game không gọn hơn
+   * được bao nhiêu (hai nút cao 48px không vừa chung dòng với tên game ở 390px), nên
+   * ngưỡng ở đây canh để nó không trôi ngược về cỡ cũ.
+   */
+  const dt = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await dt.addCookies(await parentCtx.cookies());
+  const pd = await dt.newPage();
+  await pd.goto(`${APP}/phu-huynh`, { waitUntil: 'domcontentloaded' });
+  await pd.waitForSelector(`#be-${CHILD_USER} a[href^="/game/"]`);
+  const nhay = pd.locator('[data-testid=nhay-tao-tai-khoan]');
+  const hopNhay = (await nhay.count()) ? await nhay.boundingBox() : null;
+  check(
+    '390px: link "Thêm tài khoản cho bé" nằm trong màn đầu, cao đủ tầm tay',
+    hopNhay && hopNhay.y + hopNhay.height <= 844 && hopNhay.height >= 44,
+    hopNhay ? `đáy ở ${Math.round(hopNhay.y + hopNhay.height)}px, cao ${Math.round(hopNhay.height)}px` : 'không có link'
+  );
+  const dong = await pd.locator(`#be-${CHILD_USER} ul li`).evaluateAll((els) =>
+    els.map((e) => {
+      const anh = e.querySelector('[data-testid=anh-bia-game]').getBoundingClientRect();
+      return { cao: Math.round(e.getBoundingClientRect().height), tiLe: anh.width / anh.height };
+    })
+  );
+  const caoNhat = Math.max(...dong.map((d) => d.cao));
+  check('390px: mỗi dòng game không cao quá 130px (trước khi sửa: 142px)', caoNhat <= 130, `cao nhất ${caoNhat}px`);
+  check(
+    '… và ảnh bìa vẫn đúng khổ 4:3 của sân khấu Scratch',
+    dong.every((d) => Math.abs(d.tiLe - 4 / 3) < 0.02),
+    dong.map((d) => d.tiLe.toFixed(2)).slice(0, 3).join(', ')
+  );
+  /* Không có link thì báo ĐỎ, đừng để `click()` treo 30 giây rồi ném lỗi làm đổ cả bộ
+     — lần thử phá đầu tiên đổ đúng như vậy, và không in ra một dòng kết quả nào. */
+  if (hopNhay) {
+    await nhay.click();
+    await pd.waitForTimeout(800);
+  }
+  const dinhForm = await pd.evaluate(
+    () => document.getElementById('tao-tai-khoan')?.getBoundingClientRect().top ?? -1
+  ).then(Math.round);
+  check(
+    '390px: bấm link là tới ĐÚNG tiêu đề form, sát mép trên',
+    new URL(pd.url()).hash === '#tao-tai-khoan' && dinhForm >= 0 && dinhForm <= 60,
+    `tiêu đề cách đỉnh ${dinhForm}px`
+  );
+  await dt.close();
 }
 
 // ---------- Khoá tài khoản là thu hồi phiên đang mở ----------

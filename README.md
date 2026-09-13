@@ -61,7 +61,7 @@ export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 92 kiểm tra
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 33
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 37
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 77
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 50, cần >24 game
@@ -173,7 +173,7 @@ mình từ `402b009` — trước đó nó mượn game trong DB dev và hỏng 
 ### Bàn phím và trình đọc màn hình
 
 ```bash
-node infra/a11y-check.mjs          # 13 kiểm tra, cần dev server
+node infra/a11y-check.mjs          # 26 kiểm tra, cần dev server
 ```
 
 Tách riêng đúng như `contrast-check.mjs`, vì đây là một chiều quan tâm khác:
