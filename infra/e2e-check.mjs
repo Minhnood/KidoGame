@@ -338,7 +338,7 @@ check(
   /*
    * Đo bằng DẤU HIỆU NỘI DUNG, không bằng kích thước file. Bản đầu của phép kiểm này
    * viết `htmlText.length < 200_000` và nó SAI — đã trả giá hai lần bằng hai dòng đỏ
-   * không tái hiện được, xem TODO.md.
+   * không tái hiện được (ghi chép trong TODO.md cũ, nay ở ~/KidoGame-sao-luu/bangiao-cu/).
    *
    * Lý do: HTML còn nhúng cả ASSET của game (ảnh, âm thanh, mã base85). Game
    * `siuuu` của chủ dự án nặng 9892 KB vì đúng lý do đó, và điều đó hoàn toàn ĐÚNG —
