@@ -156,6 +156,33 @@
 }
 
 # ---------------------------------------------------------------------------
+# DASHBOARD GLITCHTIP — theo dõi lỗi, chỉ người vận hành vào.
+#
+# Hostname riêng, cùng lý do với dashboard Umami ngay trên. Ở đây KHÔNG có đường nào
+# mở trên app domain: chỉ server Next gửi lỗi, và nó gửi thẳng `glitchtip:8000`
+# trong network nội bộ, không đi qua Caddy.
+#
+# Hệ quả: endpoint nhận lỗi `/api/<id>/envelope/` VẪN mở ở hostname này (GlitchTip
+# không tách được). Ai có DSN thì gửi được lỗi rác vào — DSN chỉ nằm trong `.env`
+# của server, không bao giờ xuống trình duyệt, nên đó là rủi ro chấp nhận được.
+#
+# Để trống ERRORS_DOMAIN thì compose truyền `loi.localhost` — xem ghi chú ở
+# ADMIN_DOMAIN trong docker-compose.yml.
+# ---------------------------------------------------------------------------
+{$ERRORS_DOMAIN:loi.kidogame.vn} {
+	encode zstd gzip
+	reverse_proxy glitchtip:8000
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		-Server
+	}
+}
+
+# ---------------------------------------------------------------------------
 # Player origin — chỉ file tĩnh. KHÔNG có ứng dụng, KHÔNG có cookie.
 # ---------------------------------------------------------------------------
 {$PLAYER_DOMAIN:play.kidogame.vn} {
