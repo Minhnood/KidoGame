@@ -296,7 +296,8 @@ kèm danh sách commit sắp mất. Cố tình muốn thì `CHO_PHEP_GHI_DE=1` �
 Vì sao là hook chứ không phải bảo vệ nhánh trên GitHub: GitHub **không cho** bảo vệ
 nhánh trên repo **private** ở gói Free (API trả 403, đo 12/9). Hai đường mở khoá là
 trả tiền GitHub Pro, hoặc công khai repo — mà công khai thì **không được**, vì lịch
-sử git còn một commit mang mật khẩu (`5d4e3f9`, `infra/ORACLE-FREE.md`), và công khai
+sử git còn một commit mang mật khẩu (`5d4e3f9`, trong `infra/ORACLE-FREE.md` — file nay
+đã gỡ nhưng commit cũ vẫn giữ nó), và công khai
 là phơi nó ra vĩnh viễn kể cả khi file đã gỡ.
 
 > Hook chỉ bảo vệ **máy này**. Ai clone repo ở máy khác thì nó không biết gì cả —

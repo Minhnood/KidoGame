@@ -8,7 +8,8 @@
 # đo ngày 12/9, API trả 403 "Upgrade to GitHub Pro or make this repository public".
 # Hai đường mở khoá đều có giá: trả tiền, hoặc công khai repo. Công khai thì KHÔNG
 # được — lịch sử git còn commit `5d4e3f9` mang một mật khẩu trong
-# `infra/ORACLE-FREE.md`, và công khai là phơi nó ra vĩnh viễn, kể cả khi file đã gỡ.
+# `infra/ORACLE-FREE.md` (file nay đã gỡ, commit cũ vẫn giữ), và công khai là phơi nó
+# ra vĩnh viễn.
 #
 # Nên đây là hàng rào đặt ở đúng chỗ rủi ro THẬT đi qua: repo này chỉ có một người
 # push, từ một máy. Hook không ngăn được người khác ở máy khác — nói rõ như vậy, đừng
