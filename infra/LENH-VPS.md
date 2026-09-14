@@ -418,6 +418,23 @@ service nào. Sáu đêm trong bảy, bước này in một dòng rồi thoát.
 
 ---
 
+## 12. Dashboard thống kê (Umami)
+
+Mở `https://stats.37-60-251-95.sslip.io`, đăng nhập `admin`. Mật khẩu KHÔNG nằm trong
+repo hay trong hội thoại nào — nó được sinh ngẫu nhiên trên VPS lúc cài (14/9/2026):
+
+```bash
+ssh kidovps 'cat /root/KidoGame/infra/umami-admin.txt'; echo
+```
+
+Đăng nhập được rồi thì nên tự đổi mật khẩu trong dashboard (Settings → Profile) và
+xoá file đó: `ssh kidovps 'rm /root/KidoGame/infra/umami-admin.txt'`. Mật khẩu mặc
+định `admin`/`umami` đã bị đổi ngay lúc cài — máy dò tới tên miền này chỉ vài giây sau
+khi Caddy xin chứng chỉ.
+
+Số liệu **không** nằm trong bản sao lưu. Mất VPS là mất lịch sử lượt xem, không mất gì
+của bé.
+
 ## ⛔ NHỮNG LỆNH KHÔNG BAO GIỜ GÕ
 
 | Lệnh | Nó làm gì |

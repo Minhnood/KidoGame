@@ -245,8 +245,8 @@ export default function TermsPage() {
           <strong>Thống kê lượt xem:</strong> chúng tôi đếm số lượt mở từng trang để biết web có
           ai dùng và trang nào hay bị lỗi. Việc đếm chạy trên chính máy chủ của KidoGame, không
           gửi cho công ty quảng cáo hay phân tích nào, không đặt cookie và không lưu địa chỉ IP.
-          Mỗi lượt chỉ ghi trang được mở, loại trình duyệt và thiết bị, và quốc gia/thành phố
-          ước đoán từ địa chỉ IP — không gắn với tài khoản nào, và không ghi lại những gì bé gõ
+          Mỗi lượt chỉ ghi trang được mở, loại trình duyệt, thiết bị, cỡ màn hình, ngôn ngữ, và
+          quốc gia/thành phố ước đoán từ địa chỉ IP — không gắn với tài khoản nào, và không ghi lại những gì bé gõ
           vào ô tìm kiếm. Trình duyệt bật &quot;Do Not Track&quot; thì không được đếm.
         </p>
         <p>

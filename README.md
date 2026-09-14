@@ -41,7 +41,8 @@ Bốn bộ không cần server:
 ```bash
 pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
-node infra/caddy-config-check.mjs          # 15 phép, +4 nữa nếu có Docker
+node infra/caddy-config-check.mjs          # 18 phép, +4 nữa nếu có Docker
+node infra/umami-check.mjs                 # 16, đo thẳng production, không làm bẩn số liệu
 cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49
 cd apps/web && pnpm exec tsx ../../infra/scrypt-cap-check.ts    # 9
 ```
