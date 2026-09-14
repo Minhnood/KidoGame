@@ -663,10 +663,8 @@ máy local. Ở production chính Caddy serve thư mục `storage`, đúng như
 Trước khi bắt đầu: trỏ A/AAAA của **cả hai** domain về IP của VPS. Caddy xin
 chứng chỉ ngay lúc khởi động, DNS chưa trỏ là thất bại.
 
-> Chưa có VPS lẫn domain? **[`infra/ORACLE-FREE.md`](infra/ORACLE-FREE.md)** đi từ
-> chỗ chưa có gì tới đúng điểm này: một VPS ARM miễn phí ở Singapore, mở cổng (Oracle
-> chặn 80/443 ở **hai** tầng), Docker arm64, và một domain với ba subdomain. Kèm cả
-> chỗ bảo mật bị yếu đi khi dùng một domain thay vì hai.
+> Chưa có VPS? **[`infra/VPS-TUNG-BUOC.md`](infra/VPS-TUNG-BUOC.md)** đi từng bước
+> trên đúng máy đang chạy production (Contabo), từ lúc nhận máy tới lúc web lên.
 
 ```bash
 cd infra

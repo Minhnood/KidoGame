@@ -102,14 +102,13 @@ chỗ để lỗi đi qua thì không cắm được gì vào.
 
 > **Trạng thái:** xong. UptimeRobot gói Free, hai monitor theo đúng bảng bên dưới,
 > báo về `mail-chinh@example.com`. Monitor `app` đo được 645ms, 100% trong 24h
-> đầu. **Telegram nằm sau gói trả phí** nên không dùng — cách đi vòng miễn phí
-> (bot Telegram của mình + webhook) ghi ở cuối mục này.
+> đầu. Chỉ báo qua email.
 >
 > Tài khoản đứng tên fen, nên **không phép kiểm nào trong repo nhìn thấy nó**.
 > Chuyển tên miền, đổi email, hay lỡ xoá monitor thì chỉ mục này biết.
 
 Một dịch vụ ping miễn phí. Trỏ vào `https://<APP_DOMAIN>/` mỗi 5 phút, báo qua
-email hoặc Telegram.
+email.
 
 Vì sao đáng làm **trước** cả Sentry: một lỗi lẻ ảnh hưởng một người; web sập ảnh
 hưởng tất cả, và hiện tại chẳng ai biết. Không cần sửa một dòng code nào, không
@@ -171,24 +170,6 @@ UptimeRobot — và đó là cách tầng này chết mà không ai tắt nó c�
 
 Việc cần làm khi thấy thư báo down: hỏi *"vừa nãy có ai deploy không"* trước, rồi
 mới đi tìm lỗi. Bảng của UptimeRobot ghi rõ giờ sự cố, đối chiếu được.
-
-#### Muốn báo động vào Telegram mà không trả tiền
-
-UptimeRobot khoá Telegram sau gói trả phí (đã thử 10/9/2026). Không cần trả: Bot
-API miễn phí, và bot do mình tạo thì không nhà cung cấp nào khoá được.
-
-**Từng bước ở [`TELEGRAM.md`](TELEGRAM.md)** — cố ý để ở một file riêng chứ không
-chép vào đây, vì các bước bấm tay chép ra hai chỗ thì một chỗ sẽ lạc hậu, và người
-đọc không có cách nào biết mình đang theo chỗ nào.
-
-Phần **mục 8 (canh gác hằng đêm)** đã dùng đường này rồi — code trong
-`apps/web/src/lib/telegram.ts`, bật bằng `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`.
-
-Phần **tầng 1 (UptimeRobot)** thì vẫn chưa: nếu gói Free có **Webhook** làm alert
-contact thì trỏ nó vào
-`https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>&text=...` với biến
-của UptimeRobot chèn vào `text`. **CHƯA KIỂM** webhook có miễn phí không — phải mở
-Integrations ra xem, đừng tin dòng này.
 
 ### Tầng 2 — lỗi vào DB + trang cho admin xem (ĐÃ LÀM, mục 6)
 
@@ -364,18 +345,12 @@ trong phần đầu `infra/e2e-errorlog.mjs`.
 ## 7. Việc tiếp theo cần fen quyết
 
 1. ~~**Tầng 1 (uptime)**~~ — **XONG 10/9/2026.** Cả bốn tầng giờ đều có mặt.
-2. ~~**Báo động vào Telegram**~~ — **FEN CHỐT 10/9: BỎ, không bật.** Đừng đề xuất lại
-   trừ khi fen mở ra.
+2. ~~**Báo động vào Telegram**~~ — **FEN CHỐT 10/9: BỎ.** Code chưa từng bật và đã
+   **gỡ hẳn ngày 14/9** (`lib/telegram.ts`, kênh trong `canh-gac.ts`, hai biến
+   `TELEGRAM_*`). Đừng đề xuất lại trừ khi fen mở ra; muốn làm lại thì lấy từ lịch sử
+   git trước commit gỡ.
 
-   Code vẫn nằm nguyên trong repo và trên VPS, **đang ngủ**: thiếu
-   `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` thì `canh-gac.ts` in một dòng "bỏ qua kênh
-   này" rồi gửi mail như cũ. Không có gì phải dọn, không có gì đang hỏng.
-
-   Muốn bật sau này thì chỉ là điền hai biến — từng bước ở [`TELEGRAM.md`](TELEGRAM.md),
-   khoảng 5 phút. Giữ code lại thay vì gỡ đi vì gỡ một đường đang chạy đúng để rồi viết
-   lại từ đầu là mất công hai lần.
-
-   **Hệ quả phải biết:** báo động giờ chỉ có MỘT kênh — email, vào cùng một hòm thư
+   **Hệ quả phải biết:** báo động chỉ có MỘT kênh — email, vào cùng một hòm thư
    Gmail với mọi thứ khác. Mất quyền vào hòm thư đó là mù hoàn toàn.
 3. **Tầng 3** — vẫn khuyên **hoãn** tới khi tầng 2 chứng minh chưa đủ.
 
