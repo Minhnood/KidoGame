@@ -190,6 +190,15 @@ công, nhưng nó cần tài khoản của fen nên không chờ được.
 
 ### Tầng 3 — chỉ khi tầng 2 thật sự không đủ
 
+> **14/9/2026: fen quyết định làm.** Analytics = **Umami 3.3.1** — XONG, đang chạy.
+> Dashboard ở `STATS_DOMAIN`, trên app domain chỉ mở `/_stats/script.js` và
+> `/_stats/api/send`, không ghi query string, bỏ qua trình duyệt bật Do Not Track.
+> Kiểm bằng `node infra/umami-check.mjs`. Error tracking (GlitchTip) làm tiếp sau.
+>
+> **Bẫy đã đo:** Umami trả `{"beep":"boop"}` và KHÔNG GHI cho tên trình duyệt
+> `HeadlessChrome` — Playwright headless không bao giờ được đếm. Muốn thử đếm thật thì
+> đặt `userAgent` của Chrome thường.
+
 - **Error tracking**: **GlitchTip**, không phải Sentry tự host. API tương thích
   Sentry nên dùng được SDK `@sentry/nextjs`, nhưng nhẹ hơn nhiều — Sentry tự host
   cần trên chục container và nhiều GB RAM, quá nặng cho VPS chạy kèm Postgres và
