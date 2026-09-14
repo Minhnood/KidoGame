@@ -142,6 +142,50 @@ const parentCtx = await newSession();
 
   // Mật khẩu quá ngắn phải bị từ chối.
   await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+
+  /*
+   * FORM TẠO BÉ TRẢI HẾT BỀ NGANG, bốn ô xếp hai cột THẲNG HÀNG.
+   *
+   * Nó từng là cột 500px dạt trái nằm dưới hai khối rộng hết cỡ, bên phải trống một
+   * khoảng lớn — fen chụp màn hình và nói giao diện xấu. `AuthForm` dùng chung với mọi
+   * trang đăng nhập, nơi cột 500px là đúng, nên sửa nhầm chỗ là trang bố mẹ dạt lại mà
+   * không gì đỏ.
+   *
+   * Đo ở khung nhìn mặc định của bộ này (từ `sm` trở lên mới có hai cột). So với khối
+   * ghi chú phía trên chứ không so một con số px: bề rộng thật đổi theo khung nhìn.
+   */
+  {
+    const d = await p.evaluate(() => {
+      const r = (el) => el.getBoundingClientRect();
+      const form = r(document.querySelector('[data-testid=auth-form]'));
+      const o = Object.fromEntries(['displayName', 'username', 'password', 'birthYear'].map((id) => [id, r(document.getElementById(id))]));
+      return {
+        formW: Math.round(form.width),
+        /* Bề rộng VÙNG NỘI DUNG của thẻ cha, trừ lề trong. Bản đầu lấy cả hộp (1024px)
+           rồi so với form 984px và đỏ, trong khi form đã trải đúng hết chỗ: thẻ cha là
+           `Wrap` có `px-5`. */
+        cotW: (() => {
+          const cha = document.querySelector('[data-testid=auth-form]').parentElement;
+          const cs = getComputedStyle(cha);
+          return Math.round(cha.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+        })(),
+        hang1: [Math.round(o.displayName.top), Math.round(o.username.top)],
+        hang2: [Math.round(o.password.top), Math.round(o.birthYear.top)],
+        haiCot: o.username.left > o.displayName.right,
+        vw: innerWidth,
+      };
+    });
+    check(
+      'Form tạo bé trải hết bề ngang cột nội dung, không dạt về cột 500px',
+      d.formW >= d.cotW - 2,
+      `form ${d.formW}px / cột ${d.cotW}px, khung nhìn ${d.vw}px`
+    );
+    check(
+      '… và bốn ô xếp hai cột thẳng hàng',
+      d.haiCot && d.hang1[0] === d.hang1[1] && d.hang2[0] === d.hang2[1],
+      `hàng 1 y=${d.hang1.join('/')}, hàng 2 y=${d.hang2.join('/')}`
+    );
+  }
   await p.fill('#displayName', 'Bé Test');
   await p.fill('#username', CHILD_USER);
   await p.fill('#password', '123');
@@ -258,6 +302,182 @@ if (gameUrl) {
   const res = await guest.goto(gameUrl, { waitUntil: 'networkidle' });
   check('Game bị ẩn thì khách vào trả 404', res?.status() === 404, `HTTP ${res?.status()}`);
   await anon.close();
+}
+
+// ---------- Danh sách game của bé trên trang bố mẹ: 5 game, "Xem tất cả", phân trang ----------
+/*
+ * Trước đây danh sách in hết một lượt: bé Minh trong DB dev có 26 game, thẻ của bé cao
+ * hơn 2.000px và form tạo bé bị đẩy xuống tận đáy.
+ *
+ * DỰNG GAME BẰNG SQL, không bằng upload: cần hơn 10 game cho MỘT bé, mà trần là 10 game
+ * mỗi bé trong 24 giờ — upload thật thì chính bộ này tự chạm trần, và đỏ ở một phép
+ * kiểm chẳng liên quan gì tới phân trang. Bản sao dùng lại file của game vừa upload
+ * (cùng sha), và `createdAt` lùi về QUÁ KHỨ để game thật vẫn đứng đầu danh sách — phép
+ * kiểm "Ẩn game" phía trên bấm vào nút đầu tiên và phải trúng đúng game của nó.
+ *
+ * Lùi từ `createdAt` CỦA GAME GỐC, KHÔNG từ `now()`. Prisma ghi giờ UTC vào cột
+ * `timestamp` không múi giờ, còn `now()` của Postgres dev ra giờ Asia/Ho_Chi_Minh — bản
+ * đầu viết `now() - n giờ` và mỗi lượt chạy đặt 13 game ở TƯƠNG LAI 7 tiếng. Sau vài
+ * lượt, 51 game tương lai chiếm trọn trang 1 trang chủ, game vừa đăng thật của các bộ
+ * khác rơi sang trang 2, và `e2e-dang-tai` đổ vì không tìm thấy thẻ của chính nó.
+ */
+if (gameUrl) {
+  const envPath = path.join(import.meta.dirname, '..', 'apps', 'web', '.env');
+  const dbUrl = (fs.readFileSync(envPath, 'utf8').match(/DATABASE_URL="([^"]+)"/)?.[1] ?? '').split('?')[0];
+  const gameId = gameUrl.split('/game/')[1];
+  execFileSync('psql', [dbUrl, '-q', '-c', `
+    insert into "Game" (id, "childId", title, "sb3Sha256", "sb3Size", "htmlSha256", "thumbSha256", "createdAt", "updatedAt")
+    select 'e2eph' || n || '${suffix}', "childId", 'Game phân trang ' || n, "sb3Sha256", "sb3Size", "htmlSha256", "thumbSha256",
+           "createdAt" - (n || ' hours')::interval, "updatedAt"
+    from "Game", generate_series(1, 13) as n
+    where id = '${gameId}'`]);
+
+  {
+    const tuongLai = execFileSync('psql', [dbUrl, '-tAc', `
+      select count(*) from "Game" g, "Game" goc
+      where g.id like 'e2eph%${suffix}' and goc.id = '${gameId}' and g."createdAt" >= goc."createdAt"`]).toString().trim();
+    check('Game dựng bằng SQL đều CŨ HƠN game vừa đăng thật (không nằm ở tương lai)', tuongLai === '0', `${tuongLai}/13 không cũ hơn`);
+  }
+
+  const p = await parentCtx.newPage();
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  const the = p.locator(`#be-${CHILD_USER}`);
+  const hrefs = () => the.locator('a[href^="/game/"]').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+
+  /*
+   * MẶC ĐỊNH 5 game mới nhất, bấm "Xem tất cả" mới ra 10 game một trang có phân trang
+   * — yêu cầu của fen. Trước đó trang mở ra thẳng 10 dòng một trang.
+   */
+  const t0 = await hrefs();
+  const tieuDe0 = (await p.locator(`[data-testid=tieu-de-game-be-${CHILD_USER}]`).innerText({ timeout: 3000 }).catch(() => '')).replace(/\s+/g, ' ');
+  check('Trang bố mẹ: mặc định mỗi bé chỉ bày 5 game', t0.length === 5, `${t0.length} dòng`);
+  /* Đếm TỔNG, không đếm dòng đang bày — nếu không một bé 14 game hiện "(5)". */
+  check('… tiêu đề vẫn đếm TỔNG và nói đây là 5 game mới nhất', /\(14\)/.test(tieuDe0) && /5 game mới nhất/.test(tieuDe0), tieuDe0);
+  const xemTatCa = p.locator(`[data-testid=xem-tat-ca-be-${CHILD_USER}]`);
+  check(
+    '… không có thanh phân trang, chỉ có link "Xem tất cả" kèm con số',
+    (await p.locator(`[data-testid=pager-be-${CHILD_USER}]`).count()) === 0 &&
+      /Xem tất cả 14 game/.test(await xemTatCa.innerText().catch(() => ''))
+  );
+
+  /* Không có link thì các phép trên đã đỏ; mở thẳng URL để phần còn lại vẫn đo được,
+     đừng để `click()` treo 30 giây rồi làm đổ cả bộ — lần thử phá đầu tiên đổ đúng vậy. */
+  if (await xemTatCa.count()) await xemTatCa.click();
+  else await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&xem=tat-ca#be-${CHILD_USER}`);
+  await p.waitForURL(/xem=tat-ca/, { timeout: 20000 });
+  await p.waitForSelector(`[data-testid=pager-be-${CHILD_USER}]`, { timeout: 10000 }).catch(() => {});
+  const t1 = await hrefs();
+  const tieuDe = await p.locator(`[data-testid=tieu-de-game-be-${CHILD_USER}]`).innerText({ timeout: 3000 }).catch(() => '');
+  check('Bấm "Xem tất cả": 10 game một trang', t1.length === 10, `${t1.length} dòng`);
+  check(
+    '… năm game mặc định chính là năm game ĐẦU của trang 1 (cùng thứ tự mới nhất)',
+    t0.every((h, i) => t1[i] === h)
+  );
+  check('… tiêu đề chuyển sang "trang 1/2"', /\(14\)/.test(tieuDe) && /trang 1\/2/.test(tieuDe), tieuDe.replace(/\s+/g, ' '));
+
+  await p.locator(`[data-testid=pager-be-${CHILD_USER}-sau]`).click();
+  await p.waitForURL(/trang=2/, { timeout: 20000 });
+  await p.waitForSelector(`#be-${CHILD_USER} a[href^="/game/"]`);
+  const t2 = await hrefs();
+  const u = new URL(p.url());
+  check(
+    'Sang trang 2 của bé ra 4 game KHÁC, không lặp trang 1',
+    t2.length === 4 && t2.every((h) => !t1.includes(h)),
+    `${t2.length} dòng, ${t2.filter((h) => t1.includes(h)).length} trùng`
+  );
+  check(
+    '… URL giữ "xem tất cả", chỉ đúng bé đó và neo về thẻ của bé',
+    u.searchParams.get('be') === CHILD_USER &&
+      u.searchParams.get('xem') === 'tat-ca' &&
+      u.searchParams.get('trang') === '2' &&
+      u.hash === `#be-${CHILD_USER}`,
+    u.search + u.hash
+  );
+
+  const thuGon = p.locator(`[data-testid=thu-gon-be-${CHILD_USER}]`);
+  if (await thuGon.count()) await thuGon.click();
+  else await p.goto(`${APP}/phu-huynh#be-${CHILD_USER}`);
+  await p.waitForURL((x) => !x.search.includes('xem'), { timeout: 20000 });
+  await p.waitForTimeout(800);
+  check(
+    'Bấm "Thu gọn": về lại 5 game, hết thanh phân trang, vẫn neo ở thẻ của bé',
+    (await hrefs()).length === 5 &&
+      (await p.locator(`[data-testid=pager-be-${CHILD_USER}]`).count()) === 0 &&
+      new URL(p.url()).hash === `#be-${CHILD_USER}`,
+    new URL(p.url()).search + new URL(p.url()).hash
+  );
+
+  /* Xem tất cả của MỘT bé khác không được kéo bé này mở theo: `?be=` chỉ bé khác thì bé
+     này vẫn thu gọn. Không có bé thứ hai thật trong bộ này, nhưng luật được đo đúng ở
+     chỗ nó quyết định — tên trong `be` không khớp thì là thu gọn. */
+  await p.goto(`${APP}/phu-huynh?be=bekhac&xem=tat-ca&trang=2`, { waitUntil: 'networkidle' });
+  check(
+    'Xem tất cả / lật trang của bé khác không kéo bé này mở ra',
+    (await hrefs()).length === 5 && (await p.locator(`[data-testid=pager-be-${CHILD_USER}]`).count()) === 0
+  );
+
+  /* Link lật trang CŨ (trước khi có "Xem tất cả") không có `xem` — vẫn phải ra đúng trang
+     nó ghi, không phải 5 game đầu. */
+  await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&trang=2`, { waitUntil: 'networkidle' });
+  const tCu = await hrefs();
+  check('Link cũ ?be=…&trang=2 (không có xem=) vẫn mở đúng trang 2', tCu.length === 4 && tCu.every((h) => t2.includes(h)), `${tCu.length} dòng`);
+
+  await p.goto(`${APP}/phu-huynh?be=${CHILD_USER}&xem=tat-ca&trang=9`, { waitUntil: 'networkidle' });
+  check(
+    'Trang vượt quá cuối nói ra, không giả vờ "Bé chưa đăng game nào"',
+    (await p.locator(`[data-testid=pager-be-${CHILD_USER}-khong-co]`).count()) === 1 &&
+      (await the.locator('text=Bé chưa đăng game nào').count()) === 0
+  );
+  await p.close();
+
+  /*
+   * ĐIỆN THOẠI 390px: form tạo bé phải TÌM ĐƯỢC từ màn đầu, và dòng game không phình.
+   *
+   * Đo trước khi sửa, bé 26 game: tiêu đề form ở 2.761px, không gì trên màn đầu nói
+   * rằng thêm bé làm ở trang này; mỗi dòng game cao 142px. Dòng game không gọn hơn
+   * được bao nhiêu (hai nút cao 48px không vừa chung dòng với tên game ở 390px), nên
+   * ngưỡng ở đây canh để nó không trôi ngược về cỡ cũ.
+   */
+  const dt = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await dt.addCookies(await parentCtx.cookies());
+  const pd = await dt.newPage();
+  await pd.goto(`${APP}/phu-huynh`, { waitUntil: 'domcontentloaded' });
+  await pd.waitForSelector(`#be-${CHILD_USER} a[href^="/game/"]`);
+  const nhay = pd.locator('[data-testid=nhay-tao-tai-khoan]');
+  const hopNhay = (await nhay.count()) ? await nhay.boundingBox() : null;
+  check(
+    '390px: link "Thêm tài khoản cho bé" nằm trong màn đầu, cao đủ tầm tay',
+    hopNhay && hopNhay.y + hopNhay.height <= 844 && hopNhay.height >= 44,
+    hopNhay ? `đáy ở ${Math.round(hopNhay.y + hopNhay.height)}px, cao ${Math.round(hopNhay.height)}px` : 'không có link'
+  );
+  const dong = await pd.locator(`#be-${CHILD_USER} ul li`).evaluateAll((els) =>
+    els.map((e) => {
+      const anh = e.querySelector('[data-testid=anh-bia-game]').getBoundingClientRect();
+      return { cao: Math.round(e.getBoundingClientRect().height), tiLe: anh.width / anh.height };
+    })
+  );
+  const caoNhat = Math.max(...dong.map((d) => d.cao));
+  check('390px: mỗi dòng game không cao quá 130px (trước khi sửa: 142px)', caoNhat <= 130, `cao nhất ${caoNhat}px`);
+  check(
+    '… và ảnh bìa vẫn đúng khổ 4:3 của sân khấu Scratch',
+    dong.every((d) => Math.abs(d.tiLe - 4 / 3) < 0.02),
+    dong.map((d) => d.tiLe.toFixed(2)).slice(0, 3).join(', ')
+  );
+  /* Không có link thì báo ĐỎ, đừng để `click()` treo 30 giây rồi ném lỗi làm đổ cả bộ
+     — lần thử phá đầu tiên đổ đúng như vậy, và không in ra một dòng kết quả nào. */
+  if (hopNhay) {
+    await nhay.click();
+    await pd.waitForTimeout(800);
+  }
+  const dinhForm = await pd.evaluate(
+    () => document.getElementById('tao-tai-khoan')?.getBoundingClientRect().top ?? -1
+  ).then(Math.round);
+  check(
+    '390px: bấm link là tới ĐÚNG tiêu đề form, sát mép trên',
+    new URL(pd.url()).hash === '#tao-tai-khoan' && dinhForm >= 0 && dinhForm <= 60,
+    `tiêu đề cách đỉnh ${dinhForm}px`
+  );
+  await dt.close();
 }
 
 // ---------- Khoá tài khoản là thu hồi phiên đang mở ----------

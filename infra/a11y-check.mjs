@@ -21,6 +21,8 @@ import { chromium } from 'playwright';
 const APP = process.env.APP ?? 'http://localhost:3000';
 const CHILD_USER = process.env.DEMO_CHILD ?? 'beminh';
 const CHILD_PASSWORD = process.env.DEMO_CHILD_PASSWORD ?? 'be1234';
+const PARENT_EMAIL = process.env.DEMO_EMAIL ?? 'demo@kidogame.local';
+const PARENT_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo1234ab';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -342,6 +344,119 @@ console.log('\n── Tràn ngang trên máy nhỏ ─────────�
       chuLanLe.length ? chuLanLe.join(' | ') : `${duong.length} trang sạch`
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Thanh điều hướng nằm TRỌN trong màn hình, cho cả ba vai
+// ---------------------------------------------------------------------------
+/*
+ * VÌ SAO mục trên không đủ: ngày 13/9 phụ huynh đăng nhập ở 390px thì nút đổi giao
+ * diện nằm ở 375–411px, tức 21px ngoài màn hình; ở 360px nửa nút "Đăng xuất" cũng ra
+ * theo. Trang KHÔNG tràn ngang — khung ngoài cắt phần thừa — nên "không trang nào phải
+ * vuốt ngang" vẫn xanh, trong khi nút ấy không ai bấm được. Và mục trên chỉ đo khách:
+ * nhãn dài nhất ("Trang của bố mẹ") chỉ hiện khi phụ huynh đã đăng nhập.
+ *
+ * Đo hộp của từng chỗ bấm trong <header>, không đo `scrollWidth`.
+ */
+console.log('\n── Thanh điều hướng nằm trọn trong màn hình ────────────────');
+{
+  const parent = await browser.newContext({ ignoreHTTPSErrors: true });
+  {
+    const p = await parent.newPage();
+    await p.goto(`${APP}/dang-nhap`, { waitUntil: 'domcontentloaded' });
+    await p.fill('input[name=email]', PARENT_EMAIL);
+    await p.fill('input[name=password]', PARENT_PASSWORD);
+    await p.locator('main button[type=submit]').first().click();
+    await p.waitForURL((u) => !u.pathname.includes('dang-nhap'), { timeout: 20000 }).catch(() => {});
+    check('Phụ huynh demo đăng nhập được (để đo thanh điều hướng)', !p.url().includes('dang-nhap'), p.url());
+    await p.close();
+  }
+
+  for (const [vai, ctxGoc] of [
+    ['khách', guest],
+    ['bé', child],
+    ['phụ huynh', parent],
+  ]) {
+    const hong = [];
+    const cookies = await ctxGoc.cookies();
+    for (const width of [320, 360, 390, 414]) {
+      const ctx = await browser.newContext({ viewport: { width, height: 780 }, ignoreHTTPSErrors: true });
+      await ctx.addCookies(cookies);
+      const page = await ctx.newPage();
+      await page.goto(APP, { waitUntil: 'domcontentloaded' });
+      const ra = await page.evaluate(() => {
+        const W = document.documentElement.clientWidth;
+        return [...document.querySelectorAll('header a, header button')]
+          .map((el) => ({ el, r: el.getBoundingClientRect() }))
+          .filter(({ r }) => r.width > 1 && r.height > 1)
+          .filter(({ r }) => r.left < -0.5 || r.right > W + 0.5)
+          .map(({ el, r }) => `"${(el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 18)}" ${Math.round(r.left)}–${Math.round(r.right)}`);
+      });
+      if (ra.length) hong.push(`${width}px: ${ra.join(', ')}`);
+      await ctx.close();
+    }
+    check(
+      `Thanh điều hướng của ${vai}: mọi chỗ bấm nằm trọn trong màn 320–414px`,
+      hong.length === 0,
+      hong.length ? hong.join(' | ') : 'sạch ở 4 bề rộng'
+    );
+  }
+  /*
+   * CHỖ BẤM TRONG NỘI DUNG cao ≥44px, và không cái nào chồng lên cái nào.
+   *
+   * Đo ngày 13/9 ở 390px: "Quên mật khẩu?", "Vào đây", "Đăng ký", "ở đây", "Đăng nhập"
+   * và tên game trên trang bố mẹ cao 22px — mọi nút trên site 48px, riêng mấy lối rẽ
+   * của trang đăng nhập thì bằng dòng chữ. Vế "không chồng" canh cách sửa: nới vùng
+   * bấm bằng đệm âm mà các dòng vẫn sát nhau thì hai link thẳng cột đè lên nhau.
+   *
+   * Checkbox/radio đo bằng NHÃN bọc nó — bấm vào chữ là tích được. Trang điều khoản
+   * KHÔNG nằm trong danh sách: link trong đoạn văn dày chữ là chữ để đọc, nới vùng bấm
+   * ở đó thì chồng sang dòng bên cạnh (lý do ở `kg-link-bam` trong globals.css).
+   */
+  const doBam = (page) =>
+    page.evaluate(() => {
+      const hop = [...document.querySelectorAll('main a[href], main button, main input[type=checkbox], main input[type=radio]')]
+        .map((el) => {
+          const dich = el.matches('input') ? (el.closest('label') ?? el) : el;
+          return { ten: (dich.innerText || el.name || '').trim().slice(0, 20), r: dich.getBoundingClientRect() };
+        })
+        .filter(({ r }) => r.width > 1 && r.height > 1);
+      const thap = hop.filter(({ r }) => r.height < 44).map(({ ten, r }) => `"${ten}" ${Math.round(r.height)}px`);
+      const chong = [];
+      for (let i = 0; i < hop.length; i++)
+        for (let j = i + 1; j < hop.length; j++) {
+          const a = hop[i].r, b = hop[j].r;
+          const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+          const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          /* Nhãn bọc chính cái ô của nó thì chồng là đương nhiên — bỏ qua cặp cha–con. */
+          if (x > 1 && y > 1 && hop[i].ten !== hop[j].ten) chong.push(`"${hop[i].ten}"×"${hop[j].ten}" ${Math.round(y)}px`);
+        }
+      return { thap, chong };
+    });
+  const loiBam = [];
+  for (const [ctxGoc, duong] of [
+    [guest, ['/dang-nhap', '/be-dang-nhap', '/dang-ky', '/quen-mat-khau']],
+    [parent, ['/phu-huynh']],
+  ]) {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await ctx.addCookies(await ctxGoc.cookies());
+    const page = await ctx.newPage();
+    for (const d of duong) {
+      await page.goto(APP + d, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('main');
+      const { thap, chong } = await doBam(page);
+      if (thap.length) loiBam.push(`${d} thấp: ${thap.join(', ')}`);
+      if (chong.length) loiBam.push(`${d} chồng: ${chong.slice(0, 3).join(', ')}`);
+    }
+    await ctx.close();
+  }
+  check(
+    '390px: chỗ bấm trong nội dung trang đăng nhập/đăng ký/bố mẹ cao ≥44px và không chồng nhau',
+    loiBam.length === 0,
+    loiBam.length ? loiBam.join(' | ') : '5 trang sạch'
+  );
+
+  await parent.close();
 }
 
 await browser.close();

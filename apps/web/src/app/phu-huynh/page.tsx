@@ -18,10 +18,62 @@ import {
 } from './child-controls';
 import { VerifyEmailButton } from './verify-email-button';
 import { NGAY_GIU_GAME_DA_GO } from '@/lib/moderation';
+import { Pager } from '@/components/pager';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ParentDashboard() {
+/**
+ * Mười game mỗi trang, cho TỪNG bé.
+ *
+ * Trước đây danh sách in hết một lượt. Đo trong DB dev: bé Minh có 26 game, mỗi dòng
+ * cao khoảng 84px, tức hơn 2.000px chỉ riêng một bé — form "Tạo tài khoản cho bé" bị
+ * đẩy xuống tận đáy, và bé thứ hai nằm ngoài tầm cuộn của hầu hết mọi người.
+ *
+ * Mười chứ không nhiều hơn: trang này là chỗ bố mẹ RÀ SOÁT, đọc từng dòng để quyết định
+ * ẩn hay xoá, không phải chỗ lướt. Mười dòng vừa một màn hình máy tính.
+ */
+const GAME_MOI_TRANG = 10;
+
+/**
+ * Năm game mới nhất khi CHƯA bấm "Xem tất cả" — yêu cầu của fen.
+ *
+ * Mở trang bố mẹ là để liếc xem dạo này con đăng gì, không phải để rà cả kho. Mười dòng
+ * mỗi bé ở trạng thái mặc định thì một nhà hai bé đã là hai màn hình danh sách trước
+ * khi tới form tạo tài khoản. Muốn rà hết thì bấm "Xem tất cả": lúc đó mới là mười dòng
+ * một trang, có phân trang như cũ.
+ */
+const GAME_THU_GON = 5;
+
+export default async function ParentDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ be?: string; trang?: string; xem?: string }>;
+}) {
+  const sp = await searchParams;
+  /*
+   * PHÂN TRANG THEO TỪNG BÉ, và chỉ MỘT bé được lật trang tại một thời điểm.
+   *
+   * Một nhà có thể có nhiều bé, mỗi bé một danh sách. `?be=<tên đăng nhập>&trang=N` lật
+   * đúng danh sách của bé đó; mọi bé khác đứng ở trang 1. Không làm mỗi bé một tham số
+   * riêng (`trang-beminh=2`): `Pager` dựng ô "nhảy tới trang" bằng một ô tên `trang`, nên
+   * tham số tự đặt tên khác sẽ bị ô ấy ghi đè thành một `trang` không thuộc bé nào.
+   * `be` cũng là đúng tên khu quản trị đang dùng cho cùng ý nghĩa.
+   *
+   * Đổi lại: đang ở trang 3 của bé A mà lật sang trang 2 của bé B thì bé A về trang 1.
+   * Chấp nhận — rà hai danh sách xen kẽ nhau không phải cách người ta dùng trang này.
+   */
+  const beLat = sp.be ?? '';
+  const trangLat = Math.max(1, Number(sp.trang) || 1);
+  /*
+   * "Xem tất cả" cũng theo TỪNG bé và chỉ một bé một lúc, cùng lý do với phân trang.
+   *
+   * Có `trang` mà thiếu `xem=tat-ca` vẫn tính là đang xem tất cả: link lật trang cũ còn
+   * nằm trong lịch sử trình duyệt và trong thư ai đó tự gửi cho mình, và mở `?trang=2`
+   * mà ra năm game đầu tiên, không có thanh phân trang nào, là nói sai với chính URL.
+   */
+  const moRong = (username: string) =>
+    username === beLat && (sp.xem === 'tat-ca' || sp.trang !== undefined);
+
   const actor = await getActor();
   if (!actor) redirect('/dang-nhap');
   if (actor.kind !== 'parent') redirect('/');
@@ -31,12 +83,30 @@ export default async function ParentDashboard() {
     select: { emailVerifiedAt: true },
   });
 
-  const children = await prisma.child.findMany({
+  const cacBe = await prisma.child.findMany({
     where: { parentId: actor.id },
     orderBy: { createdAt: 'asc' },
-    include: {
-      games: {
+    include: { _count: { select: { games: true } } },
+  });
+
+  /*
+   * Mỗi bé MỘT truy vấn game, chỉ lấy đúng trang đang xem.
+   *
+   * Không gộp được vào `include` ở trên: `skip` của bé đang lật khác `skip` của mọi bé
+   * còn lại, mà một `include` chỉ nhận một `skip`. Số bé mỗi nhà nhỏ (thường một hai),
+   * nên vài truy vấn song song vẫn rẻ hơn hẳn việc kéo cả trăm dòng game về chỉ để cắt.
+   */
+  const children = await Promise.all(
+    cacBe.map(async (child) => {
+      const tongGame = child._count.games;
+      const soTrang = Math.max(1, Math.ceil(tongGame / GAME_MOI_TRANG));
+      const xemTatCa = moRong(child.username);
+      const trang = xemTatCa ? trangLat : 1;
+      const games = await prisma.game.findMany({
+        where: { childId: child.id },
         orderBy: { createdAt: 'desc' },
+        skip: xemTatCa ? (trang - 1) * GAME_MOI_TRANG : 0,
+        take: xemTatCa ? GAME_MOI_TRANG : GAME_THU_GON,
         select: {
           id: true,
           title: true,
@@ -45,9 +115,20 @@ export default async function ParentDashboard() {
           createdAt: true,
           thumbSha256: true,
         },
-      },
-    },
-  });
+      });
+      return { ...child, games, tongGame, soTrang, trang, xemTatCa };
+    })
+  );
+
+  /** Link sang trang `p` của một bé, kèm neo về đúng thẻ của bé đó. */
+  const hrefTrangBe = (username: string) => (p: number) => {
+    const params = new URLSearchParams({ be: username, xem: 'tat-ca' });
+    if (p > 1) params.set('trang', String(p));
+    /* Neo `#be-...`: thẻ của bé nằm giữa trang, dưới khối ghi chú. Không có neo thì mỗi
+       lần sang trang trình duyệt nhảy về đầu, và bố mẹ phải cuộn lại xuống tìm đúng bé
+       đang rà — mười game một lần, cuộn lại một lần. */
+    return `/phu-huynh?${params.toString()}#be-${username}`;
+  };
 
   /*
    * Game nào đang bị một yêu cầu gỡ bản quyền giữ ẩn. Cần để nói trước cho phụ huynh
@@ -122,14 +203,45 @@ export default async function ParentDashboard() {
         </div>
       )}
 
-      <h2 className="mb-3 mt-9 text-xl font-bold">Tài khoản của các bé</h2>
+      {/*
+        Link "Thêm tài khoản cho bé" đứng NGAY CẠNH tiêu đề danh sách.
+
+        Form tạo tài khoản nằm dưới cùng trang, sau toàn bộ game của mọi bé. Đo ở 390px
+        với một bé 26 game: tiêu đề form ở 2.761px, gần bốn màn hình cuộn. Phụ huynh muốn
+        thêm đứa thứ hai thì không có gì trên màn đầu nói rằng việc đó làm được ở trang
+        này. Không dời form lên trên: phụ huynh vào đây hằng ngày để xem game của con, còn
+        tạo tài khoản là việc làm một hai lần — đặt form lên đầu là bắt việc hằng ngày
+        cuộn qua việc hiếm.
+      */}
+      <div className="mb-3 mt-9 flex flex-wrap items-center justify-between gap-x-4">
+        <h2 className="text-xl font-bold">Tài khoản của các bé</h2>
+        {children.length > 0 && (
+          <a
+            href="#tao-tai-khoan"
+            data-testid="nhay-tao-tai-khoan"
+            /* `-my-2.5`: vùng bấm vẫn 48px, nhưng hàng tiêu đề giữ nguyên cao 28px của
+               thẻ h2 — không có nó thì cả trang máy tính tụt 20px chỉ vì một link. */
+            className="min-h-touch -my-2.5 inline-flex items-center font-semibold text-accent-text"
+          >
+            + Thêm tài khoản cho bé
+          </a>
+        )}
+      </div>
 
       {children.length === 0 ? (
-        <EmptyState>Chưa có bé nào. Tạo tài khoản cho bé ở khung bên dưới nhé.</EmptyState>
+        <EmptyState>
+          Chưa có bé nào.{' '}
+          <a href="#tao-tai-khoan" className="font-bold text-accent-text underline">
+            Tạo tài khoản cho bé
+          </a>{' '}
+          ở khung bên dưới nhé.
+        </EmptyState>
       ) : (
         <ul className="mb-9 list-none space-y-4 p-0">
           {children.map((child) => (
-            <li key={child.id} className={`p-5 ${MAT_THE}`}>
+            /* `scroll-mt-6`: neo `#be-...` đưa thẻ lên sát mép trên, và không có khoảng này
+               thì tên bé dính sát vào mép cửa sổ trình duyệt. */
+            <li key={child.id} id={`be-${child.username}`} className={`scroll-mt-6 p-5 ${MAT_THE}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-lg font-bold">
@@ -150,17 +262,34 @@ export default async function ParentDashboard() {
 
               <ResetPasswordForm childId={child.id} />
 
-              <p className="mt-5 font-semibold">
-                Game đã đăng ({child.games.length})
+              {/* Đếm TỔNG game của bé, không đếm số dòng đang bày. Đếm dòng thì một bé có 26
+                  game hiện "Game đã đăng (10)" — một con số sai về chính con mình. */}
+              <p className="mt-5 font-semibold" data-testid={`tieu-de-game-be-${child.username}`}>
+                Game đã đăng ({child.tongGame})
+                {child.xemTatCa
+                  ? child.soTrang > 1 && (
+                      <span className="ml-2 text-sm font-normal text-ink-soft">
+                        · trang {Math.min(child.trang, child.soTrang)}/{child.soTrang}
+                      </span>
+                    )
+                  : child.tongGame > GAME_THU_GON && (
+                      <span className="ml-2 text-sm font-normal text-ink-soft">
+                        · {GAME_THU_GON} game mới nhất
+                      </span>
+                    )}
               </p>
-              {child.games.length === 0 ? (
+              {child.tongGame === 0 ? (
                 <p className="text-ink-soft">Bé chưa đăng game nào.</p>
               ) : (
                 <ul className="mt-2 list-none space-y-2 p-0">
                   {child.games.map((game) => (
                     <li
                       key={game.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-border px-3.5 py-2.5"
+                      /* Trên điện thoại: `gap-2 py-2` và ảnh bìa 64×48. Hai nút cao 48px không
+                         đứng chung dòng với tên game được ở 390px (cần 211px, dòng còn 280px
+                         kể cả ảnh), nên dòng luôn thành hai tầng; thứ bớt được là chiều cao
+                         mỗi tầng. Đo trước khi sửa: 142px một dòng. */
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-field border border-border px-3.5 py-2 sm:gap-3 sm:py-2.5"
                     >
                       {/*
                         Ảnh bìa, và nó KHÔNG phải là link.
@@ -171,7 +300,7 @@ export default async function ParentDashboard() {
                         nhà bốn game thì thành tám lần. Nên `alt=""`: ảnh ở đây để
                         nhận ra game bằng mắt, nghĩa thì nằm ở cái tên.
 
-                        `w-20 h-15` giữ đúng khổ 4:3 của sân khấu Scratch (480×360),
+                        `w-20 h-15` (và `w-16 h-12` trên điện thoại) giữ đúng khổ 4:3 của sân khấu Scratch (480×360),
                         và khai cứng để dòng không nhảy khi ảnh vừa tải xong.
 
                         Mờ đi khi game không còn hiện: trạng thái đang được nói bằng
@@ -186,17 +315,19 @@ export default async function ParentDashboard() {
                           height={60}
                           loading="lazy"
                           data-testid="anh-bia-game"
-                          className={`h-15 w-20 shrink-0 rounded-field border border-border bg-surface object-cover ${
+                          className={`h-12 w-16 shrink-0 rounded-field sm:h-15 sm:w-20 border border-border bg-surface object-cover ${
                             game.status === 'PUBLISHED' && !biKhieuNai.has(game.id)
                               ? ''
                               : 'opacity-50'
                           }`}
                         />
                         <span className="min-w-0">
-                        <Link href={`/game/${game.id}`} className="font-semibold">
+                        <Link href={`/game/${game.id}`} className="kg-link-bam font-semibold">
                           {game.title}
                         </Link>
-                        <span className="ml-2 text-sm text-ink-soft">
+                        {/* Dòng riêng dưới `sm`: nối đuôi tên game thì "5 lượt" ở cuối dòng
+                            một còn "chơi" rớt xuống dòng hai, đọc như hai mảnh vỡ. */}
+                        <span className="block text-sm text-ink-soft sm:ml-2 sm:inline">
                           {game.playCount} lượt chơi
                           {biKhieuNai.has(game.id)
                             ? ' · tạm ẩn vì có yêu cầu gỡ bản quyền đang chờ xử lý'
@@ -258,12 +389,51 @@ export default async function ParentDashboard() {
                   ))}
                 </ul>
               )}
+              {/* `testId` riêng từng bé: một nhà nhiều bé thì trang có nhiều thanh phân
+                  trang, và bộ kiểm phải chỉ đúng được thanh của bé nào. Trang vượt quá
+                  cuối danh sách thì `Pager` tự nói ra thay vì để một danh sách rỗng giả
+                  vờ là "Bé chưa đăng game nào". */}
+              {child.xemTatCa ? (
+                <>
+                  <Pager
+                    page={child.trang}
+                    lastPage={child.soTrang}
+                    href={hrefTrangBe(child.username)}
+                    testId={`pager-be-${child.username}`}
+                    className="mt-4"
+                  />
+                  {/* Thu gọn về đúng thẻ của bé này, không về đầu trang. */}
+                  {child.tongGame > GAME_THU_GON && (
+                    <Link
+                      href={`/phu-huynh#be-${child.username}`}
+                      data-testid={`thu-gon-be-${child.username}`}
+                      className="mt-3 inline-flex min-h-touch items-center font-semibold text-accent-text"
+                    >
+                      Thu gọn
+                    </Link>
+                  )}
+                </>
+              ) : (
+                child.tongGame > GAME_THU_GON && (
+                  /* Nói luôn con số: "Xem tất cả" trần không cho biết bấm vào là thêm 1
+                     game hay thêm 200. */
+                  <Link
+                    href={hrefTrangBe(child.username)(1)}
+                    data-testid={`xem-tat-ca-be-${child.username}`}
+                    className="mt-3 inline-flex min-h-touch items-center font-semibold text-accent-text"
+                  >
+                    Xem tất cả {child.tongGame} game →
+                  </Link>
+                )
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      <h2 className="mb-3 mt-9 text-xl font-bold">Tạo tài khoản cho bé</h2>
+      <h2 id="tao-tai-khoan" className="mb-3 mt-9 scroll-mt-6 text-xl font-bold">
+        Tạo tài khoản cho bé
+      </h2>
 
       {/*
         Chưa xác minh thì KHÔNG render form, thay bằng lời giải thích.
@@ -285,6 +455,7 @@ export default async function ParentDashboard() {
         submitLabel="Tạo tài khoản"
         busyLabel="Đang tạo…"
         successMessage="Đã tạo tài khoản cho bé. Tải lại trang để thấy trong danh sách."
+        rong="day"
       >
         <Field
           id="displayName"

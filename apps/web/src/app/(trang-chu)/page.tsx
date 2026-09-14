@@ -11,6 +11,7 @@ import { EmptyState, PageTitle } from '@/components/page';
 import { Pager } from '@/components/pager';
 import { demPhanUngNhieuGame } from '@/lib/phan-ung';
 import { gameMoiCuaBanBe } from '@/lib/theo-doi';
+import { HANG_LOC, LE_DUOI_LOAI, LE_DUOI_TUOI } from './hang-loc';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,7 +174,7 @@ export default async function HomePage({
 
   const chip = (active: boolean) =>
     [
-      'min-h-touch inline-flex items-center rounded-full border px-4 font-semibold no-underline',
+      'min-h-touch inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-4 font-semibold no-underline',
       active
         ? 'border-transparent bg-accent text-chrome'
         : 'border-border bg-surface text-ink hover:bg-bg',
@@ -194,29 +195,39 @@ export default async function HomePage({
         `infra/a11y-check.mjs` canh đúng điều đó.
       */}
       {!filtering && trangDau && (
+        /*
+          GỌN HƠN TRÊN ĐIỆN THOẠI, và đó là việc chính của trang chủ ở cỡ đó.
+
+          Đo ở 390×800 trước khi sửa: thẻ game đầu tiên nằm ở 1001px. Bé mở web ra
+          trên điện thoại thấy lời chào, ô tìm, năm hàng viên thuốc lọc — và KHÔNG MỘT
+          game nào. Dải chào bốn dòng chữ + hai nút `lg` xếp chồng ăn mất 390px trong số
+          đó. Dưới `sm` bỏ hẳn đoạn giới thiệu — dòng phụ của "Game mới nhất" ngay bên
+          dưới đã nói "do chính các bé làm bằng Scratch". Đoạn đầy đủ vẫn ở máy tính, nơi
+          nó đứng cạnh lưới game chứ không thay chỗ lưới game.
+        */
         <section
           data-testid="home-hero"
-          className="mt-7 rounded-card border border-accent/30 bg-accent/12 px-6 py-7 sm:px-8"
+          className="mt-5 rounded-card border border-accent/30 bg-accent/12 px-4 py-5 sm:mt-7 sm:px-8 sm:py-7"
         >
-          <p className="text-2xl font-extrabold leading-snug sm:text-3xl">
+          <p className="text-xl font-extrabold leading-snug sm:text-3xl">
             Chào bé, hôm nay chơi game gì?
           </p>
-          <p className="mt-2 max-w-2xl text-ink-soft">
+          <p className="mt-2 hidden max-w-2xl text-ink-soft sm:block">
             Tất cả game ở đây đều do các bạn nhỏ tự làm bằng Scratch. Chơi thử đã, rồi đăng
             game của bé lên cho các bạn khác cùng chơi nhé.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-3 flex flex-wrap gap-2 sm:mt-5 sm:gap-3">
             {actor?.kind === 'child' ? (
-              <ButtonLink href="/upload" size="lg">
+              <ButtonLink href="/upload" size="lg-tu-sm">
                 Đăng game của bé
               </ButtonLink>
             ) : actor?.kind === 'parent' ? (
-              <ButtonLink href="/phu-huynh" size="lg">
+              <ButtonLink href="/phu-huynh" size="lg-tu-sm">
                 Trang của bố mẹ
               </ButtonLink>
             ) : (
               <>
-                <ButtonLink href="/be-dang-nhap" size="lg">
+                <ButtonLink href="/be-dang-nhap" size="lg-tu-sm">
                   Bé đăng nhập
                 </ButtonLink>
                 {/*
@@ -224,8 +235,10 @@ export default async function HomePage({
                   tài khoản, nên nếu chỉ có nút "Bé đăng nhập" thì đứa trẻ chưa có tài
                   khoản đi vào ngõ cụt ngay ở màn hình đầu.
                 */}
-                <ButtonLink href="/dang-ky" size="lg" variant="ghost">
-                  Bố mẹ tạo tài khoản
+                <ButtonLink href="/dang-ky" size="lg-tu-sm" variant="ghost">
+                  {/* Nhãn ngắn dưới `sm` để hai nút vừa một hàng ở 360px — xem `lg-tu-sm`. */}
+                  <span className="sm:hidden">Bố mẹ đăng ký</span>
+                  <span className="hidden sm:inline">Bố mẹ tạo tài khoản</span>
                 </ButtonLink>
               </>
             )}
@@ -297,7 +310,14 @@ export default async function HomePage({
         <Button type="submit">Tìm</Button>
       </form>
 
-      <div className="mb-2 flex flex-wrap gap-2" data-testid="tag-filters">
+      {/*
+        HAI HÀNG CUỘN NGANG dưới `sm`, xuống dòng bình thường từ `sm` trở lên.
+
+        Ở 390px sáu viên loại game gãy thành 2 hàng và năm viên tuổi gãy thành 3 — năm
+        hàng viên thuốc, ~270px, đứng giữa ô tìm và game đầu tiên. Cuộn ngang giữ đủ
+        mọi lựa chọn trong đúng hai hàng. Lớp và lý do từng lớp: `hang-loc.ts`.
+      */}
+      <div className={`${LE_DUOI_LOAI} ${HANG_LOC}`} data-testid="tag-filters">
         <Link href={linkWith({ tag: '' })} className={chip(!tagSlug)}>
           Tất cả
         </Link>
@@ -313,8 +333,8 @@ export default async function HomePage({
         ))}
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center gap-2" data-testid="age-filters">
-        <span className="text-sm text-ink-soft">Bé mấy tuổi làm?</span>
+      <div className={`${LE_DUOI_TUOI} items-center ${HANG_LOC}`} data-testid="age-filters">
+        <span className="shrink-0 whitespace-nowrap text-sm text-ink-soft">Bé mấy tuổi làm?</span>
         <Link href={linkWith({ tuoi: '' })} className={chip(!bracket)}>
           Tuổi nào cũng được
         </Link>

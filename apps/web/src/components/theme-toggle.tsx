@@ -17,6 +17,15 @@ import { flushSync } from 'react-dom';
 
 const KHOA = 'kidogame-theme';
 
+/*
+ * Tên sự kiện báo "lựa chọn vừa đổi" cho các nút KHÁC trên cùng trang.
+ *
+ * Trang có hai nút: một trên thanh điều hướng (từ `sm`) và một ở chân trang (dưới
+ * `sm`). Mỗi lúc chỉ hiện một cái, nhưng xoay ngang điện thoại hay kéo cửa sổ là đổi
+ * sang cái kia — nếu cái kia vẫn giữ nhãn cũ thì nó ghi "Sáng" trên một trang tối.
+ */
+const SU_KIEN = 'kidogame-theme-doi';
+
 /** Giá trị lưu trong localStorage. Không có gì = theo máy. */
 type Chon = 'sang' | 'toi' | null;
 
@@ -60,7 +69,17 @@ function raToi(chon: Chon): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-export function ThemeToggle() {
+/**
+ * `viTri`: `nav` là nút trên thanh điều hướng, CHỈ từ `sm` trở lên; `chan-trang` là
+ * nút ở chân trang, CHỈ dưới `sm`, có chữ đầy đủ.
+ *
+ * Vì sao chuyển xuống chân trang trên điện thoại: thanh điều hướng 360px không đủ chỗ.
+ * Đo ngày 13/9, bé đăng nhập ở 360px thì nút này nằm ở 333–369px (9px ngoài màn
+ * hình), phụ huynh ở 390px thì 375–411px. Trên thanh thì nó lại chỉ còn cái icon 🖥️ —
+ * không ai đoán ra đó là nút đổi sáng/tối. Ở chân trang nó có chỗ để nói rõ mình là
+ * gì, và đổi giao diện là việc làm một lần, không phải việc cần nằm ở đầu mọi trang.
+ */
+export function ThemeToggle({ viTri }: { viTri: 'nav' | 'chan-trang' }) {
   /*
    * Khởi tạo là null (theo máy) chứ không đọc localStorage ngay trong useState:
    * server không có localStorage, nên đọc ở đây sẽ làm HTML của server và lần
@@ -81,7 +100,12 @@ export function ThemeToggle() {
    */
   const [vuaBam, setVuaBam] = useState(false);
 
-  useEffect(() => setChon(doc()), []);
+  useEffect(() => {
+    setChon(doc());
+    const docLai = () => setChon(doc());
+    window.addEventListener(SU_KIEN, docLai);
+    return () => window.removeEventListener(SU_KIEN, docLai);
+  }, []);
 
   const key = chon ?? 'may';
   const nhan = NHAN[key];
@@ -115,6 +139,7 @@ export function ThemeToggle() {
     if (!doiMau || itChuyenDong || !('startViewTransition' in document)) {
       setChon(tiep);
       ap(tiep);
+      window.dispatchEvent(new Event(SU_KIEN));
       return;
     }
 
@@ -124,25 +149,36 @@ export function ThemeToggle() {
          nút vẫn còn ghi "Sáng" trên một trang đã tối hẳn. */
       flushSync(() => setChon(tiep));
       ap(tiep);
+      window.dispatchEvent(new Event(SU_KIEN));
     });
   }
+
+  const giuaNav = viTri === 'nav';
 
   return (
     <button
       type="button"
       onClick={bam}
-      data-testid="theme-toggle"
+      /* Hai testid khác nhau: hai nút cùng nằm trong DOM, và một bộ chọn trùng cả hai
+         thì Playwright báo `strict mode violation` ở mọi phép kiểm đang bấm nút này. */
+      data-testid={giuaNav ? 'theme-toggle' : 'theme-toggle-chan-trang'}
       data-theme-choice={key}
       /* Nói cả trạng thái hiện tại: người dùng trình đọc màn hình không thấy icon,
          mà chỉ nghe "đổi giao diện" thì không biết đang ở giao diện nào. */
       aria-label={`Đổi giao diện — đang dùng: ${nhan.chu}`}
       title={`Giao diện: ${nhan.chu}`}
-      /* Cùng kiểu với các mục chữ khác trên thanh nav (xem `MUC_CHU` trong
-         `site-nav.tsx`): trỏ vào thì hiện nền bo tròn, không chỉ đậm chữ lên. Chép
-         lại chuỗi class chứ không import: nút này là client component, còn `SiteNav`
-         là server component — import qua lại giữa hai bên chỉ để lấy một chuỗi thì
-         kéo cả module sang bundle của client. */
-      className="min-h-touch inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 font-semibold text-chrome-ink/80 transition-colors hover:bg-chrome-lift hover:text-chrome-ink sm:px-3"
+      /* Nút trên nav: cùng kiểu với các mục chữ khác trên thanh (xem `MUC_CHU` trong
+         `site-nav.tsx`) — trỏ vào thì hiện nền bo tròn. Chép lại chuỗi class chứ không
+         import: nút này là client component, còn `SiteNav` là server component —
+         import qua lại chỉ để lấy một chuỗi thì kéo cả module sang bundle của client.
+
+         Nút ở chân trang: cùng kiểu với các link chân trang bên cạnh, trên nền sáng
+         của trang chứ không trên thanh tối. */
+      className={
+        giuaNav
+          ? 'min-h-touch hidden shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 font-semibold text-chrome-ink/80 transition-colors hover:bg-chrome-lift hover:text-chrome-ink sm:inline-flex'
+          : 'min-h-touch inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 font-semibold text-ink-soft hover:text-ink sm:hidden'
+      }
     >
       {/* `key` theo lựa chọn để span được GẮN LẠI mỗi lần đổi — trình duyệt chỉ chạy
           animation khi lớp được gắn vào, không phải khi nó đang có sẵn. */}
@@ -160,8 +196,14 @@ export function ThemeToggle() {
 
         `text-left`: chữ ngắn nằm sát icon, phần giữ chỗ dồn về bên phải. Căn giữa thì
         khoảng cách giữa icon và chữ đổi theo nhãn, và mắt lại thấy nó xê dịch.
+
+        Ở chân trang thì không cần giữ chỗ: nút đứng cuối hàng link, không đẩy gì cả.
       */}
-      <span className="hidden text-left text-sm sm:inline-block sm:min-w-16">{nhan.chu}</span>
+      {giuaNav ? (
+        <span className="inline-block min-w-16 text-left text-sm">{nhan.chu}</span>
+      ) : (
+        <span>Giao diện: {nhan.chu}</span>
+      )}
     </button>
   );
 }

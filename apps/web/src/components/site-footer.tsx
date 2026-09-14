@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { DatCuoiTrang, Hoa } from './site-decor';
+import { ThemeToggle } from './theme-toggle';
 
 /**
  * Chân trang: chỉ có link, KHÔNG có tên/email đơn vị vận hành.
@@ -149,6 +150,8 @@ export function SiteFooter() {
               {link.label}
             </Link>
           ))}
+          {/* Chỉ hiện dưới `sm` — trên đó nút nằm ở thanh điều hướng. Lý do ở `ThemeToggle`. */}
+          <ThemeToggle viTri="chan-trang" />
         </div>
       </div>
       {/* Ngoài khung 1024px và không có `px-5`: mặt đất phải chạy suốt hai mép màn

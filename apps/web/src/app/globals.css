@@ -771,6 +771,29 @@ body {
   animation: kg-may-bay var(--kg-bay-giay, 110s) linear infinite;
 }
 
+/*
+ * BAN ĐÊM MÂY MỜ HƠN HẲN — cả lớp, không phải từng đám.
+ *
+ * Mây ngày là mảng trắng trên nền sáng: nhẹ tự nhiên. Mây đêm là mảng lam đặc trên nền
+ * gần đen, và ở đúng độ đậm ban ngày nó đọc ra là CỤC ĐÁ, không phải mây — fen chụp màn
+ * hình trang bố mẹ và đám mây là thứ nặng nhất trên cả trang. Mờ đi thì nó thành một làn
+ * sương có hình, vẫn thấy rõ đang trôi.
+ *
+ * Đặt `opacity` trên KHỐI BỌC, vì từng đám đã có `opacity` riêng nội tuyến (độ xa gần);
+ * hai lớp nhân với nhau nên đám xa vẫn mờ hơn đám gần đúng tỉ lệ cũ.
+ *
+ * Viết hai lần, cùng lý do với `.kg-ngay` / `.kg-dem`: chọn tối trên máy sáng, và chọn
+ * theo máy trên máy tối.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) [data-kg-decor='may'] {
+    opacity: 0.5;
+  }
+}
+:root[data-theme='dark'] [data-kg-decor='may'] {
+  opacity: 0.5;
+}
+
 @keyframes kg-may-bay {
   from {
     transform: translateX(0);
@@ -1473,4 +1496,38 @@ body {
     animation-duration: var(--kg-bay-giay, 110s) !important;
     animation-play-state: paused !important;
   }
+}
+
+/*
+ * Hàng bộ lọc cuộn ngang trên điện thoại — xem `(trang-chu)/hang-loc.ts`.
+ *
+ * Ẩn thanh cuộn vì trên màn cảm ứng nó chỉ là một vạch xám đè lên đáy viên thuốc; thứ
+ * báo cho bé biết "còn nữa, vuốt sang" là viên thuốc cuối bị MÉP MÀN HÌNH cắt đôi, nên
+ * hàng phải tràn ra sát mép (`-mx-5 px-5`), không dừng ở lề nội dung.
+ */
+@utility kg-cuon-ngang {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Link chữ nằm lẻ trong một câu ("Chưa có tài khoản? Đăng ký"): vùng bấm cao 46px mà
+ * dòng chữ không cao thêm pixel nào.
+ *
+ * Đo ở 390px trước khi dùng: "Quên mật khẩu?", "Vào đây", "Đăng ký", "ở đây", tên game
+ * trên trang bố mẹ — tất cả cao 22px, bằng đúng dòng chữ. Mọi nút trên site cao 48px vì
+ * ngón tay trẻ kém chính xác, riêng mấy lối rẽ quan trọng nhất của trang đăng nhập thì
+ * không. Đệm 12px trên dưới rồi bù âm đúng 12px: hộp lề của nó vẫn bằng dòng chữ nên
+ * dòng không giãn, còn phần bấm được là cả hộp đệm.
+ *
+ * `inline-block` là cái giá: link dài không gãy giữa chừng mà xuống dòng cả cụm. Chỉ
+ * dùng cho link ngắn. KHÔNG dùng trong đoạn văn nhiều dòng liền nhau (điều khoản): hai
+ * vùng bấm 46px ở hai dòng cách nhau 24px thì chồng lên nhau, bấm dòng này trúng dòng kia.
+ */
+@utility kg-link-bam {
+  display: inline-block;
+  padding-block: 0.75rem;
+  margin-block: -0.75rem;
 }

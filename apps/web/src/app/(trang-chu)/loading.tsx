@@ -1,4 +1,5 @@
 import { DauTrangCho, KhungCho, LuoiGameCho, O, Vien } from '@/components/dang-tai';
+import { HANG_LOC, LE_DUOI_LOAI, LE_DUOI_TUOI } from './hang-loc';
 
 /**
  * Khung chờ của trang chủ.
@@ -33,17 +34,34 @@ export default function DangTaiTrangChu() {
   return (
     <KhungCho cauNoi="Đang tải trang chủ…">
       {/*
-        DẢI MỜI ở đầu trang — `mt-7 rounded-card px-6 py-7`, đúng khối `home-hero`.
-        Nó chiếm gần một phần tư màn hình đầu, nên bỏ nó khỏi khung chờ là mọi thứ
-        bên dưới nằm cao hơn chỗ thật rồi tụt xuống một cái khi trang tới.
+        DẢI MỜI ở đầu trang — cùng lớp với khối `home-hero`: `mt-5 px-4 py-5` trên điện
+        thoại, `sm:mt-7 sm:px-8 sm:py-7` từ `sm`. Nó chiếm gần một phần tư màn hình đầu,
+        nên bỏ nó khỏi khung chờ là mọi thứ bên dưới nằm cao hơn chỗ thật rồi tụt xuống
+        một cái khi trang tới.
+
       */}
-      <div className="mt-7 rounded-card border border-border px-6 py-7 sm:px-8" aria-hidden="true">
-        {/* Câu chào `text-2xl sm:text-3xl leading-snug` — hộp dòng đo được 41px. */}
-        <div className="flex h-10.25 items-center">
-          <O className="h-7 w-80 max-w-full" />
+      <div
+        className="mt-5 rounded-card border border-border px-4 py-5 sm:mt-7 sm:px-8 sm:py-7"
+        aria-hidden="true"
+      >
+        {/*
+          Câu chào: CHÍNH CÂU CHỮ THẬT, tàng hình, với gạch xám đè lên.
+
+          Không dựng bằng chiều cao cố định như các dòng khác, vì câu này gãy dòng tuỳ
+          bề rộng: một dòng ở 390px, hai dòng ở 360px. Dựng cứng một dòng thì ở 360px
+          cả trang tụt 27px khi trang thật tới. Để trình duyệt gãy dòng hộ thì khung
+          chờ khớp ở mọi cỡ mà không phải biết phông chữ rộng bao nhiêu.
+        */}
+        {/* `<div>`, KHÔNG phải `<p>` như trang thật: `O` là một `<div>`, và `<div>` trong
+            `<p>` thì trình phân tích HTML tự đóng `<p>` sớm — đo ra dải chờ cao dư 20px. */}
+        <div className="relative text-xl font-extrabold leading-snug sm:text-3xl">
+          <span className="invisible">Chào bé, hôm nay chơi game gì?</span>
+          <span className="absolute inset-0 flex items-center">
+            <O className="h-5 w-64 max-w-full sm:h-7 sm:w-80" />
+          </span>
         </div>
-        {/* Đoạn giới thiệu `mt-2 max-w-2xl`, hai dòng, đo được 48px. */}
-        <div className="mt-2 max-w-2xl">
+        {/* Đoạn giới thiệu chỉ có từ `sm`: `mt-2 max-w-2xl` hai dòng, 48px. */}
+        <div className="mt-2 hidden max-w-2xl sm:block">
           <div className="flex h-6 items-center">
             <O className="h-4 w-full" />
           </div>
@@ -51,11 +69,11 @@ export default function DangTaiTrangChu() {
             <O className="h-4 w-4/5" />
           </div>
         </div>
-        {/* HÀNG NÚT `mt-5 flex gap-3`, cao 56px — bản trước bỏ sót hẳn hàng này, và
-            một mình nó là 76 trong 89px mà dải mời bị hụt so với dải thật. */}
-        <div className="mt-5 flex flex-wrap gap-3">
-          <O className="h-14 w-44 rounded-full" />
-          <O className="h-14 w-40 rounded-full" />
+        {/* HÀNG NÚT — nút cỡ `lg-tu-sm`: 48px trên điện thoại, 56px từ `sm`. Bản đầu
+            tiên bỏ sót hẳn hàng này, và một mình nó là 76 trong 89px mà dải mời bị hụt. */}
+        <div className="mt-3 flex flex-wrap gap-2 sm:mt-5 sm:gap-3">
+          <O className="h-12 w-33 rounded-full sm:h-14 sm:w-44" />
+          <O className="h-12 w-36 rounded-full sm:h-14 sm:w-40" />
         </div>
       </div>
 
@@ -77,15 +95,15 @@ export default function DangTaiTrangChu() {
       {/* Hai hàng bộ lọc: theo loại game, rồi theo tuổi. Bề rộng các viên thuốc lệch
           nhau vì nhãn thật dài ngắn khác nhau — năm viên bằng chằn chặn đọc ra như
           một thanh điều khiển, không như một hàng nhãn chữ. */}
-      <div className="mb-2 flex flex-wrap gap-2" aria-hidden="true">
+      <div className={`${LE_DUOI_LOAI} ${HANG_LOC}`} aria-hidden="true">
         {['w-20', 'w-24', 'w-28', 'w-20', 'w-32', 'w-24'].map((w, i) => (
-          <Vien key={i} className={w} />
+          <Vien key={i} className={`shrink-0 ${w}`} />
         ))}
       </div>
-      <div className="mb-5 flex flex-wrap items-center gap-2" aria-hidden="true">
-        <O className="h-3.5 w-32" />
+      <div className={`${LE_DUOI_TUOI} items-center ${HANG_LOC}`} aria-hidden="true">
+        <O className="h-3.5 w-32 shrink-0" />
         {['w-40', 'w-24', 'w-24', 'w-24'].map((w, i) => (
-          <Vien key={i} className={w} />
+          <Vien key={i} className={`shrink-0 ${w}`} />
         ))}
       </div>
 

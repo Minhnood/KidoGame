@@ -586,11 +586,31 @@ const verifiedCtxs = [];
   );
 
   await admin.goto(`${ADMIN}/admin?loc=can-xem`, { waitUntil: 'networkidle' });
+  /*
+   * So với TỔNG của danh sách, không với số thẻ đang bày.
+   *
+   * Bản đầu đếm `admin-game` trên trang, và nó đúng cho tới khi DB dev tích đủ game cần
+   * xem để tràn một trang: danh sách admin 20 dòng một trang, và mỗi lượt chạy bộ này để
+   * lại vài game bị báo cáo. Đo được 13, rồi 15, rồi 22 — tới 22 thì phép kiểm đỏ với
+   * "ô 22 · danh sách 20", trong khi ô tổng quan đếm đúng từng game. Cả hai con số lúc đó
+   * đều đúng; chỉ có phép so là so một tổng với một trang.
+   *
+   * Vẫn đếm thẻ trên trang, nhưng như một phép kiểm riêng: trang đầu phải bày đủ
+   * `min(tổng, 20)` dòng, để một danh sách in thiếu vẫn bị bắt.
+   */
+  const tongDanhSach = Number(
+    ((await admin.locator('[data-testid=admin-total]').innerText()).match(/^(\d+)/) ?? [])[1]
+  );
   const demThat = await admin.locator('[data-testid=admin-game]').count();
   check(
-    'Ô "Game cần xem" khớp đúng số dòng trong danh sách nó dẫn tới',
-    soCanXem === demThat,
-    `ô ${soCanXem} · danh sách ${demThat}`
+    'Ô "Game cần xem" khớp đúng TỔNG của danh sách nó dẫn tới',
+    soCanXem === tongDanhSach,
+    `ô ${soCanXem} · danh sách ${tongDanhSach}`
+  );
+  check(
+    '… và trang đầu của danh sách bày đủ dòng',
+    demThat === Math.min(tongDanhSach, 20),
+    `${demThat} thẻ / tổng ${tongDanhSach}`
   );
 
   /* Bài này vừa tạo sáu báo cáo đã xác minh, nên con số 24 giờ không thể là 0. */

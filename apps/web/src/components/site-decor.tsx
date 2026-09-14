@@ -681,8 +681,11 @@ function May({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
  * đám trùng nhịp và dính thành một cục bay cùng nhau.
  */
 const MAY_BAY: Array<{ tren: string; rong: string; giay: number; tre: number; mo: number }> = [
-  { tren: '9%', rong: '9rem', giay: 95, tre: -22, mo: 0.95 },
-  { tren: '27%', rong: '5rem', giay: 150, tre: -97, mo: 0.7 },
+  /* Đám TRÊN CÙNG là đám NHỎ và mờ. 9% chiều cao là đúng ngang dòng tiêu đề H1 của mọi
+     trang, và bản đầu đặt đám to đậm nhất ở đây: trên nền tối nó thành vật nặng nhất
+     trang, nằm sát cạnh tiêu đề trên từng trang một. */
+  { tren: '9%', rong: '5rem', giay: 150, tre: -97, mo: 0.7 },
+  { tren: '27%', rong: '9rem', giay: 95, tre: -22, mo: 0.95 },
   { tren: '46%', rong: '7rem', giay: 115, tre: -61, mo: 0.85 },
   { tren: '66%', rong: '4.5rem', giay: 170, tre: -33, mo: 0.65 },
   { tren: '83%', rong: '8rem', giay: 105, tre: -78, mo: 0.9 },

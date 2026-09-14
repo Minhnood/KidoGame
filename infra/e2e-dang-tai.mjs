@@ -279,58 +279,70 @@ let GAME_ID = '';
    *     trên trang nó nở ra 54px -> cộng với 6px của dòng đếm kết quả thành 12px mà
    *     cả lưới thẻ bị tụt.
    *
+   *   · (điện thoại) câu chào gãy hai dòng ở 360px mà khung chờ dựng cứng một dòng
+   *     -> dải mời hụt 27px; rồi bản sửa đầu bọc `<div>` trong `<p>` -> dư 20px.
+   *
    * Đi từ trang game VỀ trang chủ chứ không tải thẳng: `loading.tsx` chỉ chạy khi
    * CHUYỂN trang, còn vào thẳng bằng URL thì server dựng luôn trang thật.
+   *
+   * BA CỠ, vì trang chủ trên điện thoại có bố cục riêng (dải mời gọn, hàng lọc cuộn
+   * ngang). 390 và 360 cùng là điện thoại nhưng câu chào gãy dòng khác nhau.
    */
-  const ctx = await browser.newContext({ viewport: { width: 1140, height: 1000 } });
-  const p = await ctx.newPage();
-  await p.route('**/*', async (r) =>
-    r.request().headers()['next-router-prefetch'] ? r.abort() : r.continue()
-  );
-  await p.goto(`${APP}/game/${GAME_ID}`, { waitUntil: 'networkidle' });
-  await p.waitForTimeout(800);
-  const cdp = await ctx.newCDPSession(p);
-  await cdp.send('Network.enable');
-  await cdp.send('Network.emulateNetworkConditions', CHAM);
-  await p.evaluate(() => {
-    const a = document.createElement('a');
-    a.href = '/';
-    a.id = 'e2e-ve-trang-chu';
-    a.textContent = 'về trang chủ';
-    document.body.prepend(a);
-  });
-  await p.click('#e2e-ve-trang-chu', { noWaitAfter: true });
-  await p.waitForSelector('[data-testid=dang-tai]', { timeout: 60000 });
+  for (const [w, h, dt] of [
+    [1140, 1000, false],
+    [390, 844, true],
+    [360, 800, true],
+  ]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: dt, hasTouch: dt });
+    const p = await ctx.newPage();
+    await p.route('**/*', async (r) =>
+      r.request().headers()['next-router-prefetch'] ? r.abort() : r.continue()
+    );
+    await p.goto(`${APP}/game/${GAME_ID}`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(800);
+    const cdp = await ctx.newCDPSession(p);
+    await cdp.send('Network.enable');
+    await cdp.send('Network.emulateNetworkConditions', CHAM);
+    await p.evaluate(() => {
+      const a = document.createElement('a');
+      a.href = '/';
+      a.id = 'e2e-ve-trang-chu';
+      a.textContent = 'về trang chủ';
+      document.body.prepend(a);
+    });
+    await p.click('#e2e-ve-trang-chu', { noWaitAfter: true });
+    await p.waitForSelector('[data-testid=dang-tai]', { timeout: 60000 });
 
-  const khung = p.locator('[data-testid=dang-tai]');
-  const choDai = await khung.locator('> div').first().boundingBox();
-  const choThe = await khung.locator('.grid > div').first().boundingBox();
+    const khung = p.locator('[data-testid=dang-tai]');
+    const choDai = await khung.locator('> div').first().boundingBox();
+    const choThe = await khung.locator('.grid > div').first().boundingBox();
 
-  /* Bỏ bóp mạng để trang chủ tải xong — nó có hàng chục ảnh, giữ 150kbps thì hết giờ
-     trước khi tải hết, mà thứ cần đo là BỐ CỤC chứ không phải tốc độ. */
-  await cdp.send('Network.emulateNetworkConditions', {
-    offline: false,
-    latency: 0,
-    downloadThroughput: -1,
-    uploadThroughput: -1,
-  });
-  await p.waitForSelector('[data-testid=game-card]', { timeout: 120000 });
-  await p.waitForTimeout(2500);
-  const thatDai = await p.locator('[data-testid=home-hero]').boundingBox();
-  const thatThe = await p.locator('[data-testid=game-card]').first().boundingBox();
+    /* Bỏ bóp mạng để trang chủ tải xong — nó có hàng chục ảnh, giữ 150kbps thì hết giờ
+       trước khi tải hết, mà thứ cần đo là BỐ CỤC chứ không phải tốc độ. */
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+    });
+    await p.waitForSelector('[data-testid=game-card]', { timeout: 120000 });
+    await p.waitForTimeout(2500);
+    const thatDai = await p.locator('[data-testid=home-hero]').boundingBox();
+    const thatThe = await p.locator('[data-testid=game-card]').first().boundingBox();
 
-  const khop = (a, b) =>
-    Math.abs(a.x - b.x) <= 1 &&
-    Math.abs(a.y - b.y) <= 1 &&
-    Math.abs(a.width - b.width) <= 1 &&
-    Math.abs(a.height - b.height) <= 1;
-  const ta = (a, b) =>
-    `lệch y ${Math.round(b.y - a.y)}px, cao ${Math.round(b.height - a.height)}px, rộng ${Math.round(b.width - a.width)}px`;
+    const khop = (a, b) =>
+      Math.abs(a.x - b.x) <= 1 &&
+      Math.abs(a.y - b.y) <= 1 &&
+      Math.abs(a.width - b.width) <= 1 &&
+      Math.abs(a.height - b.height) <= 1;
+    const ta = (a, b) =>
+      `lệch y ${Math.round(b.y - a.y)}px, cao ${Math.round(b.height - a.height)}px, rộng ${Math.round(b.width - a.width)}px`;
 
-  check('Trang chủ: dải mời chờ trùng khít dải mời thật', khop(choDai, thatDai), ta(choDai, thatDai));
-  check('Trang chủ: thẻ game chờ trùng khít thẻ game thật', khop(choThe, thatThe), ta(choThe, thatThe));
+    check(`Trang chủ ${w}px: dải mời chờ trùng khít dải mời thật`, khop(choDai, thatDai), ta(choDai, thatDai));
+    check(`Trang chủ ${w}px: thẻ game chờ trùng khít thẻ game thật`, khop(choThe, thatThe), ta(choThe, thatThe));
 
-  await ctx.close();
+    await ctx.close();
+  }
 }
 
 // ---------- Người xin ÍT CHUYỂN ĐỘNG vẫn phải biết trang đang tải ----------

@@ -65,7 +65,15 @@ export async function SiteNav() {
           variant="ghost"
           className="border-chrome-ink/25! text-chrome-ink! hover:bg-chrome-lift!"
         >
-          Trang của bố mẹ
+          {/*
+            "Bố mẹ" dưới `sm`. Nhãn đầy đủ rộng 164px, và ở 390px nó đẩy nút đổi giao
+            diện ra 375–411px — tức 21px NGOÀI màn hình; ở 360px nửa nút "Đăng xuất"
+            cũng ra theo. Trang không hề tràn ngang (khung ngoài cắt mất phần thừa), nên
+            mọi phép đo "không vuốt ngang" đều xanh trong khi phụ huynh trên điện thoại
+            không bấm được đổi sáng/tối. Khách cũng thấy đúng chữ "Bố mẹ" ở chỗ này.
+          */}
+          <span className="sm:hidden">Bố mẹ</span>
+          <span className="hidden sm:inline">Trang của bố mẹ</span>
         </ButtonLink>
       )}
 

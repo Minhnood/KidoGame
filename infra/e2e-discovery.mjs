@@ -46,6 +46,27 @@ if (!FIXTURE) {
 }
 
 const browser = await chromium.launch({ channel: 'chrome' });
+
+/*
+ * Khoảng TRỐNG NHÌN THẤY giữa ô tìm, hai hàng viên thuốc và dòng đếm — đo giữa các
+ * viên thuốc, không đo lề CSS. Dưới `sm` hàng lọc có đệm trong để giữ vòng focus, nên
+ * lề CSS ở hai cỡ khác nhau mà khoảng trống phải như nhau.
+ *
+ * Có vì bản đầu của hàng cuộn ngang làm lề dưới về 0 từ 640px (`sm:my-0` đè `mb-5`):
+ * hai hàng lọc và dòng đếm dính nhau. Mọi phép kiểm khác vẫn xanh, kể cả phép so khung
+ * chờ với trang thật — khung chờ dùng chung lớp nên sai y hệt. Fen bắt bằng mắt.
+ */
+const khoangLoc = (p) =>
+  p.evaluate(() => {
+    const q = (s) => document.querySelector(s);
+    const vien = (id) => q(`[data-testid=${id}] a`).getBoundingClientRect();
+    const tim = q('[data-testid=search-form]').getBoundingClientRect();
+    const loai = vien('tag-filters');
+    const tuoi = vien('age-filters');
+    const dem = q('[data-testid=result-count]').getBoundingClientRect();
+    return [loai.top - tim.bottom, tuoi.top - loai.bottom, dem.top - tuoi.bottom].map(Math.round);
+  });
+const dungKhoang = (k) => Math.abs(k[0] - 16) <= 1 && Math.abs(k[1] - 8) <= 1 && Math.abs(k[2] - 20) <= 1;
 const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1000 } });
 
@@ -123,6 +144,72 @@ if (!gameId) {
   check('Trang chủ có ô tìm kiếm', (await p.locator('[data-testid=search-form]').count()) > 0);
   check('Trang chủ có bộ lọc tag', (await p.locator('[data-testid=tag-filters]').count()) > 0);
   check('Trang chủ có bộ lọc tuổi', (await p.locator('[data-testid=age-filters]').count()) > 0);
+  await p.close();
+}
+
+// ---------- Điện thoại: game phải lọt màn hình đầu ----------
+/*
+ * Đo trước khi sửa, ở 390×800: thẻ game đầu tiên nằm ở 1001px. Bé mở web trên điện
+ * thoại thấy lời chào, ô tìm, năm hàng viên thuốc lọc — và không một game nào. Không
+ * phép kiểm nào đỏ vì tất cả đều đo ở 1300px, nơi mọi thứ vừa khít.
+ *
+ * Ngưỡng "ít nhất 100px của thẻ đầu tiên lọt màn đầu", không phải "trọn thẻ": trọn thẻ
+ * ở 360×800 cần thêm ~100px nữa, và thứ cần bảo vệ là bé THẤY có game ở dưới — một
+ * nửa ảnh thumbnail làm được việc đó.
+ */
+for (const [w, h] of [
+  [390, 844],
+  [360, 800],
+]) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true });
+  const p = await ctx.newPage();
+  await p.goto(APP, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('[data-testid=game-card]', { timeout: 30000 });
+  const m = await p.evaluate(() => {
+    const top = (el) => el.getBoundingClientRect().top + scrollY;
+    const hang = (id) => {
+      const el = document.querySelector(`[data-testid=${id}]`);
+      const dinh = new Set([...el.querySelectorAll('a')].map((a) => Math.round(top(a))));
+      return {
+        soHang: dinh.size,
+        cuonDuoc: el.scrollWidth > el.clientWidth,
+        demTren: parseFloat(getComputedStyle(el).paddingTop),
+      };
+    };
+    return {
+      the: Math.round(top(document.querySelector('[data-testid=game-card]'))),
+      tran: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      loai: hang('tag-filters'),
+      tuoi: hang('age-filters'),
+    };
+  });
+  check(`${w}px: ít nhất 100px của thẻ game đầu tiên lọt màn đầu`, m.the <= h - 100, `đỉnh thẻ ở ${m.the}px, màn cao ${h}`);
+  check(`${w}px: bộ lọc loại game nằm trên MỘT hàng cuộn ngang`, m.loai.soHang === 1 && m.loai.cuonDuoc, JSON.stringify(m.loai));
+  check(`${w}px: bộ lọc tuổi nằm trên MỘT hàng cuộn ngang`, m.tuoi.soHang === 1 && m.tuoi.cuonDuoc, JSON.stringify(m.tuoi));
+  /* Khung cuộn cắt mọi thứ tràn ra ngoài nó, kể cả vòng focus 3px + lệch 2px. */
+  check(`${w}px: hàng lọc đủ đệm cho vòng focus (≥5px)`, m.loai.demTren >= 5 && m.tuoi.demTren >= 5, `${m.loai.demTren}px`);
+  check(`${w}px: trang không tràn ngang`, m.tran === 0, `${m.tran}px`);
+  {
+    const k = await khoangLoc(p);
+    check(`${w}px: ô tìm → hàng loại → hàng tuổi → dòng đếm cách 16 / 8 / 20px`, dungKhoang(k), k.join(' / '));
+  }
+  await ctx.close();
+}
+
+// Máy tính: hàng lọc KHÔNG được cuộn — ở đó đủ chỗ, và giấu lựa chọn sau mép là mất trắng.
+{
+  const p = await anon.newPage();
+  await p.goto(APP, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('[data-testid=tag-filters]');
+  const cuon = await p.evaluate(() =>
+    ['tag-filters', 'age-filters'].map((id) => {
+      const el = document.querySelector(`[data-testid=${id}]`);
+      return el.scrollWidth - el.clientWidth;
+    })
+  );
+  check('1300px: hai hàng lọc bày hết, không giấu viên nào sau mép', cuon.every((d) => d === 0), cuon.join(', '));
+  const k = await khoangLoc(p);
+  check('1300px: ô tìm → hàng loại → hàng tuổi → dòng đếm cách 16 / 8 / 20px', dungKhoang(k), k.join(' / '));
   await p.close();
 }
 

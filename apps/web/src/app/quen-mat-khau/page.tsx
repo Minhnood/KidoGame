@@ -32,7 +32,7 @@ export default function ForgotPasswordPage() {
 
       <p className="mb-12 text-ink-soft">
         Nhớ ra mật khẩu rồi?{' '}
-        <Link href="/dang-nhap" className="font-bold text-accent-text underline">
+        <Link href="/dang-nhap" className="kg-link-bam font-bold text-accent-text underline">
           Đăng nhập
         </Link>
       </p>
