@@ -24,20 +24,45 @@
 {$APP_DOMAIN:app.kidogame.vn} {
 	encode zstd gzip
 
-	reverse_proxy web:3000 {
-		# GHI ĐÈ X-Forwarded-For, không để Caddy nối thêm.
-		#
-		# Mặc định Caddy NỐI IP thật vào cuối chuỗi client gửi lên, nên phần tử
-		# trái nhất là do client tự viết. Mà `clientIp()` trong src/lib/actions.ts
-		# lấy đúng phần tử trái nhất — tức là IP hoàn toàn giả được bằng một dòng
-		# header. Cái đó nuôi hạn mức 5 yêu cầu gỡ bản quyền mỗi IP mỗi ngày, mà
-		# gửi yêu cầu là game của một đứa trẻ bị ẩn ngay lập tức.
-		#
-		# Ở đây Caddy là hop DUY NHẤT trước app (không Cloudflare, không LB), nên
-		# ghi đè là đúng: không có proxy hợp lệ nào phía trước để mà giữ chuỗi.
-		# Thêm một lớp proxy phía trước thì PHẢI sửa lại dòng này, không thì mọi
-		# người dùng trông như cùng một IP.
-		header_up X-Forwarded-For {remote_host}
+	# UMAMI — CHỈ HAI ĐƯỜNG, và đó là cả điểm của khối này.
+	#
+	# Thẻ script trong layout tải `/_stats/script.js` và gửi lượt xem về
+	# `/_stats/api/send`. Cả hai nằm trên chính app domain, nên CSP của app
+	# (`script-src 'self'` + nonce, `connect-src 'self'`) KHÔNG phải mở thêm host nào.
+	#
+	# Không proxy nguyên `/_stats/*`: làm vậy là bày luôn trang đăng nhập và API quản
+	# trị của Umami ra app domain — nơi trẻ em dùng, và nơi cookie phiên của KidoGame
+	# sống. Dashboard nằm ở STATS_DOMAIN riêng bên dưới.
+	@umami path /_stats/script.js /_stats/api/send
+	handle @umami {
+		uri strip_prefix /_stats
+		reverse_proxy umami:3000 {
+			# Cùng lý do ghi đè như khối web ngay dưới: Umami băm IP này vào mã phiên
+			# và đoán quốc gia từ nó, nên nó phải là IP thật chứ không phải chuỗi do
+			# client tự viết.
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	# `handle` bọc ngoài thì mọi đường còn lại mới đi tới web — hai khối `handle`
+	# loại trừ nhau, cái khớp trước thắng. Để `reverse_proxy web` trần ngoài `handle`
+	# thì thứ tự chạy do Caddy tự sắp, không phải do thứ tự dòng trong file.
+	handle {
+		reverse_proxy web:3000 {
+			# GHI ĐÈ X-Forwarded-For, không để Caddy nối thêm.
+			#
+			# Mặc định Caddy NỐI IP thật vào cuối chuỗi client gửi lên, nên phần tử
+			# trái nhất là do client tự viết. Mà `clientIp()` trong src/lib/actions.ts
+			# lấy đúng phần tử trái nhất — tức là IP hoàn toàn giả được bằng một dòng
+			# header. Cái đó nuôi hạn mức 5 yêu cầu gỡ bản quyền mỗi IP mỗi ngày, mà
+			# gửi yêu cầu là game của một đứa trẻ bị ẩn ngay lập tức.
+			#
+			# Ở đây Caddy là hop DUY NHẤT trước app (không Cloudflare, không LB), nên
+			# ghi đè là đúng: không có proxy hợp lệ nào phía trước để mà giữ chuỗi.
+			# Thêm một lớp proxy phía trước thì PHẢI sửa lại dòng này, không thì mọi
+			# người dùng trông như cùng một IP.
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	header {
@@ -98,6 +123,32 @@
 		# `no-referrer` chặt hơn app domain (`same-origin`): đường dẫn ở đây mang id
 		# game đang bị khiếu nại và id nhóm lỗi, và không có lý gì để chúng rời khỏi
 		# đây khi người quản trị bấm một link ra ngoài.
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		-Server
+	}
+}
+
+# ---------------------------------------------------------------------------
+# DASHBOARD UMAMI — chỉ người vận hành vào, nên ở một hostname riêng.
+#
+# Hostname riêng chứ không phải `app/_stats/`: trang đăng nhập và API quản trị của
+# Umami không được nằm chung origin với trẻ em — cùng lý do khu quản trị KidoGame
+# đã tách sang ADMIN_DOMAIN. Umami cũng không cho đổi đường gốc lúc chạy (BASE_PATH
+# là biến lúc BUILD), nên đặt ở thư mục con thì phải tự build image.
+#
+# Để trống STATS_DOMAIN thì compose truyền `stats.localhost`: khối này vẫn hợp lệ
+# nhưng không ai tới được — xem ghi chú ở ADMIN_DOMAIN trong docker-compose.yml.
+# ---------------------------------------------------------------------------
+{$STATS_DOMAIN:stats.kidogame.vn} {
+	encode zstd gzip
+	reverse_proxy umami:3000 {
+		header_up X-Forwarded-For {remote_host}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
 		-Server

@@ -78,6 +78,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
    * site bắt đầu bằng chuỗi đó.
    */
   const laKhuQuanTri = (h.get('x-pathname') ?? '').startsWith('/admin');
+  const umamiWebsiteId = process.env.UMAMI_WEBSITE_ID?.trim() || '';
 
   return (
     /*
@@ -135,6 +136,37 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             nonce={nonce}
             suppressHydrationWarning
             dangerouslySetInnerHTML={{ __html: SCRIPT_GIAO_DIEN }}
+          />
+        )}
+        {/*
+          ĐẾM LƯỢT XEM — Umami tự host, xem service `umami` trong infra/docker-compose.yml.
+
+          Ba điều kiện, cả ba đều cố ý:
+           - Có `UMAMI_WEBSITE_ID`. Rỗng (máy dev, hoặc production chưa cấu hình) thì
+             không có thẻ nào — không phải một thẻ trỏ vào đường 404.
+           - Có nonce. CSP của app là `script-src 'self' 'nonce-…' 'strict-dynamic'`,
+             và với `strict-dynamic` trình duyệt BỎ QUA `'self'`: thẻ không mang nonce
+             bị chặn dù file nằm trên chính app domain.
+           - KHÔNG ở khu quản trị. Người vận hành bấm quanh `/admin` không phải lượt xem
+             của trẻ em, và đếm chung là làm bẩn đúng con số cần đọc.
+
+          `data-host-url` tuyệt đối tới `/_stats`: mặc định tracker gửi về GỐC domain
+          của script, tức `/api/send` — một đường của Next, không phải của Umami.
+          `data-exclude-search`: KHÔNG ghi query string. `/?q=…` là chữ trẻ tự gõ vào ô
+          tìm kiếm, và đó là thứ không có lý do gì để nằm trong bảng thống kê.
+          `data-do-not-track`: trình duyệt bật "Do Not Track" thì không đếm.
+        */}
+        {nonce && umamiWebsiteId && !laKhuQuanTri && (
+          <script
+            nonce={nonce}
+            suppressHydrationWarning
+            defer
+            src="/_stats/script.js"
+            data-website-id={umamiWebsiteId}
+            data-host-url={`${process.env.APP_ORIGIN ?? ''}/_stats`}
+            data-exclude-search="true"
+            data-do-not-track="true"
+            data-testid="umami-script"
           />
         )}
         {/* Ba thứ dưới đây — link nhảy, tranh trang trí, thanh điều hướng — là KHUNG

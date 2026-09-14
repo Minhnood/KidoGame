@@ -12,7 +12,7 @@
 # mà in ra lỗi quyền là thứ khiến người ta hoặc hoảng, hoặc quen mắt rồi bỏ qua cả
 # những lỗi thật sau này.
 #
-# NĂM SERVICE: db, web, caddy, backup, prune. KHÔNG có service nào chạy
+# SÁU SERVICE: db, web, caddy, backup, prune, umami. KHÔNG có service nào chạy
 # player-server.mjs — file đó chỉ dùng khi dev trên máy local. Ở production chính
 # Caddy serve thư mục storage, đúng như infra/Caddyfile đã viết sẵn từ M0.
 #
@@ -114,6 +114,9 @@ services:
       # đầy đủ, còn `:?` sẽ chặn cả stack không khởi động được vì một dòng chữ.
       OPERATOR_NAME: ${OPERATOR_NAME:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      # Mã website trong Umami. RỖNG = không chèn thẻ script đếm lượt xem nào — web
+      # chạy y như trước khi có Umami. Lấy mã ở dashboard sau khi tạo website.
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
       # Cùng lý do như hai service backup và prune, nhưng hệ quả ở đây là thứ NGƯỜI
       # DÙNG đọc: mọi ngày tháng của app đều do container này định dạng. Không có
       # dòng này thì nó chạy UTC, và mốc nào rơi sau 17:00 giờ ta bị in lùi một ngày
@@ -175,6 +178,10 @@ services:
       # cách đặt mặc định này vào `.env.example` — làm thế là bật tách origin sau
       # lưng người deploy, và triệu chứng khi đó là `/admin` trả 404 trên app domain.
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.localhost}
+      # Dashboard Umami. Cùng lý do với ADMIN_DOMAIN ngay trên: rỗng mà truyền thẳng
+      # xuống thì Caddy ra một khối site không tên và từ chối CẢ FILE, nên mặc định
+      # phải là một tên vô hại chứ không phải chuỗi rỗng.
+      STATS_DOMAIN: ${STATS_DOMAIN:-stats.localhost}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kidogame.vn}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -328,6 +335,44 @@ services:
       # hai quyền cùng lúc.
       - ${BACKUP_HOST_DIR:-./backups}:/backups:ro
     entrypoint: ['/bin/bash', '/prune.sh', 'loop']
+
+  # ---------------------------------------------------------------------------
+  # Umami — đếm lượt xem, TỰ HOST. Thay cho Mixpanel / Google Analytics.
+  #
+  # Vì sao tự host chứ không dùng dịch vụ: đây là web cho trẻ em. Script bên thứ
+  # ba chạy trong trình duyệt của bé và gửi IP ra máy chủ nước ngoài là đi ngược
+  # cả CSP `connect-src 'self'` lẫn Nghị định 13/2023 — xem infra/GIAM-SAT.md.
+  # Umami không đặt cookie và không lưu IP (chỉ băm kèm muối xoay vòng).
+  #
+  # Trình duyệt KHÔNG nói chuyện thẳng với container này. Trên app domain, Caddy
+  # chỉ mở đúng hai đường — `/_stats/script.js` và `/_stats/api/send` — nên với
+  # trình duyệt đó vẫn là 'self'. Dashboard nằm ở STATS_DOMAIN riêng.
+  #
+  # DB riêng (`umami`), user riêng, trong CÙNG container Postgres: user `umami`
+  # không đọc được bảng nào của KidoGame. Tạo một lần bằng `infra/tao-db-umami.sh`.
+  #
+  # KHÔNG nằm trong bản sao lưu (backup.sh chỉ dump DB `kidogame`). Mất VPS thì mất
+  # lịch sử lượt xem — chấp nhận: đó là số liệu, không phải dữ liệu của bé.
+  #
+  # Ghim phiên bản, không `latest`: build lại không được tự nhảy lên bản mới có
+  # migration DB mà chưa ai đọc release note.
+  # ---------------------------------------------------------------------------
+  umami:
+    image: ghcr.io/umami-software/umami:3.3.1
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:?thieu UMAMI_DB_PASSWORD trong infra/.env}@db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?thieu UMAMI_APP_SECRET trong infra/.env}
+      # Caddy đứng trước, nên IP thật nằm trong header này. Umami chỉ dùng nó để
+      # đoán quốc gia và băm vào mã phiên, không lưu.
+      CLIENT_IP_HEADER: x-forwarded-for
+      DISABLE_TELEMETRY: '1'
+      DISABLE_UPDATES: '1'
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
 
 volumes:
   # Hai volume dưới đây là TOÀN BỘ dữ liệu không sinh lại được. Sao lưu nghĩa là

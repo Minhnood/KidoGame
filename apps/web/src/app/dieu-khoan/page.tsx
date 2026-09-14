@@ -242,6 +242,14 @@ export default function TermsPage() {
           dạng băm, và các game bé đăng. Không email, không tên thật, không ảnh chụp, không vị trí.
         </p>
         <p>
+          <strong>Thống kê lượt xem:</strong> chúng tôi đếm số lượt mở từng trang để biết web có
+          ai dùng và trang nào hay bị lỗi. Việc đếm chạy trên chính máy chủ của KidoGame, không
+          gửi cho công ty quảng cáo hay phân tích nào, không đặt cookie và không lưu địa chỉ IP.
+          Mỗi lượt chỉ ghi trang được mở, loại trình duyệt và thiết bị, và quốc gia/thành phố
+          ước đoán từ địa chỉ IP — không gắn với tài khoản nào, và không ghi lại những gì bé gõ
+          vào ô tìm kiếm. Trình duyệt bật &quot;Do Not Track&quot; thì không được đếm.
+        </p>
+        <p>
           <strong>Khi có người báo cáo hoặc khiếu nại:</strong> chúng tôi lưu bản băm của địa chỉ
           IP để chặn spam, chứ không lưu IP thật. Riêng người gửi yêu cầu gỡ bản quyền thì có lưu
           tên và email họ tự khai, vì đó là hồ sơ của một khiếu nại và là cách để trả lời họ.
