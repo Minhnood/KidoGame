@@ -347,14 +347,25 @@ check(
   check('Trang 2 hiện nhóm khác trang 1, không lặp lại', dauTrang1 !== dauTrang2);
 
   /*
-   * Ô "tới trang" chỉ bày ra khi dãy số đã phải lược bớt. Ở đây mới có hai trang,
-   * nên nó PHẢI vắng mặt — và đó là phép kiểm thật, không phải phép kiểm cho có: một
-   * ngưỡng viết nhầm thành `>= 1` thì ô nhập xuất hiện trên mọi danh sách hai trang,
-   * ngay cạnh hai con số đã bấm thẳng được.
+   * Ô "tới trang" chỉ bày ra khi danh sách có từ 8 trang (`HIEN_O_NHAY_TU` trong
+   * `pager.tsx`) — lúc dãy số đã phải lược bớt. Một ngưỡng viết nhầm thành `>= 1` thì ô
+   * nhập xuất hiện trên mọi danh sách hai trang, ngay cạnh hai con số bấm thẳng được.
+   *
+   * ĐO THEO SỐ TRANG THẬT, không giả định số trang. Bản cũ viết cứng "mới hai trang
+   * thì KHÔNG có ô": đúng trên DB sạch, nhưng mỗi lượt bộ này để lại ~40 nhóm lỗi, và
+   * tới ngày 14/9 DB dev có 216 nhóm, 8 trang — ô hiện ra đúng thiết kế và phép kiểm đỏ.
+   * Giờ nó kiểm cả hai chiều của cùng một luật, chiều nào tuỳ dữ liệu hôm đó.
    */
+  const soTrang = Math.max(
+    ...(await p
+      .locator('[data-testid^=error-pager-so-]')
+      .evaluateAll((els) => els.map((e) => Number(e.dataset.testid.split('-').pop()) || 0)))
+  );
+  const coONhay = (await p.locator('[data-testid=error-pager-nhay]').count()) === 1;
   check(
-    'Mới hai trang thì KHÔNG bày ô nhảy trang',
-    (await p.locator('[data-testid=error-pager-nhay]').count()) === 0
+    'Ô nhảy trang hiện KHI VÀ CHỈ KHI danh sách có từ 8 trang',
+    coONhay === soTrang >= 8,
+    `${soTrang} trang, ô nhảy ${coONhay ? 'có' : 'không'}`
   );
 
   /*
