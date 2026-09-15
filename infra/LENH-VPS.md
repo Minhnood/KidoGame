@@ -461,6 +461,9 @@ docker compose up -d --no-deps glitchtip        # chờ healthy
 bash tao-admin-glitchtip.sh
 # 2. giờ mới đặt ERRORS_DOMAIN=loi.<...> trong .env
 docker compose up -d --no-deps glitchtip caddy
+# 3. tạo tổ chức, team, project `web` trong dashboard; DSN dạng nội bộ vào GLITCHTIP_DSN
+# 4. luật "mỗi lỗi mới một thư" — project mới KHÔNG có luật nào, lỗi ghi mà không ai nhận thư
+bash tao-bao-dong-glitchtip.sh
 ```
 
 Lỗi **không** nằm trong bản sao lưu, và tự xoá sau 30 ngày (`GLITCHTIP_RETENTION_DAYS`).
