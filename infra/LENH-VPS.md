@@ -191,8 +191,8 @@ Cách phục hồi ở [`SAO-LUU.md`](SAO-LUU.md) mục 4.
 
 ☁️ **VPS**
 
-Chín phép canh: bốn đường web (app, play, admin, loi), chứng chỉ, đĩa, tuổi bản sao
-lưu, lỗi mới, và GlitchTip còn nhận lỗi không.
+Mười phép canh: bốn đường web (app, play, admin, loi), chứng chỉ, đĩa, tuổi bản sao
+lưu, lỗi mới, tài khoản gửi mail còn đăng nhập được không, và GlitchTip còn nhận lỗi không.
 
 ```
 cd /root/KidoGame/infra && docker compose exec -T prune sh -c "cd /app/apps/web && pnpm --filter @kidogame/web db:canh-gac"
