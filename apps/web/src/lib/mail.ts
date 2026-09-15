@@ -398,6 +398,85 @@ async function layTransporter(cfg: CauHinhSmtp) {
   return transporter;
 }
 
+export interface TinhTrangMail {
+  /**
+   * `song` — đăng nhập SMTP được. `hong` — có cấu hình mà máy chủ từ chối hoặc không
+   * trả lời, hoặc production không có đường gửi nào. `khong-kiem` — đường gửi không
+   * kiểm được bằng đăng nhập (Resend), hoặc dev không cấu hình gì.
+   */
+  muc: 'song' | 'hong' | 'khong-kiem';
+  noi: string;
+}
+
+/** Kết quả kiểm gần nhất, dùng lại trong `CACHE_KIEM_MAIL_MS`. */
+const gKiem = globalThis as unknown as { kidogameKiemMail?: { luc: number; ket: TinhTrangMail } };
+const CACHE_KIEM_MAIL_MS = 10 * 60_000;
+
+/**
+ * Hỏi máy chủ mail: đường gửi thư CÒN DÙNG ĐƯỢC không. Đăng nhập thật, không gửi thư.
+ *
+ * VÌ SAO CẦN. Ngày 15/9/2026 mọi thư production trả 535 vì Google vô hiệu App Password
+ * của tài khoản gửi, trong khi `.env` không đổi gì. Không cái gì kêu: trang chủ vẫn 200,
+ * `sendMail` chỉ ném ở đúng lúc một phụ huynh bấm đăng ký, và thư báo động của canh gác
+ * đi qua chính đường đã chết. Lộ ra chỉ vì đang thử thư báo lỗi của GlitchTip.
+ *
+ * DỰNG TRANSPORTER RIÊNG, không dùng `layTransporter`: cái đó có `pool`, và pool đang
+ * giữ một kết nối đã xác thực từ trước thì `verify()` có thể xanh dù mật khẩu vừa bị
+ * thu hồi. Câu hỏi ở đây là "đăng nhập MỚI có được không" — đúng thứ lá thư tiếp theo cần.
+ *
+ * CACHE 10 PHÚT, cả kết quả hỏng. Trang tổng quan `/admin` gọi hàm này mỗi lần tải, và
+ * đăng nhập Gmail dồn dập từ một IP máy chủ là dấu hiệu Google dùng để khoá tài khoản —
+ * tức phép kiểm tự gây ra đúng cái hỏng nó canh. `boQuaCache` cho canh gác, vốn là một
+ * tiến trình mới mỗi đêm.
+ *
+ * KHÔNG BAO GIỜ NÉM, và không log mật khẩu: `noi` chỉ mang mã phản hồi và dòng đầu của
+ * lỗi, đủ để biết là 535 hay timeout.
+ */
+export async function kiemDuongGuiMail(boQuaCache = false): Promise<TinhTrangMail> {
+  const bayGio = Date.now();
+  if (!boQuaCache && gKiem.kidogameKiemMail && bayGio - gKiem.kidogameKiemMail.luc < CACHE_KIEM_MAIL_MS) {
+    return gKiem.kidogameKiemMail.ket;
+  }
+
+  const ket = await (async (): Promise<TinhTrangMail> => {
+    const cfg = docCauHinhSmtp();
+    if (!cfg) {
+      if (process.env.RESEND_API_KEY && !laKeyGiuCho(process.env.RESEND_API_KEY)) {
+        return { muc: 'khong-kiem', noi: 'gửi qua Resend — không có bước đăng nhập để kiểm' };
+      }
+      return process.env.NODE_ENV === 'production'
+        ? { muc: 'hong', noi: 'production không có đường gửi mail nào (thiếu SMTP_* và RESEND_API_KEY)' }
+        : { muc: 'khong-kiem', noi: 'dev chưa cấu hình đường gửi thật' };
+    }
+    try {
+      const nodemailer = (await import('nodemailer')).default;
+      const t = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: { user: cfg.user, pass: cfg.pass },
+        connectionTimeout: 8_000,
+        greetingTimeout: 8_000,
+        socketTimeout: 8_000,
+      });
+      try {
+        await t.verify();
+      } finally {
+        t.close();
+      }
+      return { muc: 'song', noi: `${cfg.user} đăng nhập ${cfg.host}:${cfg.port} được` };
+    } catch (err) {
+      const e = err as { responseCode?: number; code?: string; message?: string };
+      const ma = e.responseCode ?? e.code ?? 'lỗi';
+      const dong = String(e.message ?? err).split('\n')[0].slice(0, 120);
+      return { muc: 'hong', noi: `${cfg.user} không đăng nhập được ${cfg.host}:${cfg.port} — ${ma}: ${dong}` };
+    }
+  })();
+
+  gKiem.kidogameKiemMail = { luc: bayGio, ket };
+  return ket;
+}
+
 /**
  * Một dòng log cho mỗi lá thư đã trao được cho máy chủ mail.
  *

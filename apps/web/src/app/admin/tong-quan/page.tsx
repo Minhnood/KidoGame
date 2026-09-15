@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
-import { appOrigin } from '@/lib/mail';
+import { appOrigin, kiemDuongGuiMail } from '@/lib/mail';
 import { getAdmin } from '@/lib/session';
 import { actionLabel, hanXoaHan, NGAY_GIU_GAME_DA_GO, ngayVi } from '@/lib/moderation';
 import { slaDueAt, TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
@@ -188,6 +188,9 @@ export default async function AdminTongQuanPage() {
    * trả lời khác nhau cho cùng một câu hỏi, và lệch ở đây nghĩa là bảng này nói không
    * có việc gấp trong khi lá thư nói có ba.
    */
+  /* Bắt đầu hỏi máy chủ mail NGAY, song song với các truy vấn DB bên dưới — đăng nhập
+     SMTP mất ~1 giây khi sống và tới 8 giây khi treo, không được xếp hàng sau chúng. */
+  const mailP = kiemDuongGuiMail();
   const viec = await docViecCoHan(bayGio);
 
   const [
@@ -258,7 +261,10 @@ export default async function AdminTongQuanPage() {
      mới": hai cái đó gần như luôn khác 0 ở một trang đang sống, nên gộp vào là dòng
      yên tĩnh dưới đây không bao giờ hiện, mà một câu không bao giờ hiện thì bằng
      không có. */
-  const khongCoViecGap = !coViecGap(viec) && nhomLoiChuaXuLy === 0;
+  const mail = await mailP;
+  /* Mail chết cũng là việc gấp: phụ huynh mới kẹt ở bước xác minh, và mọi thư báo động
+     đi qua đúng đường đó — trang này là chỗ DUY NHẤT còn nói ra được. */
+  const khongCoViecGap = !coViecGap(viec) && nhomLoiChuaXuLy === 0 && mail.muc !== 'hong';
   const cuNhat = viec.cuNhat;
 
   /* --- Dữ liệu hai biểu đồ ------------------------------------------------- */
@@ -396,6 +402,24 @@ export default async function AdminTongQuanPage() {
         Ô số đã tô đỏ rồi, nhưng đỏ trong một lưới mười hai ô là thứ mắt quen đi sau
         vài ngày; câu chữ đặt trên đầu trang thì không.
       */}
+      {/*
+        MAIL CHẾT đứng đầu danh sách. Mọi cảnh báo khác trên trang còn có thư nhắc hằng
+        đêm đi kèm; cái này thì không, vì thư nhắc đi qua chính đường đã chết. Đo ngày
+        15/9: App Password bị Google vô hiệu, cả production câm mà không gì kêu.
+      */}
+      {mail.muc === 'hong' && (
+        <Notice tone="error" role="alert">
+          <span data-testid="tq-mail-hong">
+            <strong>Mail đang không gửi được.</strong> Phụ huynh mới không nhận được thư xác
+            minh, không ai đặt lại được mật khẩu, và thư báo động hằng đêm cũng không tới.{' '}
+            <code>{mail.noi}</code>
+            <br />
+            Gmail trả 535 thường là App Password đã bị thu hồi: tạo cái mới cho đúng tài khoản
+            gửi rồi chạy <code>infra/doi-smtp-pass.sh --vps</code> trên máy Mac. Kết quả kiểm giữ
+            10 phút.
+          </span>
+        </Notice>
+      )}
       {goQuaHan > 0 && (
         <Notice tone="error" role="alert">
           <strong>
