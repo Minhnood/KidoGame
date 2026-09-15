@@ -435,6 +435,36 @@ khi Caddy xin chứng chỉ.
 Số liệu **không** nằm trong bản sao lưu. Mất VPS là mất lịch sử lượt xem, không mất gì
 của bé.
 
+## 13. Theo dõi lỗi (GlitchTip)
+
+Mở `https://loi.37-60-251-95.sslip.io`. Tài khoản quản trị và mật khẩu sinh ngẫu nhiên
+trên VPS lúc cài (14/9/2026) — dòng 1 là email, dòng 2 là mật khẩu:
+
+```bash
+ssh kidovps 'cat /root/KidoGame/infra/glitchtip-admin.txt'; echo
+```
+
+Đổi mật khẩu trong dashboard (Profile) rồi xoá file đó được. Không ai tự đăng ký được:
+tài khoản mới chỉ tạo bằng lời mời từ trong dashboard.
+
+Tổ chức `kidogame`, project `web`. DSN của project lưu ở `/root/.gt-dsn` (600) — nó
+chỉ dùng phía server, không bao giờ đưa xuống trình duyệt.
+
+Dựng lại từ đầu trên máy mới, đúng thứ tự này (máy dò tới hostname mới vài giây sau
+khi Caddy xin chứng chỉ):
+
+```bash
+cd /root/KidoGame/infra
+# 1. GLITCHTIP_DB_PASSWORD, GLITCHTIP_SECRET_KEY = openssl rand -hex 32; ERRORS_DOMAIN để trống
+bash tao-db-glitchtip.sh
+docker compose up -d --no-deps glitchtip        # chờ healthy
+bash tao-admin-glitchtip.sh
+# 2. giờ mới đặt ERRORS_DOMAIN=loi.<...> trong .env
+docker compose up -d --no-deps glitchtip caddy
+```
+
+Lỗi **không** nằm trong bản sao lưu, và tự xoá sau 30 ngày (`GLITCHTIP_RETENTION_DAYS`).
+
 ## ⛔ NHỮNG LỆNH KHÔNG BAO GIỜ GÕ
 
 | Lệnh | Nó làm gì |

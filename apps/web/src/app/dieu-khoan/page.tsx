@@ -9,6 +9,9 @@ import {
   REPORT_HARD_HIDE_THRESHOLD,
 } from '@/lib/moderation';
 import { UPLOADS_PER_CHILD_PER_DAY } from '@/lib/ingest';
+/* Hạn giữ của ErrorLog. GlitchTip giữ theo GLITCHTIP_RETENTION_DAYS (30) — biến đó
+   KHÔNG được vượt số này, vì đây là lời hứa "tối đa" trên trang. */
+import { RETENTION_DAYS as ERROR_RETENTION_DAYS } from '@/lib/error-log';
 import { isOperatorConfigured, operator, TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
 
 /*
@@ -248,6 +251,12 @@ export default function TermsPage() {
           Mỗi lượt chỉ ghi trang được mở, loại trình duyệt, thiết bị, cỡ màn hình, ngôn ngữ, và
           quốc gia/thành phố ước đoán từ địa chỉ IP — không gắn với tài khoản nào, và không ghi lại những gì bé gõ
           vào ô tìm kiếm. Trình duyệt bật &quot;Do Not Track&quot; thì không được đếm.
+        </p>
+        <p>
+          <strong>Khi web bị lỗi:</strong> chúng tôi ghi lại trang bị lỗi (bỏ phần sau dấu{' '}
+          <code>?</code>), thông báo lỗi kỹ thuật đã che email và các mã bí mật, và loại trình
+          duyệt. Không gắn với tài khoản nào, không lưu địa chỉ IP, không lưu những gì bạn gõ. Bản
+          ghi nằm trên chính máy chủ của KidoGame và tự xoá sau tối đa {ERROR_RETENTION_DAYS} ngày.
         </p>
         <p>
           <strong>Khi có người báo cáo hoặc khiếu nại:</strong> chúng tôi lưu bản băm của địa chỉ

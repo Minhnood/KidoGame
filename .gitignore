@@ -12,6 +12,7 @@ infra/ssh/*
 .env.local
 # Mật khẩu dashboard Umami chỉ sống trên VPS; chặn luôn ở đây phòng khi ai chép ngược về.
 infra/umami-admin.txt
+infra/glitchtip-admin.txt
 # Mọi biến thể còn lại của .env, và `!` để giữ lại đúng file mẫu.
 #
 # Không phải lo xa: `infra/.env` giữ POSTGRES_PASSWORD, App Password SMTP và tên

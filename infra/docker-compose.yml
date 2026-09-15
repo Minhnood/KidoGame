@@ -12,7 +12,7 @@
 # mà in ra lỗi quyền là thứ khiến người ta hoặc hoảng, hoặc quen mắt rồi bỏ qua cả
 # những lỗi thật sau này.
 #
-# SÁU SERVICE: db, web, caddy, backup, prune, umami. KHÔNG có service nào chạy
+# BẢY SERVICE: db, web, caddy, backup, prune, umami, glitchtip. KHÔNG có service nào chạy
 # player-server.mjs — file đó chỉ dùng khi dev trên máy local. Ở production chính
 # Caddy serve thư mục storage, đúng như infra/Caddyfile đã viết sẵn từ M0.
 #
@@ -117,6 +117,11 @@ services:
       # Mã website trong Umami. RỖNG = không chèn thẻ script đếm lượt xem nào — web
       # chạy y như trước khi có Umami. Lấy mã ở dashboard sau khi tạo website.
       UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+      # DSN của project `web` trong GlitchTip, dạng NỘI BỘ `http://<khoá>@glitchtip:8000/1`
+      # — không phải bản https://loi.… hiện trong dashboard: lỗi đi thẳng qua network
+      # của compose, không vòng ra Internet rồi vào lại Caddy. RỖNG = không gửi lỗi nào.
+      # Chỉ server đọc biến này; nó không bao giờ xuống trình duyệt.
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
       # Cùng lý do như hai service backup và prune, nhưng hệ quả ở đây là thứ NGƯỜI
       # DÙNG đọc: mọi ngày tháng của app đều do container này định dạng. Không có
       # dòng này thì nó chạy UTC, và mốc nào rơi sau 17:00 giờ ta bị in lùi một ngày
@@ -182,6 +187,8 @@ services:
       # xuống thì Caddy ra một khối site không tên và từ chối CẢ FILE, nên mặc định
       # phải là một tên vô hại chứ không phải chuỗi rỗng.
       STATS_DOMAIN: ${STATS_DOMAIN:-stats.localhost}
+      # Dashboard GlitchTip. Cùng lý do mặc định vô hại như hai biến trên.
+      ERRORS_DOMAIN: ${ERRORS_DOMAIN:-loi.localhost}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kidogame.vn}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -373,6 +380,82 @@ services:
       DISABLE_TELEMETRY: '1'
       DISABLE_UPDATES: '1'
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
+
+  # ---------------------------------------------------------------------------
+  # GlitchTip — theo dõi lỗi, TỰ HOST. Thay cho Sentry, nhận đúng giao thức SDK Sentry.
+  #
+  # Cùng lý do tự host như Umami: stack trace mang URL, tên game, đôi khi cả đoạn dữ
+  # liệu của bé. Không gửi thứ đó ra máy chủ nước ngoài.
+  #
+  # CHỈ SERVER gửi lỗi vào đây (fen chốt 14/9): Next gọi thẳng `http://glitchtip:8000`
+  # trong network nội bộ. Trình duyệt không tải thêm JS nào, lỗi phía trình duyệt vẫn
+  # đi đường cũ `/api/errors` → ErrorLog → /admin/loi.
+  #
+  # MỘT container `all_in_one` (web + worker chung tiến trình), KHÔNG Valkey: hàng đợi
+  # và cache nằm trong Postgres. Docs bản 6 khuyên cách này cho cài nhỏ (256–512MB).
+  #
+  # DB riêng (`glitchtip`), user riêng — tạo bằng `infra/tao-db-glitchtip.sh`. Tự chạy
+  # migration mỗi lần khởi động. KHÔNG nằm trong bản sao lưu, cùng lý do như Umami.
+  #
+  # MẶC ĐỊNH TRONG CODE KHÁC DOCS — đo ở source v6.2.6 `glitchtip/settings.py`, đừng
+  # tin compose mẫu trên web:
+  #   - VALKEY_URL chưa đặt thì trỏ `redis://redis:6379/0`, KHÔNG phải tắt. Phải đặt ''.
+  #   - ENABLE_ADMIN mặc định True (compose mẫu ghi False) → mở Django admin /admin/.
+  #   - ENABLE_USER_REGISTRATION mặc định True → ai tới trước là tự tạo được tài khoản.
+  #   - Không có SECURE_PROXY_SSL_HEADER: sau Caddy nó thấy request là http, nên origin
+  #     https của trình duyệt phải khai trong CSRF_TRUSTED_ORIGINS, không thì đăng nhập
+  #     bị từ chối vì CSRF.
+  # ---------------------------------------------------------------------------
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.6
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SERVER_ROLE: all_in_one
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:?thieu GLITCHTIP_DB_PASSWORD trong infra/.env}@db:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:?thieu GLITCHTIP_SECRET_KEY trong infra/.env}
+      VALKEY_URL: ''
+      # Vào link trong thư báo lỗi và vào DSN hiện trong dashboard.
+      GLITCHTIP_DOMAIN: https://${ERRORS_DOMAIN:-loi.localhost}
+      # `glitchtip` là tên Next dùng để gửi lỗi trong network nội bộ; `127.0.0.1` cho
+      # healthcheck. Thiếu một trong hai thì request đó nhận 400 DisallowedHost.
+      ALLOWED_HOSTS: ${ERRORS_DOMAIN:-loi.localhost},glitchtip,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: https://${ERRORS_DOMAIN:-loi.localhost}
+      ENABLE_USER_REGISTRATION: 'False'
+      ENABLE_SOCIAL_APPS_USER_REGISTRATION: 'False'
+      ENABLE_ORGANIZATION_CREATION: 'False'
+      ENABLE_ADMIN: 'False'
+      ENABLE_OPENAPI: 'False'
+      GLITCHTIP_ENABLE_MCP: 'False'
+      # Tắt hai tính năng không dùng: đỡ RAM, và uptime monitor là một thứ biết tự đi
+      # gọi URL — không có lý do để bày nó ra.
+      GLITCHTIP_ENABLE_UPTIME: 'False'
+      GLITCHTIP_ENABLE_LOGS: 'False'
+      # 30 ngày chứ không phải 90 mặc định: stack trace có thể mang dữ liệu của bé, giữ
+      # đủ để sửa lỗi là đủ.
+      GLITCHTIP_RETENTION_DAYS: ${GLITCHTIP_RETENTION_DAYS:-30}
+      # Thư báo lỗi. Dùng lại nhóm SMTP_* của web qua biến EMAIL_* RIÊNG LẺ, không qua
+      # EMAIL_URL: SMTP_USER là địa chỉ Gmail, dấu `@` trong URL phải percent-encode
+      # mà compose không encode được.
+      EMAIL_HOST: ${SMTP_HOST:-}
+      EMAIL_PORT: ${SMTP_PORT:-587}
+      EMAIL_HOST_USER: ${SMTP_USER:-}
+      EMAIL_HOST_PASSWORD: ${SMTP_PASS:-}
+      # Cổng 587 = STARTTLS. Đổi sang 465 (SMTP_SECURE=true) thì phải đổi dòng này
+      # thành EMAIL_USE_SSL — Django không cho bật cả hai.
+      EMAIL_USE_TLS: 'True'
+      DEFAULT_FROM_EMAIL: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/_health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Lần đầu chạy migration cả DB mới, lâu hơn web nhiều.
+      start_period: 120s
 
 volumes:
   # Hai volume dưới đây là TOÀN BỘ dữ liệu không sinh lại được. Sao lưu nghĩa là

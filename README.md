@@ -41,8 +41,9 @@ Bốn bộ không cần server:
 ```bash
 pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
-node infra/caddy-config-check.mjs          # 18 phép, +4 nữa nếu có Docker
+node infra/caddy-config-check.mjs          # 21 phép, +4 nữa nếu có Docker
 node infra/umami-check.mjs                 # 16, đo thẳng production, không làm bẩn số liệu
+node infra/glitchtip-check.mjs             # 22, production; lớp SSH gửi rồi xoá một lỗi thử
 cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49
 cd apps/web && pnpm exec tsx ../../infra/scrypt-cap-check.ts    # 9
 ```
@@ -55,7 +56,9 @@ Còn lại cần **cả hai server đang chạy + Chrome**, và server phải đ
 **stdout đổ vào file** vì bốn bộ phải đọc link xác minh email từ log:
 
 ```bash
-pnpm --filter @kidogame/web dev > /tmp/kg-mail.log 2>&1 &
+# GLITCHTIP_DSN chỉ cần cho e2e-glitchtip (máy nhận giả ở cổng 3997).
+GLITCHTIP_DSN=http://0123456789abcdef0123456789abcdef@127.0.0.1:3997/7 \
+  pnpm --filter @kidogame/web dev > /tmp/kg-mail.log 2>&1 &
 node infra/player-server.mjs &
 
 export SB3=/đường/dẫn/tới/game.sb3
@@ -74,7 +77,8 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 36, DỌ
 node infra/e2e-bieu-do.mjs                                         # 21, không cần gì thêm
 node infra/e2e-bao-loi.mjs                                         # 30, cần psql
 node infra/e2e-touch.mjs                                           # 14, tự dựng game có phím
-node infra/e2e-errorlog.mjs                                        # 38, không cần .sb3
+node infra/e2e-errorlog.mjs                                        # 40, không cần .sb3
+node infra/e2e-glitchtip.mjs                                       # 26, chạy lại cách 60 giây
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần psql
