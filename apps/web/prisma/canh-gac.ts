@@ -47,7 +47,7 @@ import { readdirSync, statfsSync, statSync } from 'node:fs';
 import { connect as tlsConnect } from 'node:tls';
 
 import { prisma } from '../src/lib/db';
-import { sendMail } from '../src/lib/mail';
+import { kiemDuongGuiMail, sendMail } from '../src/lib/mail';
 import { isOperatorConfigured, operator } from '../src/lib/operator';
 
 const guiThat = process.argv.includes('--gui');
@@ -444,6 +444,20 @@ async function chay(): Promise<KetQua[]> {
   ketQua.push(canhDia(process.env.STORAGE_DIR ?? '/srv/storage'));
   ketQua.push(canhSaoLuu(process.env.BACKUP_DIR ?? '/backups'));
   ketQua.push(await canhLoi());
+
+  /*
+   * ĐƯỜNG GỬI MAIL. Phép này không cứu được chính nó: mail chết thì thư báo động bên
+   * dưới cũng không đi. Cái nó làm được là (1) in dòng HỎNG vào log và (2) làm bước gửi
+   * trượt, nên `main` trả mã thoát khác 0 và `prune.sh` ghi "LỖI: bước canh máy chủ
+   * thất bại". Người đọc được thật sự là dải đỏ trên `/admin` tổng quan, cùng hàm này.
+   * Đo ngày 15/9: App Password bị Google vô hiệu, cả production câm mà không gì kêu.
+   */
+  const mail = await kiemDuongGuiMail(true);
+  ketQua.push(
+    mail.muc === 'hong'
+      ? hong('đường gửi mail', mail.noi)
+      : on('đường gửi mail', mail.muc === 'song' ? mail.noi : `BỎ QUA — ${mail.noi}`)
+  );
 
   // GLITCHTIP_NOI_BO rỗng khi web chưa có DSN — tức chưa ai gửi lỗi vào GlitchTip, nên
   // không có gì để canh. Vẫn GHI RA, cùng lý do với origin thiếu biến ở trên.
