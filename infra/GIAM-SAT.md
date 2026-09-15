@@ -193,7 +193,17 @@ công, nhưng nó cần tài khoản của fen nên không chờ được.
 > **14/9/2026: fen quyết định làm.** Analytics = **Umami 3.3.1** — XONG, đang chạy.
 > Dashboard ở `STATS_DOMAIN`, trên app domain chỉ mở `/_stats/script.js` và
 > `/_stats/api/send`, không ghi query string, bỏ qua trình duyệt bật Do Not Track.
-> Kiểm bằng `node infra/umami-check.mjs`. Error tracking (GlitchTip) làm tiếp sau.
+> Kiểm bằng `node infra/umami-check.mjs`.
+>
+> Error tracking = **GlitchTip 6.2.6**, dựng 14/9 ở `ERRORS_DOMAIN`: một container
+> `all_in_one`, không Valkey, giữ lỗi 30 ngày, tắt đăng ký/Django admin/uptime/logs.
+> **Chỉ server gửi lỗi** (fen chốt), qua `http://glitchtip:8000` trong network nội bộ;
+> trình duyệt vẫn đi đường cũ `/api/errors` → ErrorLog → `/admin/loi`.
+>
+> **Bẫy đã đo:** mặc định trong source khác compose mẫu trên docs (Valkey, Django admin,
+> đăng ký — xem chú thích service trong compose). Thử đăng ký bằng request trần luôn ra
+> 403 vì CSRF, kể cả khi đăng ký đang mở: cookie `csrftoken` có cờ `Secure` nên client
+> http không gửi lại. Phải có đối chứng (đăng nhập sai ra 400) thì 403 mới có nghĩa.
 >
 > **Bẫy đã đo:** Umami trả `{"beep":"boop"}` và KHÔNG GHI cho tên trình duyệt
 > `HeadlessChrome` — Playwright headless không bao giờ được đếm. Muốn thử đếm thật thì
