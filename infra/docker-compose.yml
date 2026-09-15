@@ -117,6 +117,11 @@ services:
       # Mã website trong Umami. RỖNG = không chèn thẻ script đếm lượt xem nào — web
       # chạy y như trước khi có Umami. Lấy mã ở dashboard sau khi tạo website.
       UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+      # DSN của project `web` trong GlitchTip, dạng NỘI BỘ `http://<khoá>@glitchtip:8000/1`
+      # — không phải bản https://loi.… hiện trong dashboard: lỗi đi thẳng qua network
+      # của compose, không vòng ra Internet rồi vào lại Caddy. RỖNG = không gửi lỗi nào.
+      # Chỉ server đọc biến này; nó không bao giờ xuống trình duyệt.
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
       # Cùng lý do như hai service backup và prune, nhưng hệ quả ở đây là thứ NGƯỜI
       # DÙNG đọc: mọi ngày tháng của app đều do container này định dạng. Không có
       # dòng này thì nó chạy UTC, và mốc nào rơi sau 17:00 giờ ta bị in lùi một ngày
