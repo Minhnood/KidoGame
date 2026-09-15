@@ -52,7 +52,7 @@ for u in app play admin; do printf "$u: "; curl -s -o /dev/null -w "%{http_code}
 
 ---
 
-## 2. Năm container còn chạy không
+## 2. Bảy container còn chạy không
 
 ☁️ **VPS**
 
@@ -60,8 +60,8 @@ for u in app play admin; do printf "$u: "; curl -s -o /dev/null -w "%{http_code}
 cd /root/KidoGame/infra && docker compose ps
 ```
 
-Phải thấy đủ **5 dòng**: `db`, `web`, `caddy`, `backup`, `prune`. Cột `STATUS` ghi
-`Up`. Riêng `db` và `web` còn có thêm `(healthy)`.
+Phải thấy đủ **7 dòng**: `db`, `web`, `caddy`, `backup`, `prune`, `umami`, `glitchtip`.
+Cột `STATUS` ghi `Up`. Riêng `db`, `web` và `glitchtip` còn có thêm `(healthy)`.
 
 Thiếu dòng nào, hoặc thấy `Restarting`, thì xem log của nó ở mục 3.
 
@@ -191,7 +191,8 @@ Cách phục hồi ở [`SAO-LUU.md`](SAO-LUU.md) mục 4.
 
 ☁️ **VPS**
 
-Bảy phép canh: ba đường web, chứng chỉ, đĩa, tuổi bản sao lưu, lỗi mới.
+Chín phép canh: bốn đường web (app, play, admin, loi), chứng chỉ, đĩa, tuổi bản sao
+lưu, lỗi mới, và GlitchTip còn nhận lỗi không.
 
 ```
 cd /root/KidoGame/infra && docker compose exec -T prune sh -c "cd /app/apps/web && pnpm --filter @kidogame/web db:canh-gac"
@@ -461,6 +462,9 @@ docker compose up -d --no-deps glitchtip        # chờ healthy
 bash tao-admin-glitchtip.sh
 # 2. giờ mới đặt ERRORS_DOMAIN=loi.<...> trong .env
 docker compose up -d --no-deps glitchtip caddy
+# 3. tạo tổ chức, team, project `web` trong dashboard; DSN dạng nội bộ vào GLITCHTIP_DSN
+# 4. luật "mỗi lỗi mới một thư" — project mới KHÔNG có luật nào, lỗi ghi mà không ai nhận thư
+bash tao-bao-dong-glitchtip.sh
 ```
 
 Lỗi **không** nằm trong bản sao lưu, và tự xoá sau 30 ngày (`GLITCHTIP_RETENTION_DAYS`).

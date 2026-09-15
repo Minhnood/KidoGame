@@ -138,6 +138,7 @@ const MA_MONG_DOI: Record<string, number[]> = {
   app: [200],
   play: [404],
   admin: [200],
+  loi: [200],
 };
 
 async function canhOrigin(nhan: string, url: string): Promise<KetQua> {
@@ -343,6 +344,47 @@ async function canhLoi(): Promise<KetQua> {
 }
 
 /* --------------------------------------------------------------------------
+ * 6. GlitchTip còn NHẬN được lỗi không.
+ *
+ * VÌ SAO CẦN: GlitchTip chết thì không có gì kêu cả. Bộ gửi trong app cố ý nuốt mọi
+ * lỗi gửi (`lib/glitchtip.ts` không bao giờ ném), nên web vẫn chạy bình thường — chỉ
+ * là lỗi server rơi vào khoảng không, và ta tưởng "không có lỗi" là tin tốt.
+ *
+ * VÌ SAO KHÔNG CHỈ HỎI `/_health/`: đọc source v6.2.6, view đó trả chữ "ok" cố định,
+ * không đụng DB. Mất Postgres thì nó vẫn "khoẻ". Phép canh origin `loi` bên trên
+ * hỏi nó để bắt Caddy/chứng chỉ/container chết; phép này hỏi sâu hơn.
+ *
+ * CÁCH HỎI: POST một envelope với KHOÁ SAI vào đường nhận lỗi nội bộ, mong 403. Muốn
+ * trả 403 thì GlitchTip phải thật sự tra khoá, nên đó là một câu trả lời đi qua đúng
+ * đường nhận lỗi, không phải một hằng số. Khoá sai thì không ghi gì — không đẻ lỗi rác
+ * trong dashboard mỗi đêm. 5xx hay không gọi được là hỏng; 200 cũng là hỏng, vì nghĩa
+ * là GlitchTip đang nhận cả khoá không tồn tại.
+ * ----------------------------------------------------------------------- */
+
+const KHOA_SAI = '00000000000000000000000000000000';
+
+async function canhGlitchtip(goc: string): Promise<KetQua> {
+  const ten = 'glitchtip nhận lỗi';
+  const url = `${goc.replace(/\/$/, '')}/api/1/envelope/`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-sentry-envelope',
+        'X-Sentry-Auth': `Sentry sentry_version=7, sentry_key=${KHOA_SAI}, sentry_client=canh-gac/1`,
+      },
+      body: `{}\n{"type":"event"}\n{"message":"canh-gac"}\n`,
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (res.status === 403) return on(ten, `${url} từ chối khoá sai (403) — đường nhận lỗi đang chạy`);
+    return hong(ten, `${url} trả ${res.status} cho khoá sai, mong 403`);
+  } catch (err) {
+    const lyDo = err instanceof Error ? err.message : String(err);
+    return hong(ten, `${url} không gọi được: ${lyDo}`);
+  }
+}
+
+/* --------------------------------------------------------------------------
  * Chạy hết rồi báo.
  * ----------------------------------------------------------------------- */
 
@@ -366,6 +408,8 @@ async function chay(): Promise<KetQua[]> {
     // ADMIN_ORIGIN rỗng là trạng thái HỢP LỆ — nghĩa là chưa tách khu quản trị ra
     // origin riêng, và `/admin` nằm trên app domain. Bỏ qua chứ không báo thiếu.
     ['admin', process.env.ADMIN_ORIGIN],
+    // Dashboard GlitchTip. Rỗng = chưa mở ERRORS_DOMAIN, hợp lệ như admin.
+    ['loi', process.env.ERRORS_ORIGIN],
   ];
 
   for (const [nhan, origin] of origins) {
@@ -378,7 +422,8 @@ async function chay(): Promise<KetQua[]> {
       ketQua.push(on(`origin ${nhan}`, 'BỎ QUA — biến môi trường chưa khai'));
       continue;
     }
-    const url = nhan === 'admin' ? `${origin.replace(/\/$/, '')}/admin/dang-nhap` : origin;
+    const goc = origin.replace(/\/$/, '');
+    const url = nhan === 'admin' ? `${goc}/admin/dang-nhap` : nhan === 'loi' ? `${goc}/_health/` : origin;
     ketQua.push(await canhOrigin(nhan, url));
   }
 
@@ -399,6 +444,13 @@ async function chay(): Promise<KetQua[]> {
   ketQua.push(canhDia(process.env.STORAGE_DIR ?? '/srv/storage'));
   ketQua.push(canhSaoLuu(process.env.BACKUP_DIR ?? '/backups'));
   ketQua.push(await canhLoi());
+
+  // GLITCHTIP_NOI_BO rỗng khi web chưa có DSN — tức chưa ai gửi lỗi vào GlitchTip, nên
+  // không có gì để canh. Vẫn GHI RA, cùng lý do với origin thiếu biến ở trên.
+  const glitchtip = process.env.GLITCHTIP_NOI_BO?.trim();
+  ketQua.push(
+    glitchtip ? await canhGlitchtip(glitchtip) : on('glitchtip nhận lỗi', 'BỎ QUA — web chưa gửi lỗi vào GlitchTip')
+  );
 
   return ketQua;
 }
