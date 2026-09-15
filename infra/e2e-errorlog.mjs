@@ -166,6 +166,11 @@ check(
   (await post({ source: 'global', path: 'http://ke-xau.example/x', message: `${MESSAGE} lac` })) ===
     204
 );
+/* Thông điệp mang email và token: `/dieu-khoan` hứa bản ghi lỗi đã che chúng. Đường
+   dẫn KHÔNG mang tiền tố PATH, để không đổi phép đếm "rác không tạo nhóm" bên dưới. */
+const PATH_CHE = `/e2e-che-${suffix}`;
+const TOKEN_GIA = 'Zx9aQ2mPl7Rt4Kw8Yb3Nc6Vd1Hf5Jg0Ls2Qe7Uo9Ti';
+await post({ source: 'boundary', path: PATH_CHE, message: `${MESSAGE} che phuhuynh@vidu.test token=${TOKEN_GIA}` });
 // Lần hai y hệt lần đầu: phải gộp vào cùng một nhóm, không đẻ nhóm mới.
 await post(
   { source: 'boundary', path: `${PATH}?token=BI-MAT#x`, digest: DIGEST, message: MESSAGE },
@@ -211,6 +216,17 @@ check(
   duong.filter((d) => d.startsWith(PATH)).length === 2,
   `${duong.filter((d) => d.startsWith(PATH)).length} nhóm mang tiền tố ${PATH}`
 );
+
+{
+  const n = await the(PATH_CHE).count();
+  const text = n ? await the(PATH_CHE).innerText() : '';
+  check('Nhóm mang email/token có mặt', n === 1, `${n} thẻ`);
+  check(
+    'Email và token trong thông điệp đã bị che trước khi ghi',
+    text.includes(`${MESSAGE} che [email] token=[token]`) && !text.includes('phuhuynh@vidu.test') && !text.includes(TOKEN_GIA),
+    text.split('\n').find((d) => d.includes(MESSAGE)) ?? '(không thấy thông điệp)'
+  );
+}
 
 {
   const text = await the(PATH).innerText();
