@@ -316,6 +316,13 @@ services:
       # giám sát hỏng theo kiểu vẫn nói "ổn" thì tệ hơn hẳn không có cơ chế nào.
       APP_ORIGIN: https://${APP_DOMAIN:?thieu APP_DOMAIN trong infra/.env}
       PLAYER_ORIGIN: https://${PLAYER_DOMAIN:?thieu PLAYER_DOMAIN trong infra/.env}
+      # Hai biến cho phép canh GlitchTip. Cùng khuôn `:+` với ADMIN_ORIGIN: rỗng khi
+      # chưa bật, và bước canh GHI RA "BỎ QUA" chứ không im lặng.
+      #   ERRORS_ORIGIN   — gọi https://loi…/_health/ từ ngoài vòng vào, như ba origin kia.
+      #   GLITCHTIP_NOI_BO — gửi envelope KHOÁ SAI vào đường nhận lỗi, mong 403. Chỉ có khi
+      #                     web đã có DSN; không đưa chính DSN (có khoá) sang service này.
+      ERRORS_ORIGIN: ${ERRORS_DOMAIN:+https://${ERRORS_DOMAIN}}
+      GLITCHTIP_NOI_BO: ${GLITCHTIP_DSN:+http://glitchtip:8000}
       # Bước canh đọc thư mục này để biết bản sao lưu mới nhất bao nhiêu tuổi.
       BACKUP_DIR: /backups
       # Ngưỡng báo động, để trống là dùng mặc định trong canh-gac.ts (85 / 26 / 21 / 5).
