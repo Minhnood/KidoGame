@@ -361,6 +361,51 @@ function docCauHinhSmtp(): CauHinhSmtp | null {
 }
 
 /**
+ * Tài khoản gửi DỰ PHÒNG — chỉ dùng khi tài khoản chính bị máy chủ từ chối đăng nhập.
+ *
+ * VÌ SAO CÓ. Ngày 15/9/2026 Google vô hiệu App Password của tài khoản gửi production mà
+ * `.env` không đổi gì; mọi thư trả 535 cho tới khi người vận hành tạo mật khẩu mới. Trong
+ * quãng đó phụ huynh mới kẹt ở bước xác minh và thư báo động không đi. Fen chốt: giữ tài
+ * khoản chính như cũ, thêm một tài khoản KHÁC chỉ để đỡ khi chính chết.
+ *
+ * Cùng host/port/secure với tài khoản chính — hai tài khoản Gmail. Đòi user KHÁC user
+ * chính: cùng tài khoản thì App Password bị thu hồi cùng lúc, tức không đỡ được gì.
+ * Không có tài khoản chính thì trả `null`: dự phòng không phải một đường gửi độc lập.
+ */
+function docCauHinhSmtpDuPhong(chinh: CauHinhSmtp | null): CauHinhSmtp | null {
+  const user = process.env.SMTP_DU_PHONG_USER?.trim();
+  const pass = process.env.SMTP_DU_PHONG_PASS;
+  if (!chinh || !user || !pass || user.toLowerCase() === chinh.user.toLowerCase()) return null;
+  return { ...chinh, user, pass };
+}
+
+/**
+ * Lỗi này có nghĩa là "máy chủ không cho ĐĂNG NHẬP" không.
+ *
+ * Chỉ nhóm lỗi này mới được thử lại bằng tài khoản dự phòng, vì chỉ với nó mới chắc lá
+ * thư CHƯA đi: đăng nhập hỏng thì chưa có lệnh gửi nào. Lỗi sau đăng nhập (người nhận bị
+ * từ chối, đứt kết nối giữa lúc truyền) thì thư có thể đã tới — gửi lại là phụ huynh
+ * nhận hai lá xác minh với hai token khác nhau. Lỗi mạng tới smtp.gmail.com cũng không
+ * thử lại: dự phòng đi đúng host đó, nên nó hỏng y hệt.
+ */
+function laLoiDangNhap(err: unknown): boolean {
+  for (let e = err as { responseCode?: number; code?: string; cause?: unknown } | undefined; e; e = e.cause as typeof e) {
+    if (e.code === 'EAUTH' || e.responseCode === 530 || e.responseCode === 534 || e.responseCode === 535) return true;
+  }
+  return false;
+}
+
+/**
+ * Người gửi khi đi đường dự phòng: giữ TÊN hiển thị của `MAIL_FROM`, đổi địa chỉ sang
+ * tài khoản dự phòng. Gmail tự viết lại địa chỉ người gửi thành tài khoản đã đăng nhập,
+ * nên khai đúng từ đầu thì thư không mang một `From` mâu thuẫn.
+ */
+function mailFromDuPhong(user: string): string {
+  const ten = /^\s*(.*?)\s*<[^>]*>\s*$/.exec(mailFrom())?.[1]?.replace(/^"|"$/g, '') || 'KidoGame';
+  return `${ten} <${user}>`;
+}
+
+/**
  * Transporter dùng lại giữa các lá thư.
  *
  * Mỗi transporter mới là một lần bắt tay TLS và một lần xác thực. Đường gửi mail
@@ -369,12 +414,17 @@ function docCauHinhSmtp(): CauHinhSmtp | null {
  * chứ không phải biến module vì Next dev thay module trong lúc chạy.
  */
 const gSmtp = globalThis as unknown as {
-  kidogameSmtp?: { key: string; transporter: import('nodemailer').Transporter };
+  /* Theo TỪNG tài khoản: chính và dự phòng cùng sống trong một tiến trình, và cache một
+     chỗ thì mỗi lần đổi đường là dựng lại transporter của đường kia. Khoá có cả mật
+     khẩu (không log) để đổi App Password là có transporter mới. */
+  kidogameSmtpTheoTaiKhoan?: Map<string, import('nodemailer').Transporter>;
 };
 
 async function layTransporter(cfg: CauHinhSmtp) {
-  const key = `${cfg.host}:${cfg.port}:${cfg.secure}:${cfg.user}`;
-  if (gSmtp.kidogameSmtp?.key === key) return gSmtp.kidogameSmtp.transporter;
+  const key = `${cfg.host}:${cfg.port}:${cfg.secure}:${cfg.user}:${cfg.pass}`;
+  gSmtp.kidogameSmtpTheoTaiKhoan ??= new Map();
+  const coSan = gSmtp.kidogameSmtpTheoTaiKhoan.get(key);
+  if (coSan) return coSan;
 
   // import động: chỉ nạp nodemailer khi thật sự dùng SMTP, và nó không bị kéo vào
   // bundle của những đường không cần.
@@ -394,18 +444,49 @@ async function layTransporter(cfg: CauHinhSmtp) {
     socketTimeout: 20_000,
   });
 
-  gSmtp.kidogameSmtp = { key, transporter };
+  gSmtp.kidogameSmtpTheoTaiKhoan.set(key, transporter);
   return transporter;
 }
 
 export interface TinhTrangMail {
   /**
-   * `song` — đăng nhập SMTP được. `hong` — có cấu hình mà máy chủ từ chối hoặc không
-   * trả lời, hoặc production không có đường gửi nào. `khong-kiem` — đường gửi không
-   * kiểm được bằng đăng nhập (Resend), hoặc dev không cấu hình gì.
+   * `song` — tài khoản chính đăng nhập được, và dự phòng (nếu khai) cũng được.
+   * `du-phong` — CHÍNH chết, DỰ PHÒNG sống: thư vẫn đi, nhưng đang đi đường vòng.
+   * `du-phong-hong` — chính sống, dự phòng đã khai mà chết: chưa ai kẹt, nhưng lần chính
+   *   chết tới sẽ không có gì đỡ.
+   * `hong` — không đường nào gửi được: chính chết và không có/không sống dự phòng, hoặc
+   *   production không có đường gửi nào.
+   * `khong-kiem` — đường gửi không kiểm được bằng đăng nhập (Resend), hoặc dev không cấu hình gì.
    */
-  muc: 'song' | 'hong' | 'khong-kiem';
+  muc: 'song' | 'du-phong' | 'du-phong-hong' | 'hong' | 'khong-kiem';
   noi: string;
+}
+
+/** Đăng nhập thử một tài khoản bằng transporter riêng. Không ném. */
+async function thuDangNhap(cfg: CauHinhSmtp): Promise<{ ok: boolean; noi: string }> {
+  try {
+    const nodemailer = (await import('nodemailer')).default;
+    const t = nodemailer.createTransport({
+      host: cfg.host,
+      port: cfg.port,
+      secure: cfg.secure,
+      auth: { user: cfg.user, pass: cfg.pass },
+      connectionTimeout: 8_000,
+      greetingTimeout: 8_000,
+      socketTimeout: 8_000,
+    });
+    try {
+      await t.verify();
+    } finally {
+      t.close();
+    }
+    return { ok: true, noi: `${cfg.user} đăng nhập ${cfg.host}:${cfg.port} được` };
+  } catch (err) {
+    const e = err as { responseCode?: number; code?: string; message?: string };
+    const ma = e.responseCode ?? e.code ?? 'lỗi';
+    const dong = String(e.message ?? err).split('\n')[0].slice(0, 120);
+    return { ok: false, noi: `${cfg.user} không đăng nhập được ${cfg.host}:${cfg.port} — ${ma}: ${dong}` };
+  }
 }
 
 /** Kết quả kiểm gần nhất, dùng lại trong `CACHE_KIEM_MAIL_MS`. */
@@ -448,29 +529,24 @@ export async function kiemDuongGuiMail(boQuaCache = false): Promise<TinhTrangMai
         ? { muc: 'hong', noi: 'production không có đường gửi mail nào (thiếu SMTP_* và RESEND_API_KEY)' }
         : { muc: 'khong-kiem', noi: 'dev chưa cấu hình đường gửi thật' };
     }
-    try {
-      const nodemailer = (await import('nodemailer')).default;
-      const t = nodemailer.createTransport({
-        host: cfg.host,
-        port: cfg.port,
-        secure: cfg.secure,
-        auth: { user: cfg.user, pass: cfg.pass },
-        connectionTimeout: 8_000,
-        greetingTimeout: 8_000,
-        socketTimeout: 8_000,
-      });
-      try {
-        await t.verify();
-      } finally {
-        t.close();
-      }
-      return { muc: 'song', noi: `${cfg.user} đăng nhập ${cfg.host}:${cfg.port} được` };
-    } catch (err) {
-      const e = err as { responseCode?: number; code?: string; message?: string };
-      const ma = e.responseCode ?? e.code ?? 'lỗi';
-      const dong = String(e.message ?? err).split('\n')[0].slice(0, 120);
-      return { muc: 'hong', noi: `${cfg.user} không đăng nhập được ${cfg.host}:${cfg.port} — ${ma}: ${dong}` };
+    /* Hỏi CẢ HAI, song song. Dự phòng cũng phải được canh: một dự phòng đã chết im lặng
+       từ tuần trước thì đúng lúc cần nó, nó không có ở đó. */
+    const duPhongCfg = docCauHinhSmtpDuPhong(cfg);
+    const [chinh, duPhong] = await Promise.all([thuDangNhap(cfg), duPhongCfg ? thuDangNhap(duPhongCfg) : null]);
+
+    if (chinh.ok && (!duPhong || duPhong.ok)) {
+      return { muc: 'song', noi: duPhong ? `${chinh.noi}; dự phòng ${duPhong.noi}` : chinh.noi };
     }
+    if (chinh.ok && duPhong && !duPhong.ok) {
+      return { muc: 'du-phong-hong', noi: `chính ${chinh.noi}; DỰ PHÒNG ${duPhong.noi}` };
+    }
+    if (duPhong?.ok) {
+      return { muc: 'du-phong', noi: `CHÍNH ${chinh.noi}; thư đang đi bằng dự phòng — ${duPhong.noi}` };
+    }
+    return {
+      muc: 'hong',
+      noi: duPhong ? `CHÍNH ${chinh.noi}; DỰ PHÒNG ${duPhong.noi}` : `${chinh.noi} (không khai tài khoản dự phòng)`,
+    };
   })();
 
   gKiem.kidogameKiemMail = { luc: bayGio, ket };
@@ -501,11 +577,11 @@ function ghiLaiDaTrao(duong: string, to: string, id: string, phanHoi: string, ro
   if (rot.length) console.error(`[mail] ${duong} TỪ CHỐI ${rot.length} người nhận: ${rot.join(', ')}`);
 }
 
-async function sendViaSmtp(message: ThuGui, cfg: CauHinhSmtp): Promise<void> {
+async function sendViaSmtp(message: ThuGui, cfg: CauHinhSmtp, from: string = mailFrom()): Promise<void> {
   const transporter = await layTransporter(cfg);
   try {
     const info = await transporter.sendMail({
-      from: mailFrom(),
+      from,
       to: message.to,
       // `undefined` chứ không phải chuỗi rỗng: nodemailer dựng hẳn một header
       // `Reply-To:` rỗng cho chuỗi rỗng, và một header dị dạng bị chấm điểm spam.
@@ -533,7 +609,9 @@ async function sendViaSmtp(message: ThuGui, cfg: CauHinhSmtp): Promise<void> {
      * KHÔNG đưa `pass` vào thông điệp: dòng này đi vào log.
      */
     const lyDo = err instanceof Error ? err.message : String(err);
-    throw new Error(`Gửi SMTP thất bại qua ${cfg.host}:${cfg.port} với user ${cfg.user}: ${lyDo}`);
+    // `cause` giữ mã phản hồi gốc (535…) cho `laLoiDangNhap` đọc — thông điệp bọc lại
+    // thì mất nó.
+    throw new Error(`Gửi SMTP thất bại qua ${cfg.host}:${cfg.port} với user ${cfg.user}: ${lyDo}`, { cause: err });
   }
 }
 
@@ -684,7 +762,18 @@ export async function sendMail(message: MailMessage): Promise<void> {
    * trong .env từ lần cấu hình trước.
    */
   if (smtp) {
-    await sendViaSmtp(thu, smtp);
+    const duPhong = docCauHinhSmtpDuPhong(smtp);
+    try {
+      await sendViaSmtp(thu, smtp);
+    } catch (err) {
+      if (!duPhong || !laLoiDangNhap(err)) throw err;
+      // Một dòng log mỗi lá đi đường vòng: tài khoản chính đang chết là việc người vận
+      // hành phải biết, dù thư vẫn tới. `/admin` và canh gác nói điều này to hơn.
+      console.error(
+        `[mail] ${smtp.user} bị từ chối đăng nhập — gửi bằng tài khoản dự phòng ${duPhong.user}`
+      );
+      await sendViaSmtp(thu, duPhong, mailFromDuPhong(duPhong.user));
+    }
     return;
   }
 

@@ -191,8 +191,8 @@ Cách phục hồi ở [`SAO-LUU.md`](SAO-LUU.md) mục 4.
 
 ☁️ **VPS**
 
-Chín phép canh: bốn đường web (app, play, admin, loi), chứng chỉ, đĩa, tuổi bản sao
-lưu, lỗi mới, và GlitchTip còn nhận lỗi không.
+Mười phép canh: bốn đường web (app, play, admin, loi), chứng chỉ, đĩa, tuổi bản sao
+lưu, lỗi mới, tài khoản gửi mail còn đăng nhập được không, và GlitchTip còn nhận lỗi không.
 
 ```
 cd /root/KidoGame/infra && docker compose exec -T prune sh -c "cd /app/apps/web && pnpm --filter @kidogame/web db:canh-gac"
@@ -421,32 +421,32 @@ service nào. Sáu đêm trong bảy, bước này in một dòng rồi thoát.
 
 ## 12. Dashboard thống kê (Umami)
 
-Mở `https://stats.37-60-251-95.sslip.io`, đăng nhập `admin`. Mật khẩu KHÔNG nằm trong
-repo hay trong hội thoại nào — nó được sinh ngẫu nhiên trên VPS lúc cài (14/9/2026):
+Mở `https://stats.37-60-251-95.sslip.io`, đăng nhập `admin`. **Mật khẩu chỉ fen biết**:
+fen đã tự đổi ngày 15/9/2026 (đo: mật khẩu tạm lúc cài bị từ chối 401) và file mật khẩu tạm
+`umami-admin.txt` trên VPS đã xoá. Đổi tiếp ở `/settings/profile` → **Change password**.
 
-```bash
-ssh kidovps 'cat /root/KidoGame/infra/umami-admin.txt'; echo
-```
+Mật khẩu mặc định `admin`/`umami` đã bị đổi ngay lúc cài — máy dò tới tên miền này chỉ
+vài giây sau khi Caddy xin chứng chỉ.
 
-Đăng nhập được rồi thì nên tự đổi mật khẩu trong dashboard (Settings → Profile) và
-xoá file đó: `ssh kidovps 'rm /root/KidoGame/infra/umami-admin.txt'`. Mật khẩu mặc
-định `admin`/`umami` đã bị đổi ngay lúc cài — máy dò tới tên miền này chỉ vài giây sau
-khi Caddy xin chứng chỉ.
+**Quên mật khẩu:** Umami không có lệnh đặt lại. Phải ghi băm bcrypt mới vào bảng `user`
+của DB `umami` — nhờ Claude làm, đừng tự sửa DB.
 
 Số liệu **không** nằm trong bản sao lưu. Mất VPS là mất lịch sử lượt xem, không mất gì
 của bé.
 
 ## 13. Theo dõi lỗi (GlitchTip)
 
-Mở `https://loi.37-60-251-95.sslip.io`. Tài khoản quản trị và mật khẩu sinh ngẫu nhiên
-trên VPS lúc cài (14/9/2026) — dòng 1 là email, dòng 2 là mật khẩu:
+Mở `https://loi.37-60-251-95.sslip.io`, đăng nhập `mail-chinh@example.com`. **Mật khẩu
+chỉ fen biết**: fen đã tự đổi ngày 15/9/2026 (đo: mật khẩu tạm lúc cài bị từ chối) và file
+`glitchtip-admin.txt` trên VPS đã xoá. Đổi tiếp ở `/profile`.
 
-```bash
-ssh kidovps 'cat /root/KidoGame/infra/glitchtip-admin.txt'; echo
+Không ai tự đăng ký được: tài khoản mới chỉ tạo bằng lời mời từ trong dashboard.
+
+**Quên mật khẩu** — ☁️ **VPS**, lệnh hỏi mật khẩu mới hai lần, gõ không hiện lên:
+
 ```
-
-Đổi mật khẩu trong dashboard (Profile) rồi xoá file đó được. Không ai tự đăng ký được:
-tài khoản mới chỉ tạo bằng lời mời từ trong dashboard.
+cd /root/KidoGame/infra && docker compose exec glitchtip ./manage.py changepassword mail-chinh@example.com
+```
 
 Tổ chức `kidogame`, project `web`. DSN của project lưu ở `/root/.gt-dsn` (600) — nó
 chỉ dùng phía server, không bao giờ đưa xuống trình duyệt.
