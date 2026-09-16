@@ -275,7 +275,7 @@ async function requireParent(): Promise<string> {
 }
 
 export async function createChildAction(_prev: FormState, form: FormData): Promise<FormState> {
-  return run(async () => {
+  const state = await run(async () => {
     const parentId = await requireParent();
     const birthYearRaw = String(form.get('birthYear') ?? '').trim();
     await createChild({
@@ -286,6 +286,12 @@ export async function createChildAction(_prev: FormState, form: FormData): Promi
       birthYear: birthYearRaw ? Number(birthYearRaw) : null,
     });
   });
+  /* Thiếu dòng này thì tạo xong, danh sách phía trên vẫn "Chưa có bé nào" cho tới khi
+     bố mẹ tự tải lại trang — trên điện thoại gần như không ai nghĩ ra việc đó.
+     Chỉ khi THÀNH CÔNG: vẽ lại lúc lỗi thì form có thể bị thay bằng khối khác (vd. email
+     vừa mất xác minh) và thông báo lỗi biến theo form — e2e-auth đỏ đúng chỗ đó. */
+  if (state && 'ok' in state) revalidatePath('/phu-huynh');
+  return state;
 }
 
 export async function resetChildPasswordAction(

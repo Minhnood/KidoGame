@@ -202,11 +202,18 @@ const parentCtx = await newSession();
   await p.fill('#username', CHILD_USER);
   await p.fill('#password', CHILD_PASS);
   await p.click('[data-testid=auth-form] button[type=submit]');
-  await p.waitForTimeout(2500);
-  await p.reload({ waitUntil: 'networkidle' });
+  /*
+   * KHÔNG tải lại trang. Bản cũ `reload()` rồi mới tìm bé, nên xanh suốt trong khi trên
+   * màn hình thật bé vừa tạo không hiện: thông báo "Đã tạo" nằm dưới form, còn phía trên
+   * vẫn "Chưa có bé nào" — vì `createChildAction` thiếu `revalidatePath`. Đi tay trên
+   * iPhone mới thấy, và trên điện thoại "tải lại trang" không phải việc bố mẹ tự nghĩ ra.
+   */
+  await p.waitForSelector('[data-testid=auth-form] [role=status]', { timeout: 15000 }).catch(() => {});
+  await p.waitForTimeout(500);
   check(
-    'Tạo được tài khoản cho bé',
-    (await p.locator(`text=${CHILD_USER}`).count()) > 0,
+    'Tạo được tài khoản cho bé — thẻ của bé hiện ngay, không cần tải lại trang',
+    (await p.locator(`#be-${CHILD_USER}`).count()) > 0 &&
+      (await p.locator('text=Chưa có bé nào').count()) === 0,
     CHILD_USER
   );
 
