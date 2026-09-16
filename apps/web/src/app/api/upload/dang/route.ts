@@ -6,7 +6,8 @@ import { getActor } from '@/lib/session';
 /**
  * Bước 2 của việc đăng game: bé bấm "Đăng game" sau khi chơi thử.
  *
- * Chỉ nhận MÃ bản xem thử, không nhận tên hay file: đăng đúng cái bé vừa thử. Mọi thứ
+ * Chỉ nhận MÃ bản xem thử và CHỈ SỐ bìa đã chọn, không nhận tên hay file: đăng đúng cái
+ * bé vừa thử. Mọi thứ
  * còn lại (bản thử của ai, còn hạn không, file còn không) do `dangBanXemThu` kiểm.
  */
 export async function POST(request: Request) {
@@ -25,15 +26,18 @@ export async function POST(request: Request) {
   }
 
   let maXemThu = '';
+  let bia = 0;
   try {
-    const body = (await request.json()) as { maXemThu?: unknown };
+    const body = (await request.json()) as { maXemThu?: unknown; bia?: unknown };
     maXemThu = typeof body.maXemThu === 'string' ? body.maXemThu : '';
+    // Không gửi thì là bìa mặc định; gửi sai kiểu thì để `dangBanXemThu` từ chối.
+    bia = body.bia === undefined ? 0 : typeof body.bia === 'number' ? body.bia : -1;
   } catch {
     return NextResponse.json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });
   }
 
   try {
-    const result = await dangBanXemThu(maXemThu, actor.id);
+    const result = await dangBanXemThu(maXemThu, actor.id, bia);
     return NextResponse.json(result, { status: 201 });
   } catch (e) {
     if (e instanceof Sb3Error) {

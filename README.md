@@ -39,7 +39,7 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 Bốn bộ không cần server:
 
 ```bash
-pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
+pnpm --filter @kidogame/sb3 test           # 60 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
 node infra/caddy-config-check.mjs          # 21 phép, +4 nữa nếu có Docker
 node infra/umami-check.mjs                 # 16, đo thẳng production, không làm bẩn số liệu
@@ -86,7 +86,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 33, cần psql; chạy storage:prune khô
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 43, cần psql; chạy storage:prune khô
 node infra/contrast-check.mjs                                      # 160 phép đo màu
 node infra/a11y-check.mjs                                          # 27
 ```
@@ -633,8 +633,14 @@ Bé chọn file → **Xem thử game** → chơi thử và xem bìa ngay trên `
 - `POST /api/upload` chỉ tạo **bản xem thử** (`taoBanXemThu` trong `src/lib/ingest.ts`):
   kiểm tra, đóng gói, vẽ bìa, ghi bốn file vào storage, rồi ghi
   `storage/xem-thu/<mã 32 ký tự>.json`. Chưa có Game, chưa có thư cho bố mẹ.
-- `POST /api/upload/dang` với `{ maXemThu }` (`dangBanXemThu`) mới tạo Game từ **đúng**
-  bản đó — tên, bìa, file — và gửi thư. Mã chỉ dùng được một lần, đúng bé, trong 2 giờ.
+- `POST /api/upload/dang` với `{ maXemThu, bia }` (`dangBanXemThu`) mới tạo Game từ
+  **đúng** bản đó — tên, file, và bìa bé chọn — rồi gửi thư. Mã chỉ dùng được một lần,
+  đúng bé, trong 2 giờ.
+- **Chọn bìa:** `renderCoverOptions` (packages/sb3) vẽ tối đa 6 bìa từ chính game — bìa
+  mặc định (= `renderThumbnail`), cảnh nền đầu + từng nhân vật khác, từng cảnh nền khác +
+  nhân vật đầu, cảnh nền không nhân vật; bìa trùng từng byte bị bỏ. `bia` là chỉ số trong
+  danh sách của CHÍNH bản xem thử, nằm ngoài danh sách thì 400 và bản thử được giữ lại.
+  Không cho tải ảnh riêng: đó là đường đưa ảnh bất kỳ lên trang chủ ngoài mọi lớp kiểm.
 - Player chỉ phục vụ `sb3|html|thumb|runtime/<sha>`, nên thư mục `xem-thu/` không lộ ra.
 - `storage:prune` **chừa file sửa trong 6 giờ** (lớn hơn hạn 2 giờ của bản xem thử) và
   dọn JSON xem thử quá 24 giờ. `putObject` chạm lại giờ sửa khi dùng lại file trùng hash.

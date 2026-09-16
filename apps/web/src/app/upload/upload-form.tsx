@@ -15,6 +15,7 @@ interface BanXemThu {
   title: string;
   htmlUrl: string;
   thumbUrl: string;
+  biaUrls: string[];
   warnings: { code: string; message: string }[];
 }
 
@@ -45,6 +46,8 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [ban, setBan] = useState<BanXemThu | null>(null);
+  /** Chỉ số trong `ban.biaUrls`; 0 là bìa mặc định. */
+  const [bia, setBia] = useState(0);
   const xemThuRef = useRef<HTMLElement>(null);
 
   /*
@@ -83,6 +86,7 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
         setError(data.error ?? 'Có lỗi xảy ra, thử lại nhé.');
         return;
       }
+      setBia(0);
       setBan(data as BanXemThu);
     } catch {
       setError('Không gửi được file. Kiểm tra kết nối mạng nhé.');
@@ -99,7 +103,7 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
       const res = await fetch('/api/upload/dang', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ maXemThu: ban.maXemThu }),
+        body: JSON.stringify({ maXemThu: ban.maXemThu, bia }),
       });
       const data = await res.json();
 
@@ -233,17 +237,65 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
               </Notice>
             ))}
 
-            <p className="font-semibold">Bìa game</p>
+            <p className="font-semibold" id="bia-tieu-de">
+              Bìa game
+            </p>
             <p className="text-sm text-ink-soft">Bìa này hiện ở trang chủ và trong danh sách game.</p>
             {/* 240×180: đúng khổ 4:3 của sân khấu Scratch, cỡ gần bằng thẻ game trên trang chủ. */}
             <img
-              src={ban.thumbUrl}
+              src={ban.biaUrls[bia] ?? ban.thumbUrl}
               alt={`Bìa của game ${ban.title}`}
               width={240}
               height={180}
               data-testid="bia-xem-thu"
               className="mt-2 h-45 w-60 rounded-field border border-border bg-surface object-cover"
             />
+
+            {/*
+              Chọn bìa: radio thật (bàn phím và trình đọc màn hình dùng được), ẩn nút tròn,
+              cả ô ảnh là vùng bấm. Chỉ hiện khi có từ hai bìa trở lên — một lựa chọn duy
+              nhất thì chẳng có gì để chọn.
+            */}
+            {ban.biaUrls.length > 1 && (
+              <fieldset className="mt-4 border-0 p-0" data-testid="chon-bia">
+                <legend className="font-semibold">Chọn bìa khác</legend>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {ban.biaUrls.map((url, i) => (
+                    <label
+                      key={url}
+                      className={`relative cursor-pointer rounded-field border-3 p-0.5 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent ${
+                        i === bia ? 'border-accent' : 'border-transparent'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="bia"
+                        value={i}
+                        checked={i === bia}
+                        onChange={() => setBia(i)}
+                        className="sr-only"
+                      />
+                      <img
+                        src={url}
+                        alt={i === 0 ? 'Bìa tự tạo' : `Bìa số ${i + 1}`}
+                        width={96}
+                        height={72}
+                        className="block h-18 w-24 rounded-field object-cover"
+                      />
+                      {/* Dấu ✓ để bìa đang chọn không chỉ khác nhau ở màu viền. */}
+                      {i === bia && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute right-1 top-1 rounded-full bg-accent px-1.5 text-sm font-bold text-chrome"
+                        >
+                          ✓
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
 
             {error && (
               <Notice tone="error" role="alert">

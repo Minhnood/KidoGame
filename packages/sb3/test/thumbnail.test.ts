@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
-import { renderThumbnail, THUMB_WIDTH, THUMB_HEIGHT } from '../src/thumbnail.js';
+import { renderCoverOptions, renderThumbnail, THUMB_WIDTH, THUMB_HEIGHT } from '../src/thumbnail.js';
+import type { ProjectJson } from '../src/validate.js';
 import { validateAndNormalize } from '../src/validate.js';
 import { readSb3Zip } from '../src/zip.js';
-import { validSb3, validProject, BACKDROP_ID, SPRITE_ID, BACKDROP, SPRITE } from './fixtures.js';
+import { validSb3, validProject, BACKDROP_ID, SPRITE_ID, BACKDROP, SPRITE, md5 } from './fixtures.js';
 
 async function thumbOf(sb3: Buffer) {
   const r = await validateAndNormalize(sb3);
@@ -65,5 +66,67 @@ describe('sinh thumbnail', () => {
     const png = await sharp(BACKDROP, { density: 300 }).resize(480, 360, { fit: 'inside' }).png().toBuffer();
     expect((await sharp(png).metadata()).width).toBeGreaterThan(2);
     expect(SPRITE.length).toBeGreaterThan(0);
+  });
+});
+
+describe('các bìa để bé chọn', () => {
+  const svg = (mau: string) =>
+    Buffer.from(
+      `<svg version="1.1" width="48" height="48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="${mau}"/></svg>`
+    );
+  const nenSvg = (mau: string) =>
+    Buffer.from(
+      `<svg version="1.1" width="480" height="360" xmlns="http://www.w3.org/2000/svg"><rect width="480" height="360" fill="${mau}"/></svg>`
+    );
+  const costume = (buf: Buffer) => {
+    const id = md5(buf);
+    return { name: id, dataFormat: 'svg', assetId: id, md5ext: `${id}.svg` };
+  };
+  const entry = (buf: Buffer) => ({ name: `${md5(buf)}.svg`, data: buf });
+
+  /** Hai cảnh nền, ba nhân vật màu khác nhau. */
+  function nhieuThu(nhanVat: Buffer[] = [svg('#ff0000'), svg('#00aa00'), svg('#0000ff')]) {
+    const nen = [nenSvg('#ffee88'), nenSvg('#88ccff')];
+    const project = {
+      targets: [
+        { isStage: true, name: 'Stage', costumes: nen.map(costume) },
+        ...nhanVat.map((b, i) => ({ isStage: false, name: `NV${i}`, costumes: [costume(b)] })),
+      ],
+    } as unknown as ProjectJson;
+    return { project, entries: [...nen, ...nhanVat].map(entry) };
+  }
+
+  it('bìa đầu tiên giống hệt renderThumbnail (bìa mặc định)', async () => {
+    const { project, entries } = nhieuThu();
+    const [dau] = await renderCoverOptions(entries, project);
+    expect(dau.equals(await renderThumbnail(entries, project))).toBe(true);
+  });
+
+  it('đủ lựa chọn: nhân vật khác, cảnh nền khác, nền không nhân vật — không trùng nhau', async () => {
+    const { project, entries } = nhieuThu();
+    const bia = await renderCoverOptions(entries, project);
+    // 1 mặc định + 2 nhân vật khác + 1 cảnh nền khác + 1 nền trơn
+    expect(bia.length).toBe(5);
+    const khac = new Set(bia.map((b) => md5(b)));
+    expect(khac.size).toBe(5);
+  });
+
+  it('không vượt trần', async () => {
+    const { project, entries } = nhieuThu();
+    expect((await renderCoverOptions(entries, project, 2)).length).toBe(2);
+  });
+
+  it('hai nhân vật cùng một hình thì không thành hai bìa giống nhau', async () => {
+    const cungHinh = svg('#ff0000');
+    const { project, entries } = nhieuThu([cungHinh, cungHinh]);
+    const bia = await renderCoverOptions(entries, project);
+    expect(new Set(bia.map((b) => md5(b))).size).toBe(bia.length);
+    expect(bia.length).toBe(3); // mặc định, cảnh nền khác, nền trơn
+  });
+
+  it('project rỗng vẫn có đúng một bìa, không ném lỗi', async () => {
+    const bia = await renderCoverOptions([], { targets: [] });
+    expect(bia.length).toBe(1);
+    expect((await sharp(bia[0]).metadata()).format).toBe('webp');
   });
 });

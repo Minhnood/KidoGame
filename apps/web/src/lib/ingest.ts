@@ -4,7 +4,7 @@ import path from 'node:path';
 import {
   validateAndNormalize,
   packageToHtml,
-  renderThumbnail,
+  renderCoverOptions,
   readSb3Zip,
   Sb3Error,
   type Sb3Warning,
@@ -100,7 +100,10 @@ interface BanXemThu {
   sb3Sha256: string;
   sb3Size: number;
   htmlSha256: string;
+  /** Bìa mặc định, = `bia[0]`. Giữ riêng vì bản xem thử ghi trước khi có `bia` không có mảng đó. */
   thumbSha256: string;
+  /** Các bìa bé được chọn, bìa mặc định đứng đầu. */
+  bia?: string[];
   runtimeSha256: string;
   usesMusic: boolean;
   warnings: Sb3Warning[];
@@ -112,6 +115,8 @@ export interface KetQuaXemThu {
   title: string;
   htmlUrl: string;
   thumbUrl: string;
+  /** Cùng thứ tự với chỉ số `bia` mà bước đăng nhận. */
+  biaUrls: string[];
   hetHan: number;
   warnings: { code: string; message: string }[];
 }
@@ -183,10 +188,11 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
     projectJson: normalized.projectJson,
   });
 
-  // 3. Thumbnail (không bao giờ ném lỗi).
+  // 3. Các bìa để bé chọn, bìa mặc định đứng đầu (không bao giờ ném lỗi, luôn có ít nhất một).
   const entries = await readSb3Zip(normalized.sb3);
-  const thumb = await renderThumbnail(entries, normalized.projectJson);
-  const thumbSha = await sha256(thumb);
+  const cacBia = await renderCoverOptions(entries, normalized.projectJson);
+  const biaSha = await Promise.all(cacBia.map((b) => sha256(b)));
+  const thumbSha = biaSha[0];
 
   /*
    * 4. Ghi đĩa. Nội dung trùng thì tự dedupe.
@@ -199,7 +205,7 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
   await Promise.all([
     putObject('sb3', normalized.sha256, normalized.sb3),
     putObject('html', packaged.sha256, packaged.html),
-    putObject('thumb', thumbSha, thumb),
+    ...cacBia.map((b, i) => putObject('thumb', biaSha[i], b)),
     putObject('runtime', packaged.runtime.sha256, packaged.runtime.js),
   ]);
 
@@ -223,6 +229,7 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
     sb3Size: normalized.sb3.length,
     htmlSha256: packaged.sha256,
     thumbSha256: thumbSha,
+    bia: biaSha,
     runtimeSha256: packaged.runtime.sha256,
     usesMusic: packaged.usesMusic,
     warnings: normalized.warnings,
@@ -236,6 +243,7 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
     title,
     htmlUrl: objectUrl('html', packaged.sha256),
     thumbUrl: objectUrl('thumb', thumbSha),
+    biaUrls: biaSha.map((sha) => objectUrl('thumb', sha)),
     hetHan,
     warnings: normalized.warnings.map((w) => ({ code: w.code, message: w.message })),
   };
@@ -247,7 +255,11 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
  * Mọi lý do từ chối đều trả cùng thông điệp "hết hạn hoặc đã đăng" trừ khi nói rõ hơn
  * giúp được bé: mã của bé khác không được xác nhận là mã có tồn tại.
  */
-export async function dangBanXemThu(maXemThu: string, childId: string): Promise<IngestResult> {
+export async function dangBanXemThu(
+  maXemThu: string,
+  childId: string,
+  chiSoBia = 0
+): Promise<IngestResult> {
   const HET = new Sb3Error(
     'PREVIEW_EXPIRED',
     'Bản chơi thử này đã hết hạn hoặc đã được đăng rồi. Bấm "Xem thử game" lại nhé.'
@@ -278,12 +290,20 @@ export async function dangBanXemThu(maXemThu: string, childId: string): Promise<
 
     await chanDangQuaNhieu(childId);
 
+    /* Chỉ số bìa do client gửi, nên chỉ nhận số nguyên nằm trong danh sách của CHÍNH bản
+       thử này — không thì là cách gắn bìa của game khác (hash nào cũng có sẵn trên đĩa). */
+    const cacBia = ban.bia ?? [ban.thumbSha256];
+    if (!Number.isInteger(chiSoBia) || chiSoBia < 0 || chiSoBia >= cacBia.length) {
+      throw new Sb3Error('INVALID_COVER', 'Bìa đã chọn không hợp lệ. Chọn lại bìa rồi bấm Đăng game nhé.');
+    }
+    const thumbSha256 = cacBia[chiSoBia];
+
     // File có thể đã bị dọn (bản thử để quá lâu qua đêm). Tạo Game trỏ vào file không
     // còn thì trang game ra stage trắng — thà bắt bé xem thử lại.
     const conDu = await Promise.all([
       objectExists('sb3', ban.sb3Sha256),
       objectExists('html', ban.htmlSha256),
-      objectExists('thumb', ban.thumbSha256),
+      objectExists('thumb', thumbSha256),
       objectExists('runtime', ban.runtimeSha256),
     ]);
     if (conDu.includes(false)) {
@@ -300,7 +320,7 @@ export async function dangBanXemThu(maXemThu: string, childId: string): Promise<
         sb3Sha256: ban.sb3Sha256,
         sb3Size: ban.sb3Size,
         htmlSha256: ban.htmlSha256,
-        thumbSha256: ban.thumbSha256,
+        thumbSha256,
         runtimeSha256: ban.runtimeSha256,
         usesMusic: ban.usesMusic,
         // Sb3Warning[] -> Prisma Json. Cấu trúc do ta kiểm soát nên cast là an toàn.

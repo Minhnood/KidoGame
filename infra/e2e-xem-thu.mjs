@@ -16,6 +16,7 @@
  *  5. Mã bản thử không dùng được bởi bé khác, bởi bố mẹ, bởi người chưa đăng nhập, và
  *     không dùng lại được sau khi hết hạn.
  *  6. `storage:prune` KHÔNG dọn file của bản thử đang chơi dở, nhưng vẫn dọn khi đã cũ.
+ *  7. Bé chọn được bìa khác lấy từ chính game, và game đăng lên mang ĐÚNG bìa đã chọn.
  *
  * Chạy:
  *   SB3_FIXTURE=<đường-dẫn.sb3> MAIL_LOG=/tmp/kg-mail.log node infra/e2e-xem-thu.mjs
@@ -27,6 +28,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { batBuocMailLog, choMailToi, taoBoBamLink } from './e2e-mail.mjs';
+import { zip } from './e2e-zip.mjs';
+import { createHash } from 'node:crypto';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const PLAYER = process.env.PLAYER_ORIGIN ?? 'http://127.0.0.1:3001';
@@ -64,6 +67,35 @@ if (!FIXTURE_GOC) {
  */
 const FIXTURE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kg-xem-thu-')), 'game.sb3');
 fs.copyFileSync(FIXTURE_GOC, FIXTURE);
+
+/*
+ * Game NHIỀU BÌA: 2 cảnh nền, 3 nhân vật khác màu. File mẫu chung chỉ có một nhân vật
+ * và một cảnh nền, nên với nó phần chọn bìa không có gì để chọn.
+ */
+const FIXTURE_NHIEU_BIA = path.join(path.dirname(FIXTURE), 'nhieu-bia.sb3');
+{
+  const hinh = (noiDung) => {
+    const data = Buffer.from(noiDung, 'utf8');
+    const id = createHash('md5').update(data).digest('hex');
+    return { data, costume: { name: id, bitmapResolution: 1, dataFormat: 'svg', assetId: id, md5ext: `${id}.svg`, rotationCenterX: 24, rotationCenterY: 24 } };
+  };
+  const nen = ['#ffe08a', '#9fd3ff'].map((m) => hinh(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"><rect width="480" height="360" fill="${m}"/></svg>`));
+  const nv = ['#e63946', '#2a9d8f', '#6a4c93'].map((m) => hinh(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><circle cx="24" cy="24" r="20" fill="${m}"/></svg>`));
+  const chung = { variables: {}, lists: {}, broadcasts: {}, blocks: {}, comments: {}, currentCostume: 0, sounds: [], volume: 100 };
+  const project = {
+    targets: [
+      { ...chung, isStage: true, name: 'Stage', costumes: nen.map((h) => h.costume), layerOrder: 0, tempo: 60, videoTransparency: 50, videoState: 'off', textToSpeechLanguage: null },
+      ...nv.map((h, i) => ({ ...chung, isStage: false, name: `Nhan vat ${i}`, costumes: [h.costume], layerOrder: i + 1, visible: true, x: 0, y: 0, size: 100, direction: 90, draggable: false, rotationStyle: 'all around' })),
+    ],
+    monitors: [],
+    extensions: [],
+    meta: { semver: '3.0.0', vm: '2.3.0', agent: 'KidoGame e2e-xem-thu' },
+  };
+  fs.writeFileSync(
+    FIXTURE_NHIEU_BIA,
+    zip([{ ten: 'project.json', data: Buffer.from(JSON.stringify(project), 'utf8') }, ...[...nen, ...nv].map((h) => ({ ten: h.costume.md5ext, data: h.data }))])
+  );
+}
 
 const ROOT = path.join(import.meta.dirname, '..');
 const WEB = path.join(ROOT, 'apps', 'web');
@@ -118,16 +150,19 @@ async function xemThu(p) {
   return data;
 }
 
-/** POST /api/upload/dang từ trong trang (mang cookie của phiên đó). */
-const guiDang = (p, ma) =>
-  p.evaluate(async (ma) => {
-    const r = await fetch('/api/upload/dang', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ maXemThu: ma }),
-    });
-    return r.status;
-  }, ma);
+/** POST /api/upload/dang từ trong trang (mang cookie của phiên đó). `bia` bỏ trống thì không gửi. */
+const guiDang = (p, ma, bia) =>
+  p.evaluate(
+    async ({ ma, bia }) => {
+      const r = await fetch('/api/upload/dang', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(bia === undefined ? { maXemThu: ma } : { maXemThu: ma, bia }),
+      });
+      return r.status;
+    },
+    { ma, bia }
+  );
 
 // ---------- Dựng: phụ huynh -> hai bé ----------
 const pctx = await browser.newContext({ viewport: { width: 1100, height: 950 } });
@@ -299,6 +334,54 @@ let HTML_DIEN_THOAI = '';
     !!truoc && !!sau && sau.rac === truoc.rac + 1 && sau.moi === truoc.moi - 1,
     truoc && sau ? `rác ${truoc.rac}→${sau.rac} khi file cũ 3 ngày, mới ${truoc.moi}→${sau.moi}` : 'không đọc được kết quả prune'
   );
+}
+
+// ---------- 8. Chọn bìa khác ----------
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const m = await dangNhapBe(ctx, BE2);
+  await m.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
+  await m.fill('#title', `Game nhieu bia ${suffix}`);
+  await m.setInputFiles('#file', FIXTURE_NHIEU_BIA);
+  const ban = await xemThu(m);
+  const urls = ban?.biaUrls ?? [];
+  // mặc định + 2 nhân vật khác + 1 cảnh nền khác + nền không nhân vật
+  check('Game 2 cảnh nền + 3 nhân vật: server đưa 5 bìa khác nhau, bìa đầu là bìa mặc định', urls.length === 5 && new Set(urls).size === 5 && urls[0] === ban?.thumbUrl, `${urls.length} bìa`);
+
+  const oChon = m.locator('[data-testid=chon-bia] input[type=radio]');
+  check('… và trang hiện đủ 5 ô chọn bìa', (await oChon.count()) === 5, `${await oChon.count()} ô`);
+  const taiHet = await m.evaluate(() =>
+    [...document.querySelectorAll('[data-testid=chon-bia] img')].every((i) => i.complete && i.naturalWidth > 0)
+  );
+  check('… ảnh của mọi ô đều tải được', taiHet);
+  const tran = await m.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  check('390px: hàng bìa không làm tràn ngang', tran === 0, `${tran}px`);
+
+  if ((await oChon.count()) >= 3) {
+    await m.locator('[data-testid=chon-bia] label').nth(2).tap();
+  }
+  const lon = await m.locator('[data-testid=bia-xem-thu]').getAttribute('src').catch(() => null);
+  check('Chạm bìa số 3 thì ảnh bìa lớn đổi theo, ô đó được chọn', lon === urls[2] && (await oChon.nth(2).isChecked().catch(() => false)));
+
+  // Bàn phím: radio thật, mũi tên phải sang bìa kế tiếp.
+  if ((await oChon.count()) >= 4) {
+    await oChon.nth(2).focus();
+    await m.keyboard.press('ArrowRight');
+  }
+  check('Bàn phím: mũi tên phải chọn bìa số 4', await oChon.nth(3).isChecked().catch(() => false));
+  if ((await oChon.count()) >= 3) await m.locator('[data-testid=chon-bia] label').nth(2).tap();
+
+  const ma = ban?.maXemThu ?? 'khong-co-ma-khong-co-ma-khong-co';
+  check('Chỉ số bìa ngoài danh sách: 400, không tạo game', (await guiDang(m, ma, 99)) === 400 && soGame(BE2) === 0);
+  check('Chỉ số bìa sai kiểu ("2"): 400, không tạo game', (await guiDang(m, ma, '2')) === 400 && soGame(BE2) === 0);
+  check('… bản xem thử vẫn còn để bé chọn lại', fs.existsSync(fileXemThu(ma)));
+
+  await m.locator('[data-testid=dang-game-that]').tap().catch(() => {});
+  await m.waitForURL(/\/game\//, { timeout: 30000 }).catch(() => {});
+  const id = m.url().split('/game/')[1] ?? '';
+  const thumb = id ? sql(`select "thumbSha256" from "Game" where id = '${id}'`) : '';
+  check('Đăng xong: game mang ĐÚNG bìa số 3 đã chọn, không phải bìa mặc định', thumb.length === 64 && thumb === shaTuUrl(urls[2]) && thumb !== shaTuUrl(urls[0]), thumb.slice(0, 12));
+  await ctx.close();
 }
 
 await pctx.close();
