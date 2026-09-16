@@ -288,6 +288,8 @@ let gameUrl = '';
     await p.fill('#title', `Game của bé ${suffix}`);
     await p.setInputFiles('#file', FIXTURE);
     await p.click('[data-testid=upload-form] button[type=submit]');
+    // Bước xem thử: bấm "Đăng game" mới thành game thật.
+    await p.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
     await p.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
     gameUrl = p.url();
     check('Bé đăng game thành công', /\/game\//.test(gameUrl), gameUrl);

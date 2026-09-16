@@ -92,6 +92,8 @@ async function dungGame(browser) {
   await b.fill('#title', `Game phim ${suffix}`);
   await b.setInputFiles('#file', FIXTURE_PHIM);
   await b.click('[data-testid=upload-form] button[type=submit]');
+  // Bước xem thử: bấm "Đăng game" mới thành game thật.
+  await b.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
   await b.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
 
   const url = b.url();

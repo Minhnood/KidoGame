@@ -128,6 +128,8 @@ const games = [];
     await c.fill('#title', `Game bản quyền ${label} ${suffix}`);
     await c.setInputFiles('#file', FIXTURE);
     await c.click('[data-testid=upload-form] button[type=submit]');
+    // Bước xem thử: bấm "Đăng game" mới thành game thật.
+    await c.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
     await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
     const url = c.url();
     games.push({ url, id: url.split('/game/')[1] ?? '' });

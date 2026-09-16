@@ -17,7 +17,7 @@ const EXT: Record<Bucket, string> = {
   runtime: '.js',
 };
 
-function storageRoot(): string {
+export function storageRoot(): string {
   return path.resolve(process.cwd(), process.env.STORAGE_DIR ?? '../../storage');
 }
 
@@ -47,7 +47,12 @@ export async function putObject(bucket: Bucket, sha256: string, data: Buffer): P
   const target = objectPath(bucket, sha256);
   try {
     await fs.access(target);
-    return false; // đã có, nội dung giống hệt vì tên file là hash của nội dung
+    /* Đã có, nội dung giống hệt vì tên file là hash của nội dung. Vẫn cập nhật giờ sửa:
+       `storage:prune` chừa file mới sửa gần đây, và một bản xem thử có thể đang dùng lại
+       đúng file rác cũ của một lần xem thử trước — không chạm thì nó bị dọn giữa chừng. */
+    const now = new Date();
+    await fs.utimes(target, now, now).catch(() => {});
+    return false;
   } catch {
     // chưa có -> ghi
   }

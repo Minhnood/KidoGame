@@ -125,6 +125,8 @@ let gameId = '';
   await c.locator(`[data-testid=tag-picker] input[value="${TAG}"]`).check();
 
   await c.click('[data-testid=upload-form] button[type=submit]');
+  // Bước xem thử: bấm "Đăng game" mới thành game thật.
+  await c.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
   await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
   gameId = c.url().split('/game/')[1] ?? '';
   check('Đăng được game kèm tag', !!gameId, gameId);

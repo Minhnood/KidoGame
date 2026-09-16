@@ -66,7 +66,7 @@ export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 92 kiểm tra
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 44
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 53
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 77
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 53, cần >24 game
@@ -86,6 +86,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 33, cần psql; chạy storage:prune khô
 node infra/contrast-check.mjs                                      # 160 phép đo màu
 node infra/a11y-check.mjs                                          # 27
 ```
@@ -624,6 +625,22 @@ lớp đã bấm nút.
 banner nhắc ở `/phu-huynh`, nên lớp tự động sẽ nổ ít hơn hẳn so với khi đếm mọi báo cáo.
 Đổi lại nó không còn bị lách bằng vài phút đổi mạng. Muốn lớp tự động mạnh hơn thì phải
 làm cho việc xác minh email trở nên bắt buộc hoặc đáng làm — đó là quyết định sản phẩm.
+
+## Đăng game: xem thử rồi mới đăng
+
+Bé chọn file → **Xem thử game** → chơi thử và xem bìa ngay trên `/upload` → **Đăng game**.
+
+- `POST /api/upload` chỉ tạo **bản xem thử** (`taoBanXemThu` trong `src/lib/ingest.ts`):
+  kiểm tra, đóng gói, vẽ bìa, ghi bốn file vào storage, rồi ghi
+  `storage/xem-thu/<mã 32 ký tự>.json`. Chưa có Game, chưa có thư cho bố mẹ.
+- `POST /api/upload/dang` với `{ maXemThu }` (`dangBanXemThu`) mới tạo Game từ **đúng**
+  bản đó — tên, bìa, file — và gửi thư. Mã chỉ dùng được một lần, đúng bé, trong 2 giờ.
+- Player chỉ phục vụ `sb3|html|thumb|runtime/<sha>`, nên thư mục `xem-thu/` không lộ ra.
+- `storage:prune` **chừa file sửa trong 6 giờ** (lớn hơn hạn 2 giờ của bản xem thử) và
+  dọn JSON xem thử quá 24 giờ. `putObject` chạm lại giờ sửa khi dùng lại file trùng hash.
+- Bộ kiểm chọn file mẫu thẳng từ `storage/sb3/` thì **chọn lại file sau mỗi lần xem thử**:
+  lần xem thử chạm giờ sửa của chính file đó, và Chrome từ chối gửi lại một file đã chọn
+  mà bị đổi giờ sửa (`ERR_UPLOAD_FILE_CHANGED`). `e2e-xem-thu` dùng bản sao ở thư mục tạm.
 
 ## Nút điều khiển trên điện thoại
 
@@ -1685,7 +1702,7 @@ kiểm ĐẦU TIÊN: cả sản phẩm chọn "public ngay, không duyệt trư�
 được báo thì người phát hiện nội dung xấu đầu tiên bắt buộc phải là một người lạ đã trót
 nhìn thấy nó. Thư có tên game, mô tả, link chơi, và link `/phu-huynh` để tự ẩn.
 
-Mail này gửi từ `notifyParentOfNewGame` **bên trong `ingestGame`**, không phải ở route
+Mail này gửi từ `notifyParentOfNewGame` **bên trong `dangBanXemThu`** (lúc bé bấm Đăng, không phải lúc xem thử), không phải ở route
 upload — sau này có thêm đường đăng game nào khác thì nó vẫn tự chạy theo; đặt ở tầng
 route là để quên. Gửi trượt **không** huỷ việc đăng: game đã đóng gói, đã ghi đĩa, đã
 vào DB rồi, ném lỗi ở đó chỉ khiến bé thấy "đăng thất bại" trong khi game vẫn nằm công
