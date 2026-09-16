@@ -41,7 +41,7 @@ Bốn bộ không cần server:
 ```bash
 pnpm --filter @kidogame/sb3 test           # 60 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
-node infra/caddy-config-check.mjs          # 21 phép, +4 nữa nếu có Docker
+node infra/caddy-config-check.mjs          # 28 phép, +4 nữa nếu có Docker
 node infra/umami-check.mjs                 # 16, đo thẳng production, không làm bẩn số liệu
 node infra/glitchtip-check.mjs             # 22, production; lớp SSH gửi rồi xoá một lỗi thử
 cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49

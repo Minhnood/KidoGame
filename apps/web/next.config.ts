@@ -45,6 +45,21 @@ const nextConfig: NextConfig = {
    */
   serverExternalPackages: ['@kidogame/sb3', 'sharp', 'nodemailer'],
 
+  /*
+   * TRẦN BODY MÀ MIDDLEWARE ĐỌC. Mặc định của Next là 10MB, và vượt thì Next KHÔNG từ
+   * chối mà CẮT body rồi chuyển tiếp — `request.formData()` trong route hỏng, bé nhận
+   * "Dữ liệu gửi lên không hợp lệ" với mọi game .sb3 từ 10MB tới 50MB (trần app tự đặt,
+   * `LIMITS.MAX_SB3_BYTES`). Đo trên dev 16/9: file 9MB được đọc, file 11MB bị cắt; log
+   * in "Request body exceeded 10MB for /api/upload".
+   *
+   * 55MB = trần .sb3 cộng phần vỏ multipart. KHÔNG nâng tuỳ tiện: middleware giữ body của
+   * MỌI request trong bộ nhớ, nên Caddy chặn mọi đường không phải upload ở 1MB — xem
+   * `request_body` trong infra/Caddyfile. `caddy-config-check` đối chiếu ba con số này.
+   */
+  experimental: {
+    middlewareClientMaxBodySize: '55mb',
+  },
+
   async headers() {
     return [
       {
