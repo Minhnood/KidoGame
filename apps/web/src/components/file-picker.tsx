@@ -18,11 +18,22 @@ export function FilePicker({
   name,
   accept,
   required,
+  onChange,
 }: {
   id: string;
   name: string;
   accept?: string;
   required?: boolean;
+  /**
+   * Gọi mỗi lần chọn file. Có prop này thì ô chọn được XOÁ GIÁ TRỊ ngay sau khi báo ra
+   * ngoài, và bên gọi tự giữ `File`.
+   *
+   * Vì sao: chọn lại ĐÚNG file đang chọn thì trình duyệt không phát `change`. Bé sửa game
+   * trong Scratch, lưu đè cùng tên rồi chọn lại — không có `change` thì trang vẫn giữ bản
+   * chơi thử cũ và bấm Đăng là đăng bản cũ. Đo được bằng Playwright trên Chrome: chọn lại
+   * cùng file, 0 request.
+   */
+  onChange?: (file: File) => void;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [size, setSize] = useState<number | null>(null);
@@ -40,8 +51,15 @@ export function FilePicker({
         className="peer sr-only"
         onChange={(e) => {
           const f = e.currentTarget.files?.[0] ?? null;
+          /* Có `onChange` mà bấm Huỷ trong hộp chọn (không có file) thì giữ nguyên tên file
+             đang hiện: ô đã được xoá giá trị từ lần trước, file vẫn nằm ở bên gọi. */
+          if (onChange && !f) return;
           setFileName(f ? f.name : null);
           setSize(f ? f.size : null);
+          if (onChange && f) {
+            onChange(f);
+            e.currentTarget.value = '';
+          }
         }}
       />
 

@@ -179,8 +179,6 @@ if (FIXTURE) {
   await c.fill('#description', 'Do infra/e2e-email.mjs tạo ra.');
   await c.setInputFiles('#file', FIXTURE);
   await c.click('[data-testid=upload-form] button[type=submit]');
-  // Bước xem thử: bấm "Đăng game" mới thành game thật.
-  await c.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
   await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
   const gameUrl = c.url();
   check('Bé đăng được game', /\/game\//.test(gameUrl), gameUrl);

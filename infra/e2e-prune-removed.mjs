@@ -140,8 +140,6 @@ const games = [];
     await c.fill('#title', `Game hạn giữ ${label} ${suffix}`);
     await c.setInputFiles('#file', FIXTURE);
     await c.click('[data-testid=upload-form] button[type=submit]');
-    // Bước xem thử: bấm "Đăng game" mới thành game thật.
-    await c.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
     await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
     games.push(c.url().split('/game/')[1] ?? '');
   }

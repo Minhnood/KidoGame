@@ -190,8 +190,6 @@ let gameId = '';
   await c.fill('#title', GAME_TITLE);
   await c.setInputFiles('#file', FIXTURE);
   await c.click('[data-testid=upload-form] button[type=submit]');
-  // Bước xem thử: bấm "Đăng game" mới thành game thật.
-  await c.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
   await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
   gameUrl = c.url();
   gameId = gameUrl.split('/game/')[1] ?? '';

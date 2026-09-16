@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/button';
 import { Field, TextArea, TextInput } from '@/components/field';
 import { FilePicker } from '@/components/file-picker';
@@ -12,7 +12,6 @@ import { StageFrame } from '../game/[id]/stage-frame';
 /** Trùng `KetQuaXemThu` ở `src/lib/ingest.ts`. */
 interface BanXemThu {
   maXemThu: string;
-  title: string;
   htmlUrl: string;
   thumbUrl: string;
   biaUrls: string[];
@@ -28,27 +27,34 @@ export interface TagOption {
 const MAX_TAGS = 2;
 
 /**
- * Đăng game hai bước: "Xem thử game" rồi mới "Đăng game".
+ * Đăng game: CHỌN FILE LÀ THẤY GAME NGAY, điền tên rồi mới "Đăng game".
  *
- * Bước xem thử đóng gói game thật (đúng bản sẽ đăng) để bé bấm cờ xanh chơi thử và thấy
- * cái bìa sẽ hiện ở trang chủ — TRƯỚC khi có gì công khai. Trước đây bấm một nút là game
- * lên trang chủ ngay và thư đã đi tới bố mẹ, nên phát hiện game hỏng hay bìa xấu thì đã
- * muộn.
+ * Chọn file là gọi `/api/upload` luôn: server đóng gói đúng bản sẽ đăng, trang hiện khung
+ * chơi thử và các bìa để chọn — TRƯỚC khi có gì công khai. Tên, mô tả, loại game điền
+ * sau, gửi kèm lúc bấm Đăng. Trước đây bấm một nút là game lên trang chủ ngay và thư đã
+ * đi tới bố mẹ, nên phát hiện game hỏng hay bìa xấu thì đã muộn.
  *
- * Form KHÔNG bị gỡ khỏi trang khi đang xem thử, chỉ ẩn đi: bấm "Sửa lại" là quay về
- * đúng những gì bé đã gõ và đã chọn. Ô chọn file không gán lại được bằng script, gỡ
- * form ra là bé phải đi tìm file lần nữa.
+ * Bấm "Đăng game" lúc bản thử còn đang đóng gói thì CHỜ nó xong rồi đăng luôn, không bắt
+ * bấm lại. Chọn file khác giữa chừng thì kết quả của file cũ bị bỏ (`luot`).
  */
 export function UploadForm({ tags }: { tags: TagOption[] }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [dangXemThu, setDangXemThu] = useState(false);
   const [dangDang, setDangDang] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loiXemThu, setLoiXemThu] = useState<string | null>(null);
+  const [loiDang, setLoiDang] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [ban, setBan] = useState<BanXemThu | null>(null);
   /** Chỉ số trong `ban.biaUrls`; 0 là bìa mặc định. */
   const [bia, setBia] = useState(0);
-  const xemThuRef = useRef<HTMLElement>(null);
+
+  /* Ref song song với state: `onSubmit` phải đọc được bản xem thử MỚI NHẤT sau khi chờ,
+     còn state trong closure của lần render cũ thì vẫn là null. */
+  const banRef = useRef<BanXemThu | null>(null);
+  const choXemThu = useRef<Promise<void> | null>(null);
+  const luot = useRef(0);
+  /** File đang chọn. Ô chọn file tự xoá giá trị sau mỗi lần chọn — xem `FilePicker`. */
+  const fileRef = useRef<File | null>(null);
 
   /*
    * Chặn tick quá số cho phép ngay tại chỗ thay vì để server lặng lẽ cắt bớt.
@@ -64,73 +70,194 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
     );
   }
 
-  /* Trên điện thoại form dài hơn một màn hình: nút "Xem thử" nằm ở đáy, bản xem thử
-     hiện ở chỗ form vừa ẩn. Không cuộn lên thì bé nhìn vào giữa khung game. */
-  useEffect(() => {
-    if (ban) xemThuRef.current?.scrollIntoView({ block: 'start' });
-  }, [ban]);
+  function datBan(b: BanXemThu | null) {
+    banRef.current = b;
+    setBan(b);
+    setBia(0);
+  }
+
+  function xemThu(file: File) {
+    const lan = ++luot.current;
+    fileRef.current = file;
+    datBan(null);
+    setLoiXemThu(null);
+    setLoiDang(null);
+    setDangXemThu(true);
+
+    const fd = new FormData();
+    fd.set('file', file);
+    choXemThu.current = (async () => {
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (lan !== luot.current) return; // bé đã chọn file khác
+        if (!res.ok) setLoiXemThu(data.error ?? 'Có lỗi xảy ra, thử lại nhé.');
+        else datBan(data as BanXemThu);
+      } catch {
+        if (lan === luot.current) setLoiXemThu('Không gửi được file. Kiểm tra kết nối mạng nhé.');
+      } finally {
+        if (lan === luot.current) setDangXemThu(false);
+      }
+    })();
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    setBusy(true);
-
-    try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: new FormData(e.currentTarget),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error ?? 'Có lỗi xảy ra, thử lại nhé.');
-        return;
-      }
-      setBia(0);
-      setBan(data as BanXemThu);
-    } catch {
-      setError('Không gửi được file. Kiểm tra kết nối mạng nhé.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function dangThat() {
-    if (!ban) return;
-    setError(null);
+    const form = e.currentTarget;
+    setLoiDang(null);
     setDangDang(true);
+
+    if (choXemThu.current) await choXemThu.current;
+    const banHienTai = banRef.current;
+    if (!banHienTai) {
+      // Lỗi xem thử (file hỏng, không phải Scratch…) đã hiện ngay dưới ô chọn file.
+      if (!fileRef.current) setLoiDang('Chọn file game trước nhé.');
+      setDangDang(false);
+      return;
+    }
+
+    const fd = new FormData(form);
     try {
       const res = await fetch('/api/upload/dang', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ maXemThu: ban.maXemThu, bia }),
+        body: JSON.stringify({
+          maXemThu: banHienTai.maXemThu,
+          bia,
+          title: String(fd.get('title') ?? ''),
+          description: String(fd.get('description') ?? ''),
+          tags: fd.getAll('tags').map(String),
+        }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        // Hết hạn thì bản thử này vô dụng: về form, file vẫn còn chọn sẵn.
-        if (res.status === 410) setBan(null);
-        setError(data.error ?? 'Có lỗi xảy ra, thử lại nhé.');
         setDangDang(false);
+        if (res.status === 410) {
+          /* Bản thử hết hạn: tạo lại luôn từ file đang chọn, bé chỉ việc bấm Đăng lần nữa.
+             Tên đã gõ vẫn nằm nguyên trong form. */
+          if (fileRef.current) xemThu(fileRef.current);
+          setLoiDang(`${data.error ?? ''} Mình đang tạo lại bản chơi thử — xong thì bấm Đăng game lần nữa nhé.`);
+          return;
+        }
+        setLoiDang(data.error ?? 'Có lỗi xảy ra, thử lại nhé.');
         return;
       }
       // Giữ nút ở trạng thái "đang đăng" cho tới khi trang game mở ra, không thì bé bấm lại.
       router.push(`/game/${data.gameId}`);
     } catch {
-      setError('Không gửi được. Kiểm tra kết nối mạng nhé.');
+      setLoiDang('Không gửi được. Kiểm tra kết nối mạng nhé.');
       setDangDang(false);
     }
   }
 
   return (
-    <>
-      <form
-        data-testid="upload-form"
-        onSubmit={onSubmit}
-        hidden={ban !== null}
-        className={`max-w-140 ${THE_FORM}`}
+    <form data-testid="upload-form" onSubmit={onSubmit} className={`max-w-140 ${THE_FORM}`}>
+      <GocCo />
+      <Field
+        id="file"
+        label="File game"
+        hint={
+          <>
+            Trong Scratch, chọn <strong>File → Save to your computer</strong> để lấy file có đuôi{' '}
+            <strong>.sb3</strong>, rồi chọn file đó ở đây. Chọn xong là chơi thử được ngay.
+          </>
+        }
       >
-        <GocCo />
+        {/* Không `required`: ô tự xoá giá trị sau mỗi lần chọn, file nằm ở `fileRef`. */}
+        <FilePicker id="file" name="file" accept=".sb3" onChange={xemThu} />
+      </Field>
+
+      {dangXemThu && (
+        <p className="mt-3 text-ink-soft" role="status" data-testid="dang-xem-thu">
+          Đang chuẩn bị bản chơi thử, mất khoảng vài giây…
+        </p>
+      )}
+      {loiXemThu && (
+        <Notice tone="error" role="alert">
+          {loiXemThu}
+        </Notice>
+      )}
+
+      {ban && (
+        <section data-testid="xem-thu" aria-label="Chơi thử và chọn bìa" className="mt-5">
+          <Notice tone="info">
+            Game <strong>chưa đăng</strong>, chưa ai thấy đâu. Bấm cờ xanh để chơi thử, chọn bìa,
+            đặt tên rồi bấm <strong>Đăng game</strong> ở dưới.
+          </Notice>
+
+          <div className="mt-3">
+            <StageFrame src={ban.htmlUrl} title="Chơi thử game" />
+          </div>
+
+          {ban.warnings.map((w) => (
+            <Notice tone="warn" role="status" key={w.code}>
+              {w.message}
+            </Notice>
+          ))}
+
+          <p className="mt-5 font-semibold">Bìa game</p>
+          <p className="text-sm text-ink-soft">Bìa này hiện ở trang chủ và trong danh sách game.</p>
+          {/* 240×180: đúng khổ 4:3 của sân khấu Scratch, cỡ gần bằng thẻ game trên trang chủ. */}
+          <img
+            src={ban.biaUrls[bia] ?? ban.thumbUrl}
+            alt="Bìa game đang chọn"
+            width={240}
+            height={180}
+            data-testid="bia-xem-thu"
+            className="mt-2 h-45 w-60 rounded-field border border-border bg-surface object-cover"
+          />
+
+          {/*
+            Chọn bìa: radio thật (bàn phím và trình đọc màn hình dùng được), ẩn nút tròn,
+            cả ô ảnh là vùng bấm. Chỉ hiện khi có từ hai bìa trở lên — một lựa chọn duy
+            nhất thì chẳng có gì để chọn. `name` KHÔNG trùng ô nào của form: chỉ số bìa
+            gửi đi qua state, không qua FormData.
+          */}
+          {ban.biaUrls.length > 1 && (
+            <fieldset className="mt-4 border-0 p-0" data-testid="chon-bia">
+              <legend className="font-semibold">Chọn bìa khác</legend>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {ban.biaUrls.map((url, i) => (
+                  <label
+                    key={url}
+                    className={`relative cursor-pointer rounded-field border-3 p-0.5 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent ${
+                      i === bia ? 'border-accent' : 'border-transparent'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="chon-bia"
+                      value={i}
+                      checked={i === bia}
+                      onChange={() => setBia(i)}
+                      className="sr-only"
+                    />
+                    <img
+                      src={url}
+                      alt={i === 0 ? 'Bìa tự tạo' : `Bìa số ${i + 1}`}
+                      width={96}
+                      height={72}
+                      className="block h-18 w-24 rounded-field object-cover"
+                    />
+                    {/* Dấu ✓ để bìa đang chọn không chỉ khác nhau ở màu viền. */}
+                    {i === bia && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute right-1 top-1 rounded-full bg-accent px-1.5 text-sm font-bold text-chrome"
+                      >
+                        ✓
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+        </section>
+      )}
+
+      <div className="mt-7 border-t border-border pt-5">
         <Field id="title" label="Tên game">
           <TextInput id="title" name="title" maxLength={80} required placeholder="Mèo phiêu lưu" />
         </Field>
@@ -181,154 +308,20 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
             </div>
           </Field>
         )}
+      </div>
 
-        <Field
-          id="file"
-          label="File game"
-          hint={
-            <>
-              Trong Scratch, chọn <strong>File → Save to your computer</strong> để lấy file có đuôi{' '}
-              <strong>.sb3</strong>, rồi chọn file đó ở đây.
-            </>
-          }
-        >
-          <FilePicker id="file" name="file" accept=".sb3" required />
-        </Field>
-
-        {error && !ban && (
-          <Notice tone="error" role="alert">
-            {error}
-          </Notice>
-        )}
-
-        <div className="mt-7">
-          <Button type="submit" size="lg" disabled={busy}>
-            {busy ? 'Đang chuẩn bị bản chơi thử…' : 'Xem thử game'}
-          </Button>
-          {busy ? (
-            <p className="mt-2.5 text-ink-soft" role="status">
-              Đang kiểm tra và đóng gói, mất khoảng vài giây…
-            </p>
-          ) : (
-            <p className="mt-2.5 text-ink-soft">Game chưa đăng ngay đâu — bé được chơi thử trước.</p>
-          )}
-        </div>
-      </form>
-
-      {ban && (
-        <section ref={xemThuRef} data-testid="xem-thu" aria-labelledby="xem-thu-tieu-de" className="mb-12 scroll-mt-6">
-          <Notice tone="info">
-            Game <strong>chưa đăng</strong>, chưa ai thấy đâu. Bấm cờ xanh để chơi thử, xem bìa ở
-            dưới. Ưng rồi thì bấm <strong>Đăng game</strong>.
-          </Notice>
-
-          <h2 id="xem-thu-tieu-de" className="mt-6 text-xl font-bold">
-            {ban.title}
-          </h2>
-
-          <div className="mt-3">
-            <StageFrame src={ban.htmlUrl} title={`Chơi thử: ${ban.title}`} />
-          </div>
-
-          <div className="mx-auto mt-6 max-w-180">
-            {ban.warnings.map((w) => (
-              <Notice tone="warn" role="status" key={w.code}>
-                {w.message}
-              </Notice>
-            ))}
-
-            <p className="font-semibold" id="bia-tieu-de">
-              Bìa game
-            </p>
-            <p className="text-sm text-ink-soft">Bìa này hiện ở trang chủ và trong danh sách game.</p>
-            {/* 240×180: đúng khổ 4:3 của sân khấu Scratch, cỡ gần bằng thẻ game trên trang chủ. */}
-            <img
-              src={ban.biaUrls[bia] ?? ban.thumbUrl}
-              alt={`Bìa của game ${ban.title}`}
-              width={240}
-              height={180}
-              data-testid="bia-xem-thu"
-              className="mt-2 h-45 w-60 rounded-field border border-border bg-surface object-cover"
-            />
-
-            {/*
-              Chọn bìa: radio thật (bàn phím và trình đọc màn hình dùng được), ẩn nút tròn,
-              cả ô ảnh là vùng bấm. Chỉ hiện khi có từ hai bìa trở lên — một lựa chọn duy
-              nhất thì chẳng có gì để chọn.
-            */}
-            {ban.biaUrls.length > 1 && (
-              <fieldset className="mt-4 border-0 p-0" data-testid="chon-bia">
-                <legend className="font-semibold">Chọn bìa khác</legend>
-                <div className="mt-2 flex flex-wrap gap-3">
-                  {ban.biaUrls.map((url, i) => (
-                    <label
-                      key={url}
-                      className={`relative cursor-pointer rounded-field border-3 p-0.5 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent ${
-                        i === bia ? 'border-accent' : 'border-transparent'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="bia"
-                        value={i}
-                        checked={i === bia}
-                        onChange={() => setBia(i)}
-                        className="sr-only"
-                      />
-                      <img
-                        src={url}
-                        alt={i === 0 ? 'Bìa tự tạo' : `Bìa số ${i + 1}`}
-                        width={96}
-                        height={72}
-                        className="block h-18 w-24 rounded-field object-cover"
-                      />
-                      {/* Dấu ✓ để bìa đang chọn không chỉ khác nhau ở màu viền. */}
-                      {i === bia && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute right-1 top-1 rounded-full bg-accent px-1.5 text-sm font-bold text-chrome"
-                        >
-                          ✓
-                        </span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-
-            {error && (
-              <Notice tone="error" role="alert">
-                {error}
-              </Notice>
-            )}
-
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                size="lg"
-                onClick={dangThat}
-                disabled={dangDang}
-                data-testid="dang-game-that"
-              >
-                {dangDang ? 'Đang đăng…' : 'Đăng game'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setBan(null);
-                  setError(null);
-                }}
-                disabled={dangDang}
-                data-testid="sua-lai"
-              >
-                Sửa lại
-              </Button>
-            </div>
-          </div>
-        </section>
+      {loiDang && (
+        <Notice tone="error" role="alert">
+          {loiDang}
+        </Notice>
       )}
-    </>
+
+      <div className="mt-7">
+        <Button type="submit" size="lg" disabled={dangDang} data-testid="dang-game-that">
+          {dangDang ? (dangXemThu ? 'Chờ bản chơi thử xong…' : 'Đang đăng…') : 'Đăng game'}
+        </Button>
+        <p className="mt-2.5 text-ink-soft">Bấm Đăng thì game mới hiện cho mọi người.</p>
+      </div>
+    </form>
   );
 }

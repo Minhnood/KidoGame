@@ -150,8 +150,6 @@ const child1Ctx = await newSession();
   await c.fill('#title', `Game nhắn ${suffix}`);
   await c.setInputFiles('#file', FIXTURE);
   await c.click('[data-testid=upload-form] button[type=submit]');
-  // Bước xem thử: bấm "Đăng game" mới thành game thật.
-  await c.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
   await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
   GAME_ID = c.url().split('/game/')[1] ?? '';
   check('Bé đăng được game', GAME_ID.length > 0, GAME_ID);

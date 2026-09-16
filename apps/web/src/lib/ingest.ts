@@ -61,14 +61,31 @@ function containsProfanity(text: string): boolean {
   return PROFANITY_TEXT.some((w) => coTuRieng(hay, w));
 }
 
-export interface IngestInput {
+/** Bước xem thử chỉ cần file: bé chọn file là thấy game ngay, tên điền sau. */
+export interface XemThuInput {
   sb3: Buffer;
+  childId: string;
+}
+
+/** Những gì bé điền lúc bấm Đăng. */
+export interface DangInput {
   title: string;
   description: string;
-  childId: string;
   /** Slug tag do bé chọn. Slug lạ bị bỏ qua im lặng, không làm hỏng việc đăng. */
   tagSlugs?: string[];
+  /** Chỉ số trong danh sách bìa của bản xem thử; 0 là bìa mặc định. */
+  chiSoBia?: number;
 }
+
+/**
+ * Tên đóng gói vào HTML lúc xem thử.
+ *
+ * Bé chọn file là đóng gói ngay, trước khi có tên game — nên `<title>` của HTML là tên
+ * chung này. Nó chỉ hiện ở tab khi mở thẳng file game trên player origin, không ở đâu
+ * trong trang. Đổi lại, game đăng lên dùng ĐÚNG file HTML bé đã chơi thử, không đóng
+ * gói lại lần hai lúc bấm Đăng.
+ */
+const TEN_DONG_GOI = 'KidoGame';
 
 /**
  * Bản xem thử còn dùng được trong bao lâu.
@@ -89,14 +106,11 @@ export const XEM_THU_MOI_GIO = 30;
  * được file thì chắc chắn chính server đã ghi nó. Player chỉ phục vụ đúng bốn dạng
  * đường dẫn `sb3|html|thumb|runtime/<sha>`, nên thư mục này không lộ ra ngoài.
  *
- * Tên, mô tả, tag nằm TRONG bản xem thử: bấm Đăng là đăng đúng cái vừa thử. Muốn đổi
- * tên thì sửa rồi xem thử lại — HTML đã đóng gói mang sẵn tên game.
+ * Tên, mô tả, tag KHÔNG nằm ở đây: bé điền chúng sau khi đã thấy game, và gửi kèm lúc
+ * bấm Đăng. File game và bìa thì nằm ở đây — đăng là đăng đúng cái vừa chơi thử.
  */
 interface BanXemThu {
   childId: string;
-  title: string;
-  description: string;
-  tagSlugs: string[];
   sb3Sha256: string;
   sb3Size: number;
   htmlSha256: string;
@@ -112,7 +126,6 @@ interface BanXemThu {
 
 export interface KetQuaXemThu {
   maXemThu: string;
-  title: string;
   htmlUrl: string;
   thumbUrl: string;
   /** Cùng thứ tự với chỉ số `bia` mà bước đăng nhận. */
@@ -159,17 +172,7 @@ async function chanDangQuaNhieu(childId: string): Promise<void> {
  *
  * Thứ tự có chủ đích: mọi bước có thể từ chối đều chạy TRƯỚC khi ghi bất cứ thứ gì.
  */
-export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
-  const title = sanitizeText(input.title, MAX_TITLE_LENGTH);
-  const description = sanitizeText(input.description, MAX_DESCRIPTION_LENGTH);
-
-  if (title.length < 2) {
-    throw new Sb3Error('INVALID_TITLE', 'Hãy đặt tên cho game của bé nhé (ít nhất 2 ký tự).');
-  }
-  if (containsProfanity(title) || containsProfanity(description)) {
-    throw new Sb3Error('PROFANITY', 'Tên hoặc mô tả game có từ ngữ không phù hợp.');
-  }
-
+export async function taoBanXemThu(input: XemThuInput): Promise<KetQuaXemThu> {
   // Rate limit trước khi tốn CPU cho việc đóng gói. Hết lượt đăng thì báo NGAY, đừng
   // để bé chơi thử xong mới biết không đăng được.
   await chanDangQuaNhieu(input.childId);
@@ -184,7 +187,7 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
   // 2. Đóng gói thành HTML standalone. Truyền project.json vào để dò phím mà
   //    game dùng, từ đó sinh đúng bộ nút cảm ứng cho điện thoại.
   const packaged = await packageToHtml(normalized.sb3, {
-    title,
+    title: TEN_DONG_GOI,
     projectJson: normalized.projectJson,
   });
 
@@ -209,22 +212,11 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
     putObject('runtime', packaged.runtime.sha256, packaged.runtime.js),
   ]);
 
-  // 5. Ghi bản xem thử. Tag chỉ nhận slug có thật, đối chiếu ở đây chứ không tin client.
-  const wanted = [...new Set(input.tagSlugs ?? [])].slice(0, MAX_TAGS_PER_GAME);
-  const tagSlugs =
-    wanted.length === 0
-      ? []
-      : (await prisma.tag.findMany({ where: { slug: { in: wanted } }, select: { slug: true } })).map(
-          (t) => t.slug
-        );
-
+  // 5. Ghi bản xem thử.
   const maXemThu = randomBytes(24).toString('base64url');
   const hetHan = Date.now() + HAN_XEM_THU_MS;
   const ban: BanXemThu = {
     childId: input.childId,
-    title,
-    description,
-    tagSlugs,
     sb3Sha256: normalized.sha256,
     sb3Size: normalized.sb3.length,
     htmlSha256: packaged.sha256,
@@ -240,7 +232,6 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
 
   return {
     maXemThu,
-    title,
     htmlUrl: objectUrl('html', packaged.sha256),
     thumbUrl: objectUrl('thumb', thumbSha),
     biaUrls: biaSha.map((sha) => objectUrl('thumb', sha)),
@@ -258,11 +249,11 @@ export async function taoBanXemThu(input: IngestInput): Promise<KetQuaXemThu> {
 export async function dangBanXemThu(
   maXemThu: string,
   childId: string,
-  chiSoBia = 0
+  dang: DangInput
 ): Promise<IngestResult> {
   const HET = new Sb3Error(
     'PREVIEW_EXPIRED',
-    'Bản chơi thử này đã hết hạn hoặc đã được đăng rồi. Bấm "Xem thử game" lại nhé.'
+    'Bản chơi thử này đã hết hạn hoặc đã được đăng rồi. Chọn lại file game nhé.'
   );
   const file = fileXemThu(maXemThu);
   if (!file) throw HET;
@@ -288,8 +279,20 @@ export async function dangBanXemThu(
       throw HET;
     }
 
+    /* Tên và mô tả kiểm Ở ĐÂY, lúc bấm Đăng — lỗi thì bản xem thử được trả lại chỗ cũ
+       (`xong` còn false), bé sửa tên rồi bấm lại, không phải chọn file lần nữa. */
+    const title = sanitizeText(dang.title, MAX_TITLE_LENGTH);
+    const description = sanitizeText(dang.description, MAX_DESCRIPTION_LENGTH);
+    if (title.length < 2) {
+      throw new Sb3Error('INVALID_TITLE', 'Hãy đặt tên cho game của bé nhé (ít nhất 2 ký tự).');
+    }
+    if (containsProfanity(title) || containsProfanity(description)) {
+      throw new Sb3Error('PROFANITY', 'Tên hoặc mô tả game có từ ngữ không phù hợp.');
+    }
+
     await chanDangQuaNhieu(childId);
 
+    const chiSoBia = dang.chiSoBia ?? 0;
     /* Chỉ số bìa do client gửi, nên chỉ nhận số nguyên nằm trong danh sách của CHÍNH bản
        thử này — không thì là cách gắn bìa của game khác (hash nào cũng có sẵn trên đĩa). */
     const cacBia = ban.bia ?? [ban.thumbSha256];
@@ -314,9 +317,9 @@ export async function dangBanXemThu(
     const game = await prisma.game.create({
       data: {
         childId,
-        title: ban.title,
-        description: ban.description,
-        titleSearch: buildTitleSearch(ban.title, ban.description),
+        title,
+        description,
+        titleSearch: buildTitleSearch(title, description),
         sb3Sha256: ban.sb3Sha256,
         sb3Size: ban.sb3Size,
         htmlSha256: ban.htmlSha256,
@@ -333,9 +336,10 @@ export async function dangBanXemThu(
      * Gắn tag SAU khi tạo game. Gắn trượt cũng không huỷ game — game đã đóng gói xong
      * rồi, mất tag còn hơn mất cả game.
      */
-    if (ban.tagSlugs.length > 0) {
+    const wanted = [...new Set(dang.tagSlugs ?? [])].slice(0, MAX_TAGS_PER_GAME);
+    if (wanted.length > 0) {
       const tags = await prisma.tag.findMany({
-        where: { slug: { in: ban.tagSlugs } },
+        where: { slug: { in: wanted } },
         select: { id: true },
       });
       if (tags.length > 0) {

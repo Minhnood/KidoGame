@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Sb3Error, LIMITS } from '@kidogame/sb3';
-import { MAX_TAGS_PER_GAME, taoBanXemThu } from '@/lib/ingest';
+import { taoBanXemThu } from '@/lib/ingest';
 import { getActor } from '@/lib/session';
 
 // Đóng gói cần Node API (sharp, zlib, fs) — không chạy được trên edge runtime.
@@ -11,8 +11,9 @@ export const maxDuration = 60;
 /**
  * Bước 1 của việc đăng game: nhận file, đóng gói, trả về một BẢN XEM THỬ.
  *
- * KHÔNG tạo game. Bé chơi thử và xem bìa ngay trên trang đăng, ưng rồi mới bấm "Đăng
- * game" — lúc đó `/api/upload/dang` mới tạo game công khai và báo cho bố mẹ.
+ * Chỉ cần file: bé chọn file là trang gọi route này ngay, trước khi có tên game. KHÔNG
+ * tạo game. Bé chơi thử, chọn bìa, điền tên rồi mới bấm "Đăng game" — lúc đó
+ * `/api/upload/dang` mới tạo game công khai và báo cho bố mẹ.
  */
 export async function POST(request: Request) {
   /*
@@ -71,27 +72,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const title = String(form.get('title') ?? '');
-  const description = String(form.get('description') ?? '');
-
-  /*
-   * Tag do bé tick, nên không bao giờ tin thẳng: chỉ nhận slug, cắt còn tối đa 2,
-   * và `taoBanXemThu` còn đối chiếu lại với bảng Tag. Slug lạ bị bỏ im lặng chứ
-   * không báo lỗi — bé không làm gì sai, và game vẫn nên đăng được.
-   */
-  const tagSlugs = form
-    .getAll('tags')
-    .map((v) => String(v))
-    .filter((v) => /^[a-z0-9-]{1,40}$/.test(v))
-    .slice(0, MAX_TAGS_PER_GAME);
-
   try {
     const result = await taoBanXemThu({
       sb3: Buffer.from(await file.arrayBuffer()),
-      title,
-      description,
       childId: actor.id,
-      tagSlugs,
     });
     return NextResponse.json(result, { status: 200 });
   } catch (e) {

@@ -493,8 +493,6 @@ if (FIXTURE) {
   await page.fill('#description', 'Do infra/e2e-check.mjs tạo ra.');
   await page.setInputFiles('#file', FIXTURE);
   await page.click('[data-testid=upload-form] button[type=submit]');
-  // Bước xem thử: bấm "Đăng game" mới thành game thật.
-  await page.click('[data-testid=dang-game-that]', { timeout: 60000 }).catch(() => {});
   await page.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
   check('Upload .sb3 hợp lệ qua form thành công', /\/game\//.test(page.url()), page.url());
 
