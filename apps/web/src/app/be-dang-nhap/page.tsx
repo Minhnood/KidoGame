@@ -6,8 +6,20 @@ import { FormColumn, PageTitle } from '@/components/page';
 import { loginChildAction } from '@/lib/actions';
 import { getActor } from '@/lib/session';
 
-export default async function LoginChildPage() {
+export default async function LoginChildPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ten?: string }>;
+}) {
   if (await getActor()) redirect('/');
+
+  /*
+   * `?ten=` do nút "Cho bé đăng nhập trên máy này" ở trang bố mẹ gửi sang, để bé chỉ phải
+   * gõ mật khẩu. Chỉ nhận đúng dạng tên đăng nhập (cùng luật với `createChild`): link này
+   * ai cũng dựng được, và ô tên không nên điền sẵn thứ gì khác.
+   */
+  const ten = (await searchParams).ten ?? '';
+  const tenDienSan = /^[a-z0-9._-]{3,24}$/.test(ten) ? ten : undefined;
 
   return (
     <FormColumn>
@@ -24,6 +36,7 @@ export default async function LoginChildPage() {
             autoComplete="username"
             required
             placeholder="beminh"
+            defaultValue={tenDienSan}
             /* Điện thoại hay tự viết hoa chữ đầu và tự sửa chính tả -> tắt hết,
                không thì bé gõ "Beminh" và không đăng nhập được. */
             autoCapitalize="none"

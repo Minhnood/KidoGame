@@ -294,6 +294,31 @@ export async function createChildAction(_prev: FormState, form: FormData): Promi
   return state;
 }
 
+/**
+ * "Cho bé đăng nhập trên máy này": đăng xuất bố mẹ, mở trang bé đăng nhập với tên của bé
+ * điền sẵn.
+ *
+ * Có vì đi tay luồng phụ huynh mới trên điện thoại: tạo bé xong, bố mẹ đang cầm đúng cái
+ * máy bé sẽ dùng, mà trang không nói bé đăng nhập ở đâu — phải tự mò "Đăng xuất" rồi
+ * "Bé đăng nhập", rồi gõ lại tên vừa đặt.
+ *
+ * Bé không thuộc nhà này, hoặc đang bị khoá, thì KHÔNG đăng xuất ai cả: quay về trang bố
+ * mẹ. Nút không hiện với bé bị khoá; kiểm lại ở đây vì form gửi được từ một trang cũ.
+ */
+export async function choBeDangNhapAction(form: FormData): Promise<void> {
+  const actor = await getActor();
+  if (!actor || actor.kind !== 'parent') redirect('/dang-nhap');
+
+  const child = await prisma.child.findFirst({
+    where: { id: String(form.get('childId') ?? ''), parentId: actor.id, isLocked: false },
+    select: { username: true },
+  });
+  if (!child) redirect('/phu-huynh');
+
+  await destroySession();
+  redirect(`/be-dang-nhap?ten=${encodeURIComponent(child.username)}`);
+}
+
 export async function resetChildPasswordAction(
   _prev: FormState,
   form: FormData

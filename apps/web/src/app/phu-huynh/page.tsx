@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
-import { createChildAction } from '@/lib/actions';
+import { choBeDangNhapAction, createChildAction } from '@/lib/actions';
+import { Button } from '@/components/button';
 import { gameDangBiKhieuNai } from '@/lib/takedown';
 import { objectUrl } from '@/lib/storage';
 import { AuthForm } from '@/components/auth-form';
@@ -259,6 +260,17 @@ export default async function ParentDashboard({
                 </div>
                 <LockToggle childId={child.id} isLocked={child.isLocked} />
               </div>
+
+              {/* Bố mẹ vừa tạo bé thường đang cầm đúng cái máy bé sẽ dùng. Không hiện khi
+                  bé bị khoá: đăng xuất bố mẹ để rồi bé bị từ chối là mất cả hai. */}
+              {!child.isLocked && (
+                <form action={choBeDangNhapAction} data-testid="cho-be-dang-nhap" className="mt-3">
+                  <input type="hidden" name="childId" value={child.id} />
+                  <Button type="submit" variant="ghost">
+                    Cho bé đăng nhập trên máy này
+                  </Button>
+                </form>
+              )}
 
               <ResetPasswordForm childId={child.id} />
 
