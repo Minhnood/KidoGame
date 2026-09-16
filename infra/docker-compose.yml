@@ -107,6 +107,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_SECURE: ${SMTP_SECURE:-}
+      # Tài khoản DỰ PHÒNG, chỉ dùng khi tài khoản chính bị từ chối đăng nhập (535). Rỗng =
+      # không có dự phòng. Xem `docCauHinhSmtpDuPhong` trong src/lib/mail.ts.
+      SMTP_DU_PHONG_USER: ${SMTP_DU_PHONG_USER:-}
+      SMTP_DU_PHONG_PASS: ${SMTP_DU_PHONG_PASS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
       # Hiện trên /dieu-khoan và nhận mail yêu cầu gỡ bản quyền. KHÔNG dùng `:?`
@@ -298,6 +302,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_SECURE: ${SMTP_SECURE:-}
+      # Tài khoản DỰ PHÒNG, chỉ dùng khi tài khoản chính bị từ chối đăng nhập (535). Rỗng =
+      # không có dự phòng. Xem `docCauHinhSmtpDuPhong` trong src/lib/mail.ts.
+      SMTP_DU_PHONG_USER: ${SMTP_DU_PHONG_USER:-}
+      SMTP_DU_PHONG_PASS: ${SMTP_DU_PHONG_PASS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-KidoGame <no-reply@kidogame.vn>}
       # Địa chỉ NHẬN thư nhắc. Chưa khai thì bước nhắc từ chối gửi và nói rõ lý do,

@@ -453,10 +453,14 @@ async function chay(): Promise<KetQua[]> {
    * Đo ngày 15/9: App Password bị Google vô hiệu, cả production câm mà không gì kêu.
    */
   const mail = await kiemDuongGuiMail(true);
+  // `du-phong` và `du-phong-hong` là LO chứ không HỎNG: thư vẫn đi được. Thư báo động
+  // của hai mức này tới được người vận hành, qua đúng đường còn sống.
   ketQua.push(
     mail.muc === 'hong'
       ? hong('đường gửi mail', mail.noi)
-      : on('đường gửi mail', mail.muc === 'song' ? mail.noi : `BỎ QUA — ${mail.noi}`)
+      : mail.muc === 'du-phong' || mail.muc === 'du-phong-hong'
+        ? lo('đường gửi mail', mail.noi)
+        : on('đường gửi mail', mail.muc === 'song' ? mail.noi : `BỎ QUA — ${mail.noi}`)
   );
 
   // GLITCHTIP_NOI_BO rỗng khi web chưa có DSN — tức chưa ai gửi lỗi vào GlitchTip, nên

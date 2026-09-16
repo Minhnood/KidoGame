@@ -264,7 +264,8 @@ export default async function AdminTongQuanPage() {
   const mail = await mailP;
   /* Mail chết cũng là việc gấp: phụ huynh mới kẹt ở bước xác minh, và mọi thư báo động
      đi qua đúng đường đó — trang này là chỗ DUY NHẤT còn nói ra được. */
-  const khongCoViecGap = !coViecGap(viec) && nhomLoiChuaXuLy === 0 && mail.muc !== 'hong';
+  const khongCoViecGap =
+    !coViecGap(viec) && nhomLoiChuaXuLy === 0 && (mail.muc === 'song' || mail.muc === 'khong-kiem');
   const cuNhat = viec.cuNhat;
 
   /* --- Dữ liệu hai biểu đồ ------------------------------------------------- */
@@ -417,6 +418,29 @@ export default async function AdminTongQuanPage() {
             Gmail trả 535 thường là App Password đã bị thu hồi: tạo cái mới cho đúng tài khoản
             gửi rồi chạy <code>infra/doi-smtp-pass.sh --vps</code> trên máy Mac. Kết quả kiểm giữ
             10 phút.
+          </span>
+        </Notice>
+      )}
+      {mail.muc === 'du-phong' && (
+        <Notice tone="warn" role="status">
+          <span data-testid="tq-mail-du-phong">
+            <strong>Tài khoản gửi mail chính bị từ chối — thư đang đi bằng tài khoản dự phòng.</strong>{' '}
+            Phụ huynh vẫn nhận được thư, nhưng giờ không còn gì đỡ nếu dự phòng cũng chết.{' '}
+            <code>{mail.noi}</code>
+            <br />
+            Tạo App Password mới cho tài khoản chính rồi chạy <code>infra/doi-smtp-pass.sh --vps</code>.
+          </span>
+        </Notice>
+      )}
+      {mail.muc === 'du-phong-hong' && (
+        <Notice tone="warn" role="status">
+          <span data-testid="tq-mail-du-phong-hong">
+            <strong>Tài khoản gửi mail dự phòng không đăng nhập được.</strong> Thư vẫn đi bằng tài
+            khoản chính, nhưng lần tới tài khoản chính bị từ chối sẽ không có gì đỡ.{' '}
+            <code>{mail.noi}</code>
+            <br />
+            Tạo App Password mới cho tài khoản dự phòng rồi chạy{' '}
+            <code>infra/dat-smtp-du-phong.sh</code>.
           </span>
         </Notice>
       )}
