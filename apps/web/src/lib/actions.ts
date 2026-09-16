@@ -334,7 +334,7 @@ export async function resetChildPasswordAction(
 }
 
 export async function setChildLockedAction(_prev: FormState, form: FormData): Promise<FormState> {
-  return run(async () => {
+  const state = await run(async () => {
     const parentId = await requireParent();
     await setChildLocked(
       parentId,
@@ -342,6 +342,10 @@ export async function setChildLockedAction(_prev: FormState, form: FormData): Pr
       String(form.get('locked')) === 'true'
     );
   });
+  /* Thiếu thì khoá có hiệu lực mà nút vẫn "Tạm khoá tài khoản", không hiện "(đang khoá)"
+     — bố mẹ tưởng bấm hỏng, đúng ở nút an toàn. Cũng như tạo bé: chỉ khi thành công. */
+  if (state && 'ok' in state) revalidatePath('/phu-huynh');
+  return state;
 }
 
 /**

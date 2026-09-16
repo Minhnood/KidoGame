@@ -494,6 +494,16 @@ if (gameUrl) {
   await p.locator('button:has-text("Tạm khoá tài khoản")').first().click();
   await p.waitForTimeout(2500);
 
+  /* Không tải lại trang. Từng không đổi gì trên màn hình: khoá đã có hiệu lực ở server
+     nhưng nút vẫn "Tạm khoá tài khoản", không có "(đang khoá)" — trông như bấm hỏng, đúng
+     ở nút an toàn. `setChildLockedAction` thiếu `revalidatePath`. */
+  const theBe = p.locator(`#be-${CHILD_USER}`);
+  check(
+    'Bấm khoá thì thẻ của bé đổi ngay: nút "Mở khoá tài khoản" và "(đang khoá)", không cần tải lại',
+    (await theBe.locator('button:has-text("Mở khoá tài khoản")').count()) > 0 &&
+      (await theBe.locator('text=(đang khoá)').count()) > 0
+  );
+
   // Dùng lại đúng context của bé — phiên cũ phải mất hiệu lực NGAY.
   const childPage = await childCtx.newPage();
   await childPage.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
