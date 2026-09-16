@@ -275,7 +275,7 @@ async function requireParent(): Promise<string> {
 }
 
 export async function createChildAction(_prev: FormState, form: FormData): Promise<FormState> {
-  return run(async () => {
+  const state = await run(async () => {
     const parentId = await requireParent();
     const birthYearRaw = String(form.get('birthYear') ?? '').trim();
     await createChild({
@@ -286,6 +286,37 @@ export async function createChildAction(_prev: FormState, form: FormData): Promi
       birthYear: birthYearRaw ? Number(birthYearRaw) : null,
     });
   });
+  /* Thiếu dòng này thì tạo xong, danh sách phía trên vẫn "Chưa có bé nào" cho tới khi
+     bố mẹ tự tải lại trang — trên điện thoại gần như không ai nghĩ ra việc đó.
+     Chỉ khi THÀNH CÔNG: vẽ lại lúc lỗi thì form có thể bị thay bằng khối khác (vd. email
+     vừa mất xác minh) và thông báo lỗi biến theo form — e2e-auth đỏ đúng chỗ đó. */
+  if (state && 'ok' in state) revalidatePath('/phu-huynh');
+  return state;
+}
+
+/**
+ * "Cho bé đăng nhập trên máy này": đăng xuất bố mẹ, mở trang bé đăng nhập với tên của bé
+ * điền sẵn.
+ *
+ * Có vì đi tay luồng phụ huynh mới trên điện thoại: tạo bé xong, bố mẹ đang cầm đúng cái
+ * máy bé sẽ dùng, mà trang không nói bé đăng nhập ở đâu — phải tự mò "Đăng xuất" rồi
+ * "Bé đăng nhập", rồi gõ lại tên vừa đặt.
+ *
+ * Bé không thuộc nhà này, hoặc đang bị khoá, thì KHÔNG đăng xuất ai cả: quay về trang bố
+ * mẹ. Nút không hiện với bé bị khoá; kiểm lại ở đây vì form gửi được từ một trang cũ.
+ */
+export async function choBeDangNhapAction(form: FormData): Promise<void> {
+  const actor = await getActor();
+  if (!actor || actor.kind !== 'parent') redirect('/dang-nhap');
+
+  const child = await prisma.child.findFirst({
+    where: { id: String(form.get('childId') ?? ''), parentId: actor.id, isLocked: false },
+    select: { username: true },
+  });
+  if (!child) redirect('/phu-huynh');
+
+  await destroySession();
+  redirect(`/be-dang-nhap?ten=${encodeURIComponent(child.username)}`);
 }
 
 export async function resetChildPasswordAction(
@@ -303,7 +334,7 @@ export async function resetChildPasswordAction(
 }
 
 export async function setChildLockedAction(_prev: FormState, form: FormData): Promise<FormState> {
-  return run(async () => {
+  const state = await run(async () => {
     const parentId = await requireParent();
     await setChildLocked(
       parentId,
@@ -311,6 +342,10 @@ export async function setChildLockedAction(_prev: FormState, form: FormData): Pr
       String(form.get('locked')) === 'true'
     );
   });
+  /* Thiếu thì khoá có hiệu lực mà nút vẫn "Tạm khoá tài khoản", không hiện "(đang khoá)"
+     — bố mẹ tưởng bấm hỏng, đúng ở nút an toàn. Cũng như tạo bé: chỉ khi thành công. */
+  if (state && 'ok' in state) revalidatePath('/phu-huynh');
+  return state;
 }
 
 /**

@@ -202,11 +202,18 @@ const parentCtx = await newSession();
   await p.fill('#username', CHILD_USER);
   await p.fill('#password', CHILD_PASS);
   await p.click('[data-testid=auth-form] button[type=submit]');
-  await p.waitForTimeout(2500);
-  await p.reload({ waitUntil: 'networkidle' });
+  /*
+   * KHÔNG tải lại trang. Bản cũ `reload()` rồi mới tìm bé, nên xanh suốt trong khi trên
+   * màn hình thật bé vừa tạo không hiện: thông báo "Đã tạo" nằm dưới form, còn phía trên
+   * vẫn "Chưa có bé nào" — vì `createChildAction` thiếu `revalidatePath`. Đi tay trên
+   * iPhone mới thấy, và trên điện thoại "tải lại trang" không phải việc bố mẹ tự nghĩ ra.
+   */
+  await p.waitForSelector('[data-testid=auth-form] [role=status]', { timeout: 15000 }).catch(() => {});
+  await p.waitForTimeout(500);
   check(
-    'Tạo được tài khoản cho bé',
-    (await p.locator(`text=${CHILD_USER}`).count()) > 0,
+    'Tạo được tài khoản cho bé — thẻ của bé hiện ngay, không cần tải lại trang',
+    (await p.locator(`#be-${CHILD_USER}`).count()) > 0 &&
+      (await p.locator('text=Chưa có bé nào').count()) === 0,
     CHILD_USER
   );
 
@@ -487,6 +494,16 @@ if (gameUrl) {
   await p.locator('button:has-text("Tạm khoá tài khoản")').first().click();
   await p.waitForTimeout(2500);
 
+  /* Không tải lại trang. Từng không đổi gì trên màn hình: khoá đã có hiệu lực ở server
+     nhưng nút vẫn "Tạm khoá tài khoản", không có "(đang khoá)" — trông như bấm hỏng, đúng
+     ở nút an toàn. `setChildLockedAction` thiếu `revalidatePath`. */
+  const theBe = p.locator(`#be-${CHILD_USER}`);
+  check(
+    'Bấm khoá thì thẻ của bé đổi ngay: nút "Mở khoá tài khoản" và "(đang khoá)", không cần tải lại',
+    (await theBe.locator('button:has-text("Mở khoá tài khoản")').count()) > 0 &&
+      (await theBe.locator('text=(đang khoá)').count()) > 0
+  );
+
   // Dùng lại đúng context của bé — phiên cũ phải mất hiệu lực NGAY.
   const childPage = await childCtx.newPage();
   await childPage.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
@@ -495,6 +512,113 @@ if (gameUrl) {
     /be-dang-nhap/.test(childPage.url()),
     childPage.url()
   );
+}
+
+/*
+ * ---------- Bố mẹ đưa điện thoại cho bé: "Cho bé đăng nhập trên máy này" ----------
+ *
+ * Đi tay luồng phụ huynh mới ở khổ iPhone: tạo bé xong, trang bố mẹ không nói bé đăng
+ * nhập ở đâu. Bố mẹ phải tự mò "Đăng xuất" rồi "Bé đăng nhập", rồi gõ lại tên đăng nhập
+ * vừa đặt. Nút này làm cả ba việc trong một cú chạm.
+ *
+ * Để CUỐI bộ: nút huỷ phiên của bố mẹ, mà các phần trên còn dùng `parentCtx`.
+ */
+{
+  const p = await parentCtx.newPage();
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  const nutTrongThe = () => p.locator(`#be-${CHILD_USER} [data-testid=cho-be-dang-nhap]`);
+
+  // Phần trên vừa khoá bé (khi có game). Bé bị khoá thì có vào cũng bị từ chối.
+  if (gameUrl) {
+    check('Bé đang khoá: KHÔNG có nút cho bé đăng nhập', (await nutTrongThe().count()) === 0);
+    await p.locator(`#be-${CHILD_USER} button:has-text("Mở khoá tài khoản")`).click();
+    await p.waitForSelector(`#be-${CHILD_USER} button:has-text("Tạm khoá tài khoản")`, { timeout: 15000 }).catch(() => {});
+  }
+
+  /* Server phải tự kiểm "bé đang khoá", không dựa vào việc nút bị ẩn: trang `p` còn mở
+     nút từ lúc bé chưa khoá, tab khác khoá bé, rồi bấm nút cũ. Không được đăng xuất bố mẹ. */
+  await p.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  if ((await nutTrongThe().count()) > 0) {
+    const tabKhac = await parentCtx.newPage();
+    await tabKhac.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+    await tabKhac.locator(`#be-${CHILD_USER} button:has-text("Tạm khoá tài khoản")`).click();
+    await tabKhac.waitForSelector(`#be-${CHILD_USER} button:has-text("Mở khoá tài khoản")`, { timeout: 15000 }).catch(() => {});
+
+    await nutTrongThe().locator('button').click();
+    await p.waitForLoadState('networkidle').catch(() => {});
+    await p.waitForTimeout(1000);
+    const conDangNhap = await (async () => {
+      const t = await parentCtx.newPage();
+      await t.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+      const ok = /\/phu-huynh/.test(t.url());
+      await t.close();
+      return ok;
+    })();
+    check(
+      'Bấm nút cũ sau khi bé vừa bị khoá: server từ chối, bố mẹ KHÔNG bị đăng xuất',
+      !/be-dang-nhap/.test(p.url()) && conDangNhap,
+      `${p.url()} · phiên bố mẹ ${conDangNhap ? 'còn' : 'MẤT'}`
+    );
+
+    // Mở lại trang trước khi bấm: đừng để phần dọn dẹp phụ thuộc vào nút đổi chữ tại chỗ.
+    await tabKhac.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+    const moKhoa = tabKhac.locator(`#be-${CHILD_USER} button:has-text("Mở khoá tài khoản")`);
+    if ((await moKhoa.count()) > 0) {
+      await moKhoa.click();
+      await tabKhac.waitForTimeout(2500);
+    }
+    await tabKhac.close();
+  } else {
+    check('Bấm nút cũ sau khi bé vừa bị khoá: server từ chối, bố mẹ KHÔNG bị đăng xuất', false, 'không có nút để thử');
+  }
+  await p.close();
+
+  const dt = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await dt.addCookies(await parentCtx.cookies());
+  const pd = await dt.newPage();
+  await pd.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  const nut = pd.locator(`#be-${CHILD_USER} [data-testid=cho-be-dang-nhap] button`);
+  const hop = (await nut.count()) ? await nut.boundingBox() : null;
+  check(
+    '390px: thẻ của bé có nút "Cho bé đăng nhập trên máy này", cao đủ tầm tay',
+    hop !== null && hop.height >= 44,
+    hop ? `cao ${Math.round(hop.height)}px` : 'không có nút'
+  );
+
+  if (hop) {
+    await nut.tap();
+    await pd.waitForURL(/be-dang-nhap/, { timeout: 15000 }).catch(() => {});
+  }
+  check('Chạm nút thì sang trang bé đăng nhập', /\/be-dang-nhap/.test(pd.url()), pd.url());
+  const tenDien = (await pd.locator('#username').count()) ? await pd.inputValue('#username') : '(không có ô)';
+  check('… tên đăng nhập của bé đã điền sẵn', tenDien === CHILD_USER, tenDien);
+
+  /* Phiên bố mẹ phải CHẾT thật ở server, không chỉ mất cookie ở máy này: dùng
+     `parentCtx`, context vẫn còn giữ cookie cũ. */
+  const pc = await parentCtx.newPage();
+  await pc.goto(`${APP}/phu-huynh`, { waitUntil: 'networkidle' });
+  check('… và phiên của bố mẹ đã huỷ ở server (cookie cũ không vào được /phu-huynh)', /\/dang-nhap/.test(pc.url()), pc.url());
+  await pc.close();
+
+  if ((await pd.locator('#password').count()) > 0) {
+    await pd.locator('#password').tap();
+    await pd.keyboard.type(CHILD_PASS);
+    await pd.locator('[data-testid=auth-form] button[type=submit]').tap();
+    await pd.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
+  }
+  check(
+    '… bé chỉ gõ mật khẩu là vào, thanh trên có "Đăng game"',
+    !/be-dang-nhap/.test(pd.url()) && (await pd.locator('header a[href="/upload"]').count()) > 0,
+    pd.url()
+  );
+
+  // `?ten=` chỉ nhận đúng dạng tên đăng nhập; thứ khác thì ô để trống.
+  const lạ = await dt.newPage();
+  await dt.clearCookies();
+  await lạ.goto(`${APP}/be-dang-nhap?ten=${encodeURIComponent('"><b>x</b>')}`, { waitUntil: 'networkidle' });
+  const giaTriLa = (await lạ.locator('#username').count()) ? await lạ.inputValue('#username') : '(không có ô)';
+  check('?ten= sai dạng tên đăng nhập thì ô để trống', giaTriLa === '', JSON.stringify(giaTriLa));
+  await dt.close();
 }
 
 await browser.close();
