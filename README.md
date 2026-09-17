@@ -66,7 +66,7 @@ export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 92 kiểm tra
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 53
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 57
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 77
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 53, cần >24 game
@@ -74,7 +74,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-nhac-viec.mjs      # 50, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 36, DỌN THẬT
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-an-vs-xoa.mjs      # 39, DỌN THẬT
 node infra/e2e-bieu-do.mjs                                         # 21, không cần gì thêm
 node infra/e2e-bao-loi.mjs                                         # 30, cần psql
 node infra/e2e-touch.mjs                                           # 14, tự dựng game có phím
@@ -82,11 +82,12 @@ node infra/e2e-errorlog.mjs                                        # 40, không 
 node infra/e2e-glitchtip.mjs                                       # 26, chạy lại cách 60 giây
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 49, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
+node infra/e2e-bia-hong.mjs                                        # 13, cần psql + tài khoản demo
 node infra/contrast-check.mjs                                      # 160 phép đo màu
 node infra/a11y-check.mjs                                          # 27
 ```

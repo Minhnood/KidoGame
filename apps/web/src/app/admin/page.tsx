@@ -13,6 +13,7 @@ import {
 import { reasonLabel } from '@/lib/report-reasons';
 import { objectUrl } from '@/lib/storage';
 import { EmptyState, PageTitle } from '@/components/page';
+import { AnhBia } from '@/components/anh-bia';
 import { Notice } from '@/components/notice';
 import { MAT_THE } from '@/components/card';
 import { slaDueAt } from '@/lib/operator';
@@ -472,10 +473,9 @@ export default async function AdminPage({
                   việc nhìn bìa và tên game trong cùng một tia mắt — việc chính của
                   người trực khi lướt hàng chờ.
                 */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <AnhBia
                   src={objectUrl('thumb', game.thumbSha256)}
-                  alt=""
+                  ten={game.title}
                   loading="lazy"
                   width={160}
                   height={120}
