@@ -190,15 +190,17 @@ export interface GameCardData {
   /** Nhãn loại game, ví dụ "Giải đố". Thẻ chỉ hiện CÁI ĐẦU TIÊN — xem `NhanLoai`. */
   tagLabels?: string[];
   /**
-   * TỔNG số icon đã thả, gộp cả năm loại. Bỏ trống hoặc 0 thì viên thuốc không hiện.
+   * TỔNG số icon đã thả, gộp cả năm loại. LUÔN hiện, kể cả 0.
    *
    * Tổng chứ không tách từng loại: thẻ game to bằng ngón tay cái, năm con số nhỏ trên
    * đó không đọc được và cũng không ai cần đọc ở đây — muốn biết bạn bè thả gì thì vào
    * trang game. Ở danh sách, câu hỏi duy nhất là "cái này có được yêu thích không".
    *
-   * KHÔNG hiện số 0. Một dãy thẻ mà thẻ nào cũng đeo "❤️ 0" đọc lên là một bảng xếp
-   * hạng những game không ai thích — với trang mà mỗi thẻ là công của một đứa trẻ thì
-   * đó là thứ tệ hơn hẳn việc không hiện gì.
+   * TỪNG ẩn ở 0, với lý lẽ: một dãy thẻ mà thẻ nào cũng đeo "❤ 0" đọc lên là bảng xếp
+   * hạng những game không ai thích, mà mỗi thẻ ở đây là công của một đứa trẻ. Fen nhìn
+   * thẻ thật của một game mới và chốt ngược lại: chỗ đó trông trống, và "❤ 0" nói thẳng
+   * rằng game này CÓ chỗ để thả icon, chưa ai thả. Đánh đổi vẫn còn đó, đừng đảo lại mà
+   * không hỏi fen.
    */
   reactionCount?: number;
 }
@@ -386,12 +388,15 @@ export function GameCard({ game }: { game: GameCardData }) {
               <TamGiac className="size-2.5" />
               {game.playCount}
             </span>
-            {(game.reactionCount ?? 0) > 0 && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-chrome px-2 py-0.5 text-xs font-bold text-chrome-ink shadow-sm"
-                data-testid="the-so-icon"
-                aria-label={`${game.reactionCount} bạn đã thả icon`}
-              >
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-chrome px-2 py-0.5 text-xs font-bold text-chrome-ink shadow-sm"
+              data-testid="the-so-icon"
+              aria-label={
+                (game.reactionCount ?? 0) === 0
+                  ? 'Chưa bạn nào thả icon'
+                  : `${game.reactionCount} bạn đã thả icon`
+              }
+            >
                 {/*
                   `❤` (U+2764) TRẦN, cố ý không kèm U+FE0F.
 
@@ -407,10 +412,9 @@ export function GameCard({ game }: { game: GameCardData }) {
                   `aria-hidden` vì câu đọc cho trình đọc màn hình nằm ở `aria-label`
                   của cả viên thuốc — không thì nó đọc "trái tim hai" cụt lủn.
                 */}
-                <span aria-hidden="true">❤</span>
-                {game.reactionCount}
-              </span>
-            )}
+              <span aria-hidden="true">❤</span>
+              {game.reactionCount ?? 0}
+            </span>
           </span>
 
           <NhanLoai labels={game.tagLabels} />
