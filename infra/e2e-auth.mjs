@@ -618,6 +618,65 @@ if (gameUrl) {
   await lạ.goto(`${APP}/be-dang-nhap?ten=${encodeURIComponent('"><b>x</b>')}`, { waitUntil: 'networkidle' });
   const giaTriLa = (await lạ.locator('#username').count()) ? await lạ.inputValue('#username') : '(không có ô)';
   check('?ten= sai dạng tên đăng nhập thì ô để trống', giaTriLa === '', JSON.stringify(giaTriLa));
+
+  /*
+   * Ô TÊN ĐIỀN SẴN, khi bé không để yên nó.
+   *
+   * Bé chưa chắc biết ô đã có tên: chạm vào rồi gõ tên mình. Trước đây con trỏ đặt ở cuối
+   * nên tên nối thành `beminhbeminh` và báo sai. Tệ hơn, sau khi báo lỗi form bị React
+   * reset về `defaultValue` — tức lại đúng tên điền sẵn — và `AuthForm` chỉ trả lại chữ
+   * đã gõ vào ô TRỐNG, nên bé nhìn thấy một cái tên đúng cạnh câu "sai tên hoặc mật
+   * khẩu" và không có cách nào hiểu vì sao.
+   */
+  const goLai = await dt.newPage();
+  await goLai.goto(`${APP}/be-dang-nhap?ten=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  if ((await goLai.locator('#username').count()) > 0) {
+    await goLai.locator('#username').tap();
+    await goLai.keyboard.type(CHILD_USER);
+  }
+  const sauKhiCham = (await goLai.locator('#username').count()) ? await goLai.inputValue('#username') : '(không có ô)';
+  check('Chạm vào ô tên điền sẵn rồi gõ lại tên mình: tên KHÔNG bị lặp', sauKhiCham === CHILD_USER, JSON.stringify(sauKhiCham));
+
+  /* Cùng chuyện đó bằng chuột, trên máy tính: nhấp chuột đặt con trỏ khác chạm ngón tay. */
+  const mayTinh = await browser.newContext();
+  const goChuot = await mayTinh.newPage();
+  await goChuot.goto(`${APP}/be-dang-nhap?ten=${CHILD_USER}`, { waitUntil: 'networkidle' });
+  if ((await goChuot.locator('#username').count()) > 0) {
+    await goChuot.locator('#username').click();
+    await goChuot.keyboard.type(CHILD_USER);
+  }
+  const sauKhiNhap = (await goChuot.locator('#username').count()) ? await goChuot.inputValue('#username') : '(không có ô)';
+  check('… và bằng chuột trên máy tính cũng không lặp', sauKhiNhap === CHILD_USER, JSON.stringify(sauKhiNhap));
+
+  /* Bé cố ý sửa tên thành tên khác thì vẫn sửa được — chọn hết không được biến ô thành
+     ô chỉ-đọc. Lần chạm THỨ HAI phải đặt được con trỏ như bình thường. */
+  /* Không dùng phím End: trên macOS nó không đưa con trỏ về cuối ô. Đo đúng điều cần
+     đo — chữ gõ thêm được CHÈN vào tên, không thay cả tên. */
+  await goChuot.locator('#username').click().catch(() => {});
+  await goChuot.keyboard.type('x').catch(() => {});
+  const suaTiep = await goChuot.inputValue('#username').catch(() => '');
+  check(
+    '… nhưng lần nhấp thứ hai đặt con trỏ như ô thường (chữ gõ thêm được chèn, không thay cả tên)',
+    suaTiep.length === CHILD_USER.length + 1 && suaTiep.replace('x', '') === CHILD_USER,
+    JSON.stringify(suaTiep)
+  );
+  await mayTinh.close();
+
+  const TEN_GO_NHAM = `${CHILD_USER}nham`;
+  if ((await goLai.locator('#username').count()) > 0) {
+    await goLai.fill('#username', TEN_GO_NHAM);
+    await goLai.locator('#password').tap();
+    await goLai.keyboard.type('khong-phai-mat-khau');
+    await goLai.locator('[data-testid=auth-form] button[type=submit]').tap();
+    await goLai.waitForSelector('[data-testid=auth-form] [role=alert]', { timeout: 15000 }).catch(() => {});
+    await goLai.waitForTimeout(300);
+  }
+  const sauLoi = (await goLai.locator('#username').count()) ? await goLai.inputValue('#username') : '(không có ô)';
+  check(
+    'Báo lỗi xong, ô tên hiện ĐÚNG chữ bé vừa gõ, không nhảy về tên điền sẵn',
+    (await goLai.locator('[data-testid=auth-form] [role=alert]').count()) > 0 && sauLoi === TEN_GO_NHAM,
+    JSON.stringify(sauLoi)
+  );
   await dt.close();
 }
 

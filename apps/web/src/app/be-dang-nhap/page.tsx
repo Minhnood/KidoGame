@@ -5,6 +5,7 @@ import { Field, TextInput } from '@/components/field';
 import { FormColumn, PageTitle } from '@/components/page';
 import { loginChildAction } from '@/lib/actions';
 import { getActor } from '@/lib/session';
+import { OTenBe } from './o-ten-be';
 
 export default async function LoginChildPage({
   searchParams,
@@ -30,19 +31,7 @@ export default async function LoginChildPage({
 
       <AuthForm action={loginChildAction} submitLabel="Vào chơi" busyLabel="Đang vào…">
         <Field id="username" label="Tên đăng nhập của bé">
-          <TextInput
-            id="username"
-            name="username"
-            autoComplete="username"
-            required
-            placeholder="beminh"
-            defaultValue={tenDienSan}
-            /* Điện thoại hay tự viết hoa chữ đầu và tự sửa chính tả -> tắt hết,
-               không thì bé gõ "Beminh" và không đăng nhập được. */
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
+          <OTenBe tenDienSan={tenDienSan} />
         </Field>
         <Field id="password" label="Mật khẩu">
           <TextInput
