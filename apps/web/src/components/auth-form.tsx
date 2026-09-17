@@ -120,10 +120,19 @@ export function AuthForm({
     for (const el of form.elements) {
       if (!laOTraLaiDuoc(el)) continue;
       const cu = daGo.current.get(el.name);
-      /* Chỉ điền vào ô ĐANG TRỐNG. Nếu React không reset ô đó, hoặc người dùng đã
-       * gõ lại nhanh hơn effect này, thì thứ trên màn hình mới là thứ đúng — đè lên
-       * là tự tạo ra một lỗi khó hiểu hơn lỗi đang chữa. */
-      if (cu !== undefined && cu !== '' && el.value === '') el.value = cu;
+      /* Chỉ điền vào ô VỪA BỊ RESET: trống, hoặc về đúng `defaultValue` của nó. Nếu
+       * React không reset ô đó, hoặc người dùng đã gõ lại nhanh hơn effect này, thì
+       * thứ trên màn hình mới là thứ đúng — đè lên là tự tạo ra một lỗi khó hiểu hơn
+       * lỗi đang chữa.
+       *
+       * Vế `defaultValue` cho ô ĐIỀN SẴN (tên bé ở `/be-dang-nhap?ten=`). Reset đưa ô
+       * đó về tên điền sẵn chứ không về rỗng, nên bản chỉ-ô-trống bỏ qua nó: bé gõ
+       * nhầm tên, bị báo sai, rồi thấy trong ô một cái tên ĐÚNG — không cách nào hiểu
+       * vì sao sai. Không đè nhầm chữ người dùng vừa gõ lại: `onInput` ghi mọi lần gõ,
+       * nên nếu họ đã gõ sau khi reset thì `cu` đã chính là thứ đang trên màn hình. */
+      const vuaReset =
+        el.value === '' || (el instanceof HTMLInputElement && el.value === el.defaultValue);
+      if (cu !== undefined && cu !== '' && vuaReset) el.value = cu;
     }
   }, [state]);
 
