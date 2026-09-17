@@ -32,8 +32,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { batBuocMailLog, choMailToi, taoBoBamLink } from './e2e-mail.mjs';
-import { zip } from './e2e-zip.mjs';
-import { createHash } from 'node:crypto';
+import { dungSb3 } from './e2e-zip.mjs';
 import { createRequire } from 'node:module';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
@@ -72,40 +71,6 @@ if (!FIXTURE_GOC) {
  */
 const FIXTURE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kg-xem-thu-')), 'game.sb3');
 fs.copyFileSync(FIXTURE_GOC, FIXTURE);
-
-/*
- * Game NHIỀU BÌA: 2 cảnh nền, 3 nhân vật khác màu. File mẫu chung chỉ có một nhân vật
- * và một cảnh nền, nên với nó phần chọn bìa không có gì để chọn.
- */
-/** Dựng một .sb3: mỗi màu trong `nenMau` là một cảnh nền, mỗi màu trong `nvMau` một nhân vật. */
-function dungSb3(ra, nenMau, nvMau) {
-  const hinh = (noiDung) => {
-    const data = Buffer.from(noiDung, 'utf8');
-    const id = createHash('md5').update(data).digest('hex');
-    return { data, costume: { name: id, bitmapResolution: 1, dataFormat: 'svg', assetId: id, md5ext: `${id}.svg`, rotationCenterX: 24, rotationCenterY: 24 } };
-  };
-  const nen = nenMau.map((m) => hinh(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"><rect width="480" height="360" fill="${m}"/></svg>`));
-  const nv = nvMau.map((m) => hinh(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><circle cx="24" cy="24" r="20" fill="${m}"/></svg>`));
-  const chung = { variables: {}, lists: {}, broadcasts: {}, blocks: {}, comments: {}, currentCostume: 0, sounds: [], volume: 100 };
-  const project = {
-    targets: [
-      { ...chung, isStage: true, name: 'Stage', costumes: nen.map((h) => h.costume), layerOrder: 0, tempo: 60, videoTransparency: 50, videoState: 'off', textToSpeechLanguage: null },
-      ...nv.map((h, i) => ({ ...chung, isStage: false, name: `Nhan vat ${i}`, costumes: [h.costume], layerOrder: i + 1, visible: true, x: 0, y: 0, size: 100, direction: 90, draggable: false, rotationStyle: 'all around' })),
-    ],
-    monitors: [],
-    extensions: [],
-    meta: { semver: '3.0.0', vm: '2.3.0', agent: 'KidoGame e2e-xem-thu' },
-  };
-  const tenHinh = new Set();
-  const files = [{ ten: 'project.json', data: Buffer.from(JSON.stringify(project), 'utf8') }];
-  for (const h of [...nen, ...nv]) {
-    if (tenHinh.has(h.costume.md5ext)) continue;
-    tenHinh.add(h.costume.md5ext);
-    files.push({ ten: h.costume.md5ext, data: h.data });
-  }
-  fs.writeFileSync(ra, zip(files));
-  return ra;
-}
 
 /*
  * Game NHIỀU BÌA: 2 cảnh nền, 3 nhân vật khác màu. File mẫu chung chỉ có một nhân vật
