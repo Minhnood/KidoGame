@@ -24,6 +24,24 @@
 {$APP_DOMAIN:app.kidogame.vn} {
 	encode zstd gzip
 
+	# TRẦN BODY — body lớn CHỈ cho hai đường nhận file, mọi đường khác tối đa 1MB.
+	#
+	# Middleware của Next đọc cả body của MỌI request vào bộ nhớ, tới
+	# `middlewareClientMaxBodySize` (55MB, next.config.ts). Không chặn ở đây thì ai cũng
+	# bắt được server giữ 55MB cho mỗi request tới bất kỳ đường nào. Hai đường upload cần
+	# 55MB vì game .sb3 được tới 50MB (`LIMITS.MAX_SB3_BYTES`) cộng vỏ multipart; form lớn
+	# nhất còn lại của app là ô chữ 2.000 ký tự, và `/api/upload/dang` chỉ gửi JSON.
+	# Vượt trần thì Caddy trả 413 trước khi request tới app.
+	# `caddy-config-check` đối chiếu các con số này với app.
+	@nhanFile path /api/upload /api/upload/bia
+	request_body @nhanFile {
+		max_size 55MB
+	}
+	@khongNhanFile not path /api/upload /api/upload/bia
+	request_body @khongNhanFile {
+		max_size 1MB
+	}
+
 	# UMAMI — CHỈ HAI ĐƯỜNG, và đó là cả điểm của khối này.
 	#
 	# Thẻ script trong layout tải `/_stats/script.js` và gửi lượt xem về
@@ -108,6 +126,11 @@
 # ---------------------------------------------------------------------------
 {$ADMIN_DOMAIN:admin.kidogame.vn} {
 	encode zstd gzip
+
+	# Khu quản trị không nhận file nào. Cùng lý do trần body như app domain.
+	request_body {
+		max_size 1MB
+	}
 
 	reverse_proxy web:3000 {
 		# Cùng lý lẽ ghi đè như app domain: Caddy là hop duy nhất trước app, nên

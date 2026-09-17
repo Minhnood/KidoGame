@@ -146,6 +146,26 @@ const child1Ctx = await newSession();
   await c.close();
 }
 
+/*
+ * VIÊN "❤ số" TRÊN THẺ Ở TRANG CHỦ, kể cả khi chưa ai thả.
+ *
+ * Trước đây viên này bị ẩn ở 0, với lý lẽ "một dãy thẻ toàn ❤ 0 đọc như bảng xếp hạng
+ * game không ai thích". Fen nhìn thẻ thật và thấy chỗ đó trống, chốt luôn hiện. Phép
+ * kiểm này giữ cả hai đầu: 0 vẫn hiện, và con số đi theo số lượt thật.
+ */
+const vienIcon = async (p) => {
+  /* Khoanh theo LINK của đúng game này: thẻ không mang id nào khác để bám. */
+  const v = p.locator(`[data-testid=game-card][href="/game/${GAME_ID}"] [data-testid=the-so-icon]`);
+  return (await v.count()) === 0 ? '(không có viên)' : (await v.innerText()).replace(/\s+/g, ' ').trim();
+};
+{
+  const ctx = await newSession();
+  const p = await ctx.newPage();
+  await p.goto(`${APP}/`, { waitUntil: 'networkidle' });
+  check('Thẻ game chưa ai thả icon VẪN hiện viên "❤ 0"', (await vienIcon(p)) === '❤ 0', await vienIcon(p));
+  await ctx.close();
+}
+
 // ---------- Khách chưa đăng nhập ----------
 {
   const ctx = await newSession();
@@ -504,6 +524,9 @@ const child2Ctx = await newSession();
     'Số trên màn hình lên 2',
     (await c.locator('[data-testid=icon-tim]').innerText()).includes('2')
   );
+
+  await c.goto(`${APP}/`, { waitUntil: 'networkidle' });
+  check('Thẻ ở trang chủ đếm đúng số icon đã thả', (await vienIcon(c)) === '❤ 2', await vienIcon(c));
   await c.close();
 }
 

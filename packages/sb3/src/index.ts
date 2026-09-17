@@ -10,7 +10,15 @@ export type {
 export { packageToHtml, runtimePath } from './package.js';
 export type { PackagedHtml, PackagedRuntime, PackageOptions } from './package.js';
 
-export { renderThumbnail, THUMB_WIDTH, THUMB_HEIGHT } from './thumbnail.js';
+export {
+  renderThumbnail,
+  renderCoverOptions,
+  normalizeCoverImage,
+  MAX_COVER_OPTIONS,
+  MAX_COVER_IMAGE_BYTES,
+  THUMB_WIDTH,
+  THUMB_HEIGHT,
+} from './thumbnail.js';
 
 export { detectTouchKeys } from './keys.js';
 export type { TouchKey } from './keys.js';

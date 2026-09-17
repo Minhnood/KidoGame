@@ -457,8 +457,9 @@ export default async function AdminTongQuanPage() {
       {sapXoa + quaHanXoa > 0 && (
         <Notice tone="warn" role="status">
           <strong>{sapXoa + quaHanXoa} game đã gỡ sắp bị xoá hẳn.</strong> Sau hạn đó thì hàng
-          dữ liệu, bản đã đóng gói, ảnh bìa và file <code>.sb3</code> gốc của bé đều đi hẳn —
-          nút &quot;Cho hiện lại&quot; không còn gì để hiện lại.
+          dữ liệu, bản đã đóng gói, ảnh bìa và file <code>.sb3</code> gốc của bé đều đi hẳn (trừ
+          file còn game khác cùng .sb3 dùng chung) — nút &quot;Cho hiện lại&quot; không còn gì để
+          hiện lại.
         </Notice>
       )}
       {/*

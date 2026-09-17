@@ -145,13 +145,14 @@ export default function TermsPage() {
           Người cần thu hồi nội dung thật thường là phụ huynh phát hiện game để lộ gì đó
           về con mình. Họ phải biết ranh giới này trước khi bấm, không phải sau.
 
-          MỆNH ĐỀ "nếu không còn game nào khác dùng đúng file đó" KHÔNG phải rào chữ:
-          storage địa chỉ hoá theo nội dung, nên hai game dựng từ cùng một .sb3 dùng
-          CHUNG cả file gốc lẫn ảnh bìa — đo trên dữ liệu thật: tám game cho ra tám mã
-          HTML khác nhau (HTML mang tên game) nhưng chỉ sáu mã .sb3, hai cặp trùng. Bản
-          đã đóng gói thì luôn mất, vì mã của nó là riêng. Bỏ mệnh đề ấy đi là hứa một
-          việc mà cơ chế không làm — và không làm ĐÚNG, vì xoá file theo mã nội dung là
-          xoá mất bản gốc của game khác.
+          MỆNH ĐỀ "nếu không còn game nào khác dùng đúng file đó" KHÔNG phải rào chữ, và
+          nó phủ CẢ BA file: storage địa chỉ hoá theo nội dung, nên hai game dựng từ cùng
+          một .sb3 dùng CHUNG file gốc, ảnh bìa, và cả bản đã đóng gói. Câu này từng để
+          bản đã đóng gói NGOÀI mệnh đề ("luôn mất, vì mã của nó là riêng") — đúng khi HTML
+          còn mang tên game. Từ khi HTML đóng gói lúc xem thử, trước khi bé đặt tên, nó mang
+          tên chung và trùng mã với mọi game cùng .sb3; `e2e-an-vs-xoa` đo ra HTML vẫn trả
+          200 sau khi xoá hẳn. Bỏ mệnh đề ấy đi là hứa một việc mà cơ chế không làm — và
+          không làm ĐÚNG, vì xoá file theo mã nội dung là xoá mất bản của game khác.
         */}
         <p>
           <strong>“Ẩn” và “xoá hẳn” không giống nhau, và đây là chỗ nên đọc kỹ.</strong> Ẩn là
@@ -159,10 +160,11 @@ export default function TermsPage() {
           Nhưng file game đã đóng gói được phục vụ theo mã nội dung, nên{' '}
           <em>ai đang giữ sẵn link tới đúng file đó vẫn mở được</em>. Muốn nội dung không còn
           trên mạng nữa thì bố mẹ bấm <strong>Xoá hẳn</strong> ở trang của bố mẹ: game rời trang
-          ngay, và sau {NGAY_GIU_GAME_DA_GO} ngày chúng tôi xoá thật bản đã đóng gói — không ai
-          mở được nữa, kể cả bằng link cũ — cùng ảnh bìa và file <code>.sb3</code> gốc, nếu
-          không còn game nào khác dùng đúng file đó. Ngay lúc bấm, bố mẹ nhận một email kèm link
-          tải bản gốc để kịp giữ lại công của bé.
+          ngay, và sau {NGAY_GIU_GAME_DA_GO} ngày chúng tôi xoá thật bản đã đóng gói, ảnh bìa và
+          file <code>.sb3</code> gốc — không ai mở được nữa, kể cả bằng link cũ — nếu không còn
+          game nào khác dùng đúng file đó (ví dụ khi hai game được đăng từ cùng một file{' '}
+          <code>.sb3</code>). Ngay lúc bấm, bố mẹ nhận một email kèm link tải bản gốc để
+          kịp giữ lại công của bé.
         </p>
       </Section>
 
@@ -266,10 +268,11 @@ export default function TermsPage() {
         <p>
           <strong>Khi một game bị gỡ hẳn:</strong> chúng tôi giữ lại {NGAY_GIU_GAME_DA_GO} ngày
           rồi xoá thật — hàng dữ liệu, bản đã đóng gói, ảnh bìa, và cả file <code>.sb3</code> gốc
-          của bé. Ngay lúc gỡ, bố mẹ nhận một email nói rõ ngày đó, để công của bé không mất theo
-          một quyết định của chúng tôi. Với game bị gỡ theo quyết định kiểm duyệt, thư kèm luôn
-          link tải lại file gốc; với game bị gỡ vì khiếu nại bản quyền thì bố mẹ trả lời thư để
-          lấy lại, vì lúc ấy chính nội dung đó đang có tranh chấp.
+          của bé, trừ file nào còn được một game khác dùng đúng y hệt. Ngay lúc gỡ, bố mẹ nhận một
+          email nói rõ ngày đó, để công của bé không mất theo một quyết định của chúng tôi. Với
+          game bị gỡ theo quyết định kiểm duyệt, thư kèm luôn link tải lại file gốc; với game bị
+          gỡ vì khiếu nại bản quyền thì bố mẹ trả lời thư để lấy lại, vì lúc ấy chính nội dung đó
+          đang có tranh chấp.
         </p>
         <p>
           Hồ sơ của một yêu cầu gỡ bản quyền thì <strong>ở lại</strong> sau khi game đã xoá — kèm

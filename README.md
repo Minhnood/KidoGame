@@ -39,9 +39,9 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 Bốn bộ không cần server:
 
 ```bash
-pnpm --filter @kidogame/sb3 test           # 55 unit test, gồm fixture độc hại
+pnpm --filter @kidogame/sb3 test           # 64 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
-node infra/caddy-config-check.mjs          # 21 phép, +4 nữa nếu có Docker
+node infra/caddy-config-check.mjs          # 28 phép, +4 nữa nếu có Docker
 node infra/umami-check.mjs                 # 16, đo thẳng production, không làm bẩn số liệu
 node infra/glitchtip-check.mjs             # 22, production; lớp SSH gửi rồi xoá một lỗi thử
 cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49
@@ -66,7 +66,7 @@ export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 92 kiểm tra
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 44
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 53
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 77
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 53, cần >24 game
@@ -86,6 +86,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
 node infra/contrast-check.mjs                                      # 160 phép đo màu
 node infra/a11y-check.mjs                                          # 27
 ```
@@ -624,6 +625,45 @@ lớp đã bấm nút.
 banner nhắc ở `/phu-huynh`, nên lớp tự động sẽ nổ ít hơn hẳn so với khi đếm mọi báo cáo.
 Đổi lại nó không còn bị lách bằng vài phút đổi mạng. Muốn lớp tự động mạnh hơn thì phải
 làm cho việc xác minh email trở nên bắt buộc hoặc đáng làm — đó là quyết định sản phẩm.
+
+## Đăng game: chọn file là chơi thử được ngay
+
+Bé chọn file → khung chơi thử và các bìa hiện ra ngay trên `/upload` → chọn bìa, điền
+tên → **Đăng game**.
+
+- Chọn file là trang gọi `POST /api/upload` (chỉ file) → `taoBanXemThu` trong
+  `src/lib/ingest.ts`: kiểm tra, đóng gói, vẽ các bìa, ghi file vào storage, rồi ghi
+  `storage/xem-thu/<mã 32 ký tự>.json`. Chưa có Game, chưa có thư cho bố mẹ. HTML đóng
+  gói với `<title>` chung là "KidoGame" vì lúc này chưa có tên game.
+- `POST /api/upload/dang` với `{ maXemThu, bia, title, description, tags }`
+  (`dangBanXemThu`) mới kiểm tên/mô tả, tạo Game từ **đúng** file và bìa đã thử, rồi gửi
+  thư. Mã chỉ dùng được một lần, đúng bé, trong 2 giờ. Tên sai hay bìa sai thì 400 và bản
+  thử được giữ lại để bé sửa rồi bấm lại.
+- Bấm Đăng lúc bản thử đang đóng gói thì trang chờ xong rồi đăng luôn — các bộ e2e cũ
+  vẫn đăng game bằng một cú bấm nhờ vậy. Chọn dồn hai file thì phản hồi của file cũ bị bỏ.
+- `FilePicker` có `onChange` thì **tự xoá giá trị ô chọn** sau mỗi lần chọn, file nằm ở
+  trang: trình duyệt không phát `change` khi chọn lại đúng file đang chọn, nên bé sửa game
+  trong Scratch, lưu đè cùng tên rồi chọn lại sẽ kẹt ở bản cũ. Vì thế ô file không có
+  `required`.
+- **Ảnh bìa bé tự tải:** `POST /api/upload/bia` (`themBiaTuTai` + `normalizeCoverImage`)
+  nhận JPEG/PNG/WebP, **xoay theo cờ EXIF Orientation rồi bỏ sạch EXIF** — ảnh chụp điện
+  thoại mang toạ độ GPS nơi chụp — cắt 480×360, lưu WebP, nối vào danh sách bìa của bản
+  xem thử (tối đa 3 ảnh mỗi bản, 20 lượt/giờ mỗi bé). Không nhận SVG, chặn ảnh quá 10MB và
+  ảnh quá nhiều điểm ảnh. Không đọc được HEIC (bản `sharp` dựng sẵn không có bộ giải), nên
+  ô chọn khai `accept="image/jpeg,image/png,image/webp"` để Safari iPhone tự đổi sang JPEG.
+  Thư báo bố mẹ nói rõ khi bìa là ảnh tự tải, kèm link ảnh — đó là thứ duy nhất trong game
+  không đến từ file Scratch.
+- **Chọn bìa:** `renderCoverOptions` (packages/sb3) vẽ tối đa 6 bìa từ chính game — bìa
+  mặc định (= `renderThumbnail`), cảnh nền đầu + từng nhân vật khác, từng cảnh nền khác +
+  nhân vật đầu, cảnh nền không nhân vật; bìa trùng từng byte bị bỏ. Game 1 nhân vật + 1
+  cảnh nền vẫn có 2 bìa. `bia` là chỉ số trong danh sách của CHÍNH bản xem thử. Không cho
+  tải ảnh riêng: đó là đường đưa ảnh bất kỳ lên trang chủ ngoài mọi lớp kiểm.
+- Player chỉ phục vụ `sb3|html|thumb|runtime/<sha>`, nên thư mục `xem-thu/` không lộ ra.
+- `storage:prune` **chừa file sửa trong 6 giờ** (lớn hơn hạn 2 giờ của bản xem thử) và
+  dọn JSON xem thử quá 24 giờ. `putObject` chạm lại giờ sửa khi dùng lại file trùng hash.
+- Bộ kiểm chọn file mẫu thẳng từ `storage/sb3/` thì đừng để trang gửi lại đúng file đó:
+  lần xem thử chạm giờ sửa của nó, và Chrome từ chối gửi lại một file đã chọn mà bị đổi
+  giờ sửa (`ERR_UPLOAD_FILE_CHANGED`). `e2e-xem-thu` dùng bản sao ở thư mục tạm.
 
 ## Nút điều khiển trên điện thoại
 
@@ -1685,7 +1725,7 @@ kiểm ĐẦU TIÊN: cả sản phẩm chọn "public ngay, không duyệt trư�
 được báo thì người phát hiện nội dung xấu đầu tiên bắt buộc phải là một người lạ đã trót
 nhìn thấy nó. Thư có tên game, mô tả, link chơi, và link `/phu-huynh` để tự ẩn.
 
-Mail này gửi từ `notifyParentOfNewGame` **bên trong `ingestGame`**, không phải ở route
+Mail này gửi từ `notifyParentOfNewGame` **bên trong `dangBanXemThu`** (lúc bé bấm Đăng, không phải lúc xem thử), không phải ở route
 upload — sau này có thêm đường đăng game nào khác thì nó vẫn tự chạy theo; đặt ở tầng
 route là để quên. Gửi trượt **không** huỷ việc đăng: game đã đóng gói, đã ghi đĩa, đã
 vào DB rồi, ném lỗi ở đó chỉ khiến bé thấy "đăng thất bại" trong khi game vẫn nằm công

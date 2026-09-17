@@ -13,12 +13,15 @@
  *  1. ẨN KHÔNG THU HỒI FILE. Nếu một ngày nào đó player origin bắt đầu tra DB thì câu
  *     chữ trên hai trang kia thành nói giảm, và không có gì báo. Phép kiểm đo cả hai
  *     phía: trang game trả 404 nhưng file vẫn trả 200.
- *  2. XOÁ HẲN THÌ THU HỒI ĐƯỢC BẢN CHƠI ĐƯỢC. Sau khi dọn, file HTML trả 404. Đây là
- *     lời hứa mới trên `/dieu-khoan`; nếu nó không đúng thì trang đang hứa sai.
- *  3. FILE `.sb3` DÙNG CHUNG THÌ KHÔNG BỊ XOÁ. Storage địa chỉ hoá theo nội dung: hai
- *     game dựng từ cùng một .sb3 chia nhau đúng một file. Xoá theo mã là xoá mất bản
- *     gốc của game khác — nên `/dieu-khoan` phải mang mệnh đề "nếu không còn game nào
- *     khác dùng đúng file đó", và phép kiểm này giữ mệnh đề ấy trung thực.
+ *  2. XOÁ HẲN THÌ THU HỒI ĐƯỢC BẢN CHƠI ĐƯỢC. Sau khi dọn, file HTML và file .sb3 của
+ *     một game KHÔNG trùng file với ai đều trả 404. Đây là lời hứa trên `/dieu-khoan`;
+ *     nếu nó không đúng thì trang đang hứa sai.
+ *  3. FILE DÙNG CHUNG THÌ KHÔNG BỊ XOÁ — cả .sb3 LẪN HTML. Storage địa chỉ hoá theo nội
+ *     dung: hai game dựng từ cùng một .sb3 chia nhau đúng một file .sb3, và từ khi HTML
+ *     đóng gói lúc xem thử mang tên chung "KidoGame" (chưa có tên game) thì chia nhau cả
+ *     file HTML. Xoá theo mã là xoá mất bản của game khác — nên `/dieu-khoan` phải đặt
+ *     CẢ BẢN ĐÃ ĐÓNG GÓI dưới mệnh đề "nếu không còn game nào khác dùng đúng file đó", và
+ *     phép kiểm này giữ mệnh đề ấy trung thực.
  *
  * Cần: app server + player server đang chạy, `psql`, một file .sb3 hợp lệ.
  *
@@ -38,8 +41,10 @@ import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { batBuocMailLog, choMailToi, taoBoBamLink } from './e2e-mail.mjs';
+import { dungSb3 } from './e2e-zip.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const PLAYER = process.env.PLAYER_ORIGIN ?? 'http://127.0.0.1:3001';
@@ -109,7 +114,20 @@ const browser = await chromium.launch({ channel: 'chrome' });
 const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1000 } });
 
-// ---------- Dựng: phụ huynh -> bé -> ba game (hai game dùng CHUNG file .sb3) ----------
+/*
+ * Game CỦA RIÊNG LẦN CHẠY NÀY: màu nhân vật lấy từ `suffix`, nên cả .sb3 lẫn HTML của nó
+ * không trùng game nào khác trong DB. Chỉ với một game như vậy mới đo được "xoá hẳn thì
+ * bản chơi được biến mất" — game dựng từ file mẫu chung thì HTML của nó còn bị các game
+ * cũ trong DB dev trỏ tới. Để ở thư mục tạm, không cạnh file mẫu (xem
+ * `ERR_UPLOAD_FILE_CHANGED` ở `e2e-xem-thu`).
+ */
+const FIXTURE_RIENG = dungSb3(
+  path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kg-an-vs-xoa-')), 'rieng.sb3'),
+  ['#ffffff'],
+  [`#${suffix.slice(0, 6)}`]
+);
+
+// ---------- Dựng: phụ huynh -> bé -> bốn game (ba game dùng CHUNG file .sb3) ----------
 const parentCtx = await newSession();
 
 /** Phiên của nhà hàng xóm — xem ghi chú ở `PARENT2_EMAIL`. */
@@ -152,18 +170,24 @@ const games = [];
   await c.click('[data-testid=auth-form] button[type=submit]');
   await c.waitForURL((u) => !/be-dang-nhap/.test(u.toString()), { timeout: 20000 }).catch(() => {});
 
-  /* BA game từ CÙNG một file .sb3, cố ý: hai game đầu để kiểm rằng file gốc dùng chung
-     không bị xoá theo một game, game thứ ba để kiểm chốt khiếu nại bản quyền. */
-  for (const nhan of ['xoa', 'giu', 'khieu-nai']) {
+  /* BA game từ CÙNG một file .sb3, cố ý: hai game đầu để kiểm rằng file dùng chung
+     không bị xoá theo một game, game thứ ba để kiểm chốt khiếu nại bản quyền. Game thứ
+     tư có file riêng, để kiểm rằng xoá hẳn thu hồi được bản chơi được. */
+  for (const [nhan, file] of [
+    ['xoa', FIXTURE],
+    ['giu', FIXTURE],
+    ['khieu-nai', FIXTURE],
+    ['rieng', FIXTURE_RIENG],
+  ]) {
     await c.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
     await c.fill('#title', `Game ẩn xoá ${nhan} ${suffix}`);
-    await c.setInputFiles('#file', FIXTURE);
+    await c.setInputFiles('#file', file);
     await c.click('[data-testid=upload-form] button[type=submit]');
     await c.waitForURL(/\/game\//, { timeout: 60000 }).catch(() => {});
     games.push(c.url().split('/game/')[1] ?? '');
   }
   await c.close();
-  check('Dựng được ba game', games.length === 3 && games.every(Boolean));
+  check('Dựng được bốn game', games.length === 4 && games.every(Boolean));
 }
 
 if (!games.every(Boolean)) {
@@ -172,20 +196,31 @@ if (!games.every(Boolean)) {
   process.exit(1);
 }
 
-const [GAME_XOA, GAME_GIU, GAME_KN] = games;
+const [GAME_XOA, GAME_GIU, GAME_KN, GAME_RIENG] = games;
 const shaCua = (id) =>
   sql(`select "sb3Sha256" || ' ' || "htmlSha256" from "Game" where id = '${id}'`).split(' ');
 const [SB3_XOA, HTML_XOA] = shaCua(GAME_XOA);
 const [SB3_GIU, HTML_GIU] = shaCua(GAME_GIU);
+const [SB3_RIENG, HTML_RIENG] = shaCua(GAME_RIENG);
 
 /*
- * Điều kiện của cả bài: hai game phải chia nhau file .sb3 nhưng có HTML riêng. Nếu
- * packager một ngày nào đó nhúng thêm gì làm HTML trùng nhau, hoặc storage thôi địa chỉ
- * hoá theo nội dung, thì mọi kết luận bên dưới đổi nghĩa — nên khẳng định nó ra thành
- * một phép kiểm chứ không giả định.
+ * Điều kiện của cả bài: hai game dựng từ cùng .sb3 chia nhau CẢ HAI file, còn game riêng
+ * thì không chia gì với chúng. Nếu storage thôi địa chỉ hoá theo nội dung, hoặc HTML lại
+ * mang tên game, thì mọi kết luận bên dưới đổi nghĩa — nên khẳng định ra thành phép kiểm
+ * chứ không giả định.
+ *
+ * Phép kiểm HTML ở đây TỪNG khẳng định điều ngược lại ("HTML mang tên game, nên là hai
+ * file khác nhau"). Nó đỏ ở lượt chạy đủ đầu tiên sau khi HTML đóng gói lúc xem thử mang
+ * tên chung "KidoGame" — và kéo theo phép "xoá hẳn thì HTML trả 404" đỏ, vì HTML đó còn
+ * game `giu` trỏ tới. Tức `/dieu-khoan` lúc ấy đang hứa "bản đã đóng gói luôn mất".
  */
 check('Hai game dùng CHUNG file .sb3 (storage địa chỉ hoá theo nội dung)', SB3_XOA === SB3_GIU, SB3_XOA.slice(0, 12));
-check('… nhưng HTML của chúng là hai file khác nhau (HTML mang tên game)', HTML_XOA !== HTML_GIU);
+check('… và CHUNG cả file HTML (HTML đóng gói lúc xem thử, mang tên chung)', HTML_XOA === HTML_GIU, HTML_XOA.slice(0, 12));
+check(
+  'Game file riêng không chia file nào với hai game kia',
+  SB3_RIENG !== SB3_XOA && HTML_RIENG !== HTML_XOA,
+  `${SB3_RIENG.slice(0, 12)} / ${HTML_RIENG.slice(0, 12)}`
+);
 
 // ---------- Sự thật 1: ẨN không thu hồi file ----------
 {
@@ -407,18 +442,54 @@ check('… nhưng HTML của chúng là hai file khác nhau (HTML mang tên game
   sql(
     `update "Game" set "removedAt" = now() - interval '30 days' where id = '${GAME_XOA}'`
   );
+  /* Game file riêng: đưa thẳng về REMOVED quá hạn bằng SQL. Đường bấm nút đã đo trọn ở
+     GAME_XOA phía trên; ở đây chỉ cần đúng trạng thái đầu vào cho lượt dọn. */
+  sql(
+    `update "Game" set status = 'REMOVED', "removedAt" = now() - interval '30 days' where id = '${GAME_RIENG}'`
+  );
   const donDb = chayCli('db:prune-removed', ['--xoa']);
   check('Bước dọn DB chạy được', donDb.ma === 0, `mã ${donDb.ma}`);
   check(
     'Game quá hạn bị xoá khỏi DB',
-    dem(`select count(*) from "Game" where id = '${GAME_XOA}'`) === 0
+    dem(`select count(*) from "Game" where id in ('${GAME_XOA}', '${GAME_RIENG}')`) === 0
   );
+  /*
+   * Lùi giờ sửa của các file sắp đo về 3 ngày trước, TRƯỚC khi dọn.
+   *
+   * `storage:prune` chừa mọi file sửa trong 6 giờ qua (để không xoá file của bản xem thử
+   * đang chơi dở), mà cả bốn game của bài này vừa đăng xong. Không lùi thì game file riêng
+   * không bao giờ bị dọn — đo được: HTML và .sb3 của nó vẫn 200 — còn hai phép "file dùng
+   * CHUNG không bị xoá" xanh nhờ lớp chừa chứ không nhờ việc game `giu` còn trỏ tới, tức
+   * không đỏ được. Lùi cả file dùng chung là để chúng chỉ còn được cứu bởi đúng lý do đó.
+   * Trên production, file của một game đã quá hạn giữ 7 ngày thì vốn đã cũ hơn 6 giờ.
+   */
+  const cu = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  for (const [bucket, sha, ext] of [
+    ['html', HTML_RIENG, '.html'],
+    ['sb3', SB3_RIENG, '.sb3'],
+    ['html', HTML_XOA, '.html'],
+    ['sb3', SB3_XOA, '.sb3'],
+  ]) {
+    const f = path.join(ROOT, 'storage', bucket, sha.slice(0, 2), `${sha}${ext}`);
+    if (fs.existsSync(f)) fs.utimesSync(f, cu, cu);
+  }
   const donFile = chayCli('storage:prune', ['--xoa']);
   check('Bước dọn file chạy được', donFile.ma === 0, `mã ${donFile.ma}`);
 
   check(
-    'XOÁ HẲN thu hồi được bản chơi được: file HTML trả 404',
-    (await maFile('html', HTML_XOA, '.html')) === 404,
+    'XOÁ HẲN thu hồi được bản chơi được: file HTML của game file riêng trả 404',
+    (await maFile('html', HTML_RIENG, '.html')) === 404,
+    HTML_RIENG.slice(0, 12)
+  );
+  check(
+    '… và cả file .sb3 gốc của nó',
+    (await maFile('sb3', SB3_RIENG, '.sb3')) === 404,
+    SB3_RIENG.slice(0, 12)
+  );
+  /* Cùng lý lẽ với .sb3 ngay dưới: HTML dùng chung mà bị xoá là game `giu` chết theo. */
+  check(
+    'File HTML dùng CHUNG với game còn lại thì KHÔNG bị xoá',
+    (await maFile('html', HTML_XOA, '.html')) === 200,
     HTML_XOA.slice(0, 12)
   );
   /*

@@ -26,7 +26,7 @@
  *   node infra/caddy-config-check.mjs
  *   DOCKER_HOST=ssh://kidovps node infra/caddy-config-check.mjs   # mượn Docker VPS
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -147,6 +147,64 @@ for (const [ten, env] of [
     env?.ADMIN_ORIGIN?.startsWith('${ADMIN_DOMAIN:+') === true,
     env?.ADMIN_ORIGIN ?? 'không có'
   );
+}
+
+// ---------------------------------------------------------------------------
+console.log('\n── Trần body: Caddy ↔ middleware Next ↔ app ─────────────────');
+/*
+ * Ba nơi cùng nói về một con số, ở ba file khác nhau:
+ *   - app: `LIMITS.MAX_SB3_BYTES` (packages/sb3) — game lớn nhất được đăng;
+ *   - Next: `middlewareClientMaxBodySize` — vượt thì Next CẮT body, không báo lỗi;
+ *   - Caddy: `request_body max_size` — vượt thì 413.
+ * Lệch nhau là hỏng im lặng: trần Next dưới trần app thì game lớn ra "Dữ liệu gửi lên
+ * không hợp lệ" (đã xảy ra: mặc định 10MB của Next dưới trần 50MB của app).
+ */
+{
+  const coSo = (chuoi) => {
+    const m = /^(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)?$/i.exec(String(chuoi).trim());
+    if (!m) return NaN;
+    const nhan = { b: 1, kb: 1024, mb: 1024 ** 2, gb: 1024 ** 3 }[(m[2] ?? 'b').toLowerCase()];
+    return Number(m[1]) * nhan;
+  };
+  const limits = readFileSync(join(here, '..', 'packages', 'sb3', 'src', 'limits.ts'), 'utf8');
+  const mSb3 = /MAX_SB3_BYTES:\s*(\d+)\s*\*\s*1024\s*\*\s*1024/.exec(limits);
+  const tranSb3 = mSb3 ? Number(mSb3[1]) * 1024 ** 2 : NaN;
+  const nextConfig = readFileSync(join(here, '..', 'apps', 'web', 'next.config.ts'), 'utf8');
+  const tranNext = coSo(/middlewareClientMaxBodySize:\s*'([^']+)'/.exec(nextConfig)?.[1] ?? '');
+
+  const khoiApp = /\{\$APP_DOMAIN:[^}]*\}\s*\{([\s\S]*?)\n\}/.exec(caddyfile)?.[1] ?? '';
+  const khoiAdmin = /\{\$ADMIN_DOMAIN:[^}]*\}\s*\{([\s\S]*?)\n\}/.exec(caddyfile)?.[1] ?? '';
+  const duongNhanFile = (/@nhanFile path ([^\n]+)/.exec(khoiApp)?.[1] ?? '').trim().split(/\s+/).filter(Boolean);
+  const duongKhong = (/@khongNhanFile not path ([^\n]+)/.exec(khoiApp)?.[1] ?? '').trim().split(/\s+/).filter(Boolean);
+  const tranCaddy = (khoi, matcher) =>
+    coSo(new RegExp(`request_body${matcher ? ` @${matcher}` : ''} \\{\\s*max_size (\\S+)`).exec(khoi)?.[1] ?? '');
+
+  // Mọi route API của app đọc file (`instanceof File`) phải nằm trong @nhanFile.
+  const apiDir = join(here, '..', 'apps', 'web', 'src', 'app', 'api');
+  const routeNhanFile = [];
+  const duyet = (dir, url) => {
+    for (const ten of readdirSync(dir, { withFileTypes: true })) {
+      if (ten.isDirectory()) duyet(join(dir, ten.name), `${url}/${ten.name}`);
+      else if (ten.name === 'route.ts' && /instanceof File/.test(readFileSync(join(dir, ten.name), 'utf8'))) routeNhanFile.push(url);
+    }
+  };
+  duyet(apiDir, '/api');
+
+  check('Đọc được trần .sb3 của app và trần middleware của Next', tranSb3 > 0 && tranNext > 0, `app ${tranSb3 / 1024 ** 2}MB, Next ${tranNext / 1024 ** 2}MB`);
+  check('Trần middleware Next ≥ trần .sb3 + 1MB vỏ multipart', tranNext >= tranSb3 + 1024 ** 2, `${tranNext / 1024 ** 2}MB ≥ ${tranSb3 / 1024 ** 2 + 1}MB`);
+  check(
+    'Mọi route API nhận file của app nằm trong @nhanFile, và ngược lại',
+    routeNhanFile.length > 0 && [...routeNhanFile].sort().join(' ') === [...duongNhanFile].sort().join(' '),
+    `route: ${routeNhanFile.sort().join(', ')} · Caddy: ${duongNhanFile.join(', ')}`
+  );
+  check('@khongNhanFile loại đúng các đường của @nhanFile', duongKhong.length > 0 && [...duongKhong].sort().join(' ') === [...duongNhanFile].sort().join(' '));
+  check(
+    'Caddy: đường nhận file có trần = trần middleware Next (không thấp hơn app, không để Next cắt body)',
+    tranCaddy(khoiApp, 'nhanFile') === tranNext,
+    `${tranCaddy(khoiApp, 'nhanFile') / 1024 ** 2}MB`
+  );
+  check('Caddy: mọi đường khác của app tối đa 1MB', tranCaddy(khoiApp, 'khongNhanFile') > 0 && tranCaddy(khoiApp, 'khongNhanFile') <= 1024 ** 2, `${tranCaddy(khoiApp, 'khongNhanFile') / 1024 ** 2}MB`);
+  check('Caddy: admin origin tối đa 1MB', tranCaddy(khoiAdmin, null) > 0 && tranCaddy(khoiAdmin, null) <= 1024 ** 2, `${tranCaddy(khoiAdmin, null) / 1024 ** 2}MB`);
 }
 
 // ---------------------------------------------------------------------------

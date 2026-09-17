@@ -36,6 +36,19 @@ const xoaThat = process.argv.includes('--xoa');
 
 const kb = (n: number) => `${(n / 1024 / 1024).toFixed(1)} MB`;
 
+/**
+ * File sửa trong chừng này giờ thì KHÔNG dọn, dù chưa Game nào trỏ tới.
+ *
+ * Vì bước xem thử: bé chọn file, server ghi đủ bốn file lên đĩa để player chạy bản thử,
+ * nhưng Game chỉ được tạo khi bé bấm Đăng. Trong lúc đó các file ấy trông y hệt rác, và
+ * lượt dọn 4 giờ sáng sẽ xoá mất bản thử đang chơi dở. Phải lớn hơn `HAN_XEM_THU_MS`
+ * (2 giờ) trong `src/lib/ingest.ts`; `putObject` chạm lại giờ sửa khi dùng lại file cũ.
+ */
+const GIU_FILE_MOI_GIO = 6;
+
+/** Bản xem thử (JSON) quá chừng này giờ thì chắc chắn đã hết hạn, dọn luôn. */
+const XOA_XEM_THU_SAU_GIO = 24;
+
 async function main() {
   const games = await prisma.game.findMany({
     select: { sb3Sha256: true, htmlSha256: true, thumbSha256: true, runtimeSha256: true },
@@ -80,6 +93,7 @@ async function main() {
 
   let tongFile = 0;
   let tongByte = 0;
+  const mocMoi = Date.now() - GIU_FILE_MOI_GIO * 60 * 60 * 1000;
 
   for (const bucket of Object.keys(EXT) as Bucket[]) {
     const thungDir = path.join(root, bucket);
@@ -94,6 +108,7 @@ async function main() {
     const rac: { duongDan: string; bytes: number }[] = [];
     let soFile = 0;
     let byteDung = 0;
+    let soMoi = 0;
 
     for (const con of thuMucCon) {
       const conDir = path.join(thungDir, con);
@@ -119,6 +134,7 @@ async function main() {
         const st = await fs.stat(duongDan);
 
         if (dangDung[bucket].has(khop[1])) byteDung += st.size;
+        else if (st.mtimeMs > mocMoi) soMoi += 1;
         else rac.push({ duongDan, bytes: st.size });
       }
     }
@@ -130,7 +146,8 @@ async function main() {
     console.log(
       `${bucket.padEnd(8)} ${String(soFile).padStart(4)} file · ` +
         `${String(dangDung[bucket].size).padStart(3)} hash đang dùng (${kb(byteDung)}) · ` +
-        `${String(rac.length).padStart(4)} rác (${kb(byteRac)})`
+        `${String(rac.length).padStart(4)} rác (${kb(byteRac)}) · ` +
+        `${String(soMoi).padStart(3)} mới dưới ${GIU_FILE_MOI_GIO} giờ (chừa lại)`
     );
 
     if (xoaThat) {
@@ -146,6 +163,24 @@ async function main() {
       }
     }
   }
+
+  /* Bản xem thử bé không bấm Đăng. File JSON nhỏ, nhưng không dọn thì mỗi lần xem thử để
+     lại một cái mãi mãi. Chỉ đụng đúng dạng tên mà `taoBanXemThu` sinh ra. */
+  let xemThuCu = 0;
+  const xemThuDir = path.join(root, 'xem-thu');
+  const mocXemThu = Date.now() - XOA_XEM_THU_SAU_GIO * 60 * 60 * 1000;
+  try {
+    for (const ten of await fs.readdir(xemThuDir)) {
+      if (!/^[A-Za-z0-9_-]{32}\.json(\.dang-[0-9a-f]{12})?$/.test(ten)) continue;
+      const duongDan = path.join(xemThuDir, ten);
+      if ((await fs.stat(duongDan)).mtimeMs > mocXemThu) continue;
+      xemThuCu += 1;
+      if (xoaThat) await fs.unlink(duongDan);
+    }
+  } catch {
+    /* chưa ai xem thử lần nào */
+  }
+  console.log(`xem-thu  ${String(xemThuCu).padStart(4)} bản xem thử quá ${XOA_XEM_THU_SAU_GIO} giờ`);
 
   console.log('');
   if (xoaThat) console.log(`Đã xoá ${tongFile} file, giải phóng ${kb(tongByte)}.`);
