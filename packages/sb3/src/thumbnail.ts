@@ -2,6 +2,7 @@ import sharp from 'sharp';
 import type { Sharp } from 'sharp';
 import type { ZipEntry } from './zip.js';
 import type { ProjectJson } from './validate.js';
+import { Sb3Error } from './errors.js';
 
 export const THUMB_WIDTH = 480;
 export const THUMB_HEIGHT = 360;
@@ -162,4 +163,58 @@ export async function renderCoverOptions(
     if (!ketQua.some((k) => k.equals(anh))) ketQua.push(anh);
   }
   return ketQua;
+}
+
+/** Dung lượng tối đa của ảnh bìa bé tự tải (trước khi xử lý). Ảnh chụp điện thoại thường 2–6 MB. */
+export const MAX_COVER_IMAGE_BYTES = 10 * 1024 * 1024;
+
+/** Chỉ nhận những định dạng này. KHÔNG nhận SVG: nó là tài liệu, không phải ảnh chụp. */
+const DINH_DANG_ANH = new Set(['jpeg', 'png', 'webp']);
+
+/**
+ * Ảnh bìa bé tự tải lên -> WebP 480×360 SẠCH.
+ *
+ * - `rotate()` TRƯỚC khi bỏ metadata: ảnh điện thoại chụp dọc lưu xoay ngang kèm cờ
+ *   Orientation trong EXIF; bỏ EXIF mà không xoay trước là bìa bị nằm nghiêng.
+ * - Không gọi `withMetadata` / `keepExif`: `sharp` mặc định KHÔNG chép EXIF, XMP, ICC sang
+ *   ảnh ra. Ảnh chụp điện thoại mang toạ độ GPS nơi chụp — thứ không được lên trang chủ.
+ *   Bộ kiểm `e2e-xem-thu` gửi một JPEG có GPS thật và đo ảnh ra không còn EXIF.
+ * - `limitInputPixels`: một PNG 30.000×30.000 một màu chỉ vài trăm KB nhưng giải nén ra
+ *   hàng GB. Chặn trước khi giải nén.
+ * - Cắt giữa về khổ 4:3 của sân khấu Scratch, cùng cỡ với bìa tự tạo.
+ *
+ * HEIC (ảnh iPhone) không đọc được — `sharp` bản dựng sẵn không có bộ giải HEIC. Ô chọn ảnh
+ * chỉ nhận JPEG/PNG/WebP, và Safari trên iPhone tự đổi HEIC sang JPEG khi tải lên ô như vậy.
+ */
+export async function normalizeCoverImage(input: Buffer): Promise<Buffer> {
+  const LOI = new Sb3Error(
+    'INVALID_IMAGE',
+    'Ảnh này không dùng được. Chọn ảnh JPG hoặc PNG nhé.'
+  );
+  if (input.length > MAX_COVER_IMAGE_BYTES) {
+    throw new Sb3Error('INVALID_IMAGE', `Ảnh quá lớn (tối đa ${MAX_COVER_IMAGE_BYTES / 1024 / 1024}MB).`);
+  }
+
+  let meta;
+  try {
+    // `metadata` chỉ đọc phần đầu file, không giải nén — đọc không giới hạn để còn báo đúng
+    // lỗi "quá lớn" bên dưới; bước xử lý thật vẫn chặn bằng `limitInputPixels`.
+    meta = await sharp(input).metadata();
+  } catch {
+    throw LOI;
+  }
+  if (!meta.format || !DINH_DANG_ANH.has(meta.format) || !meta.width || !meta.height) throw LOI;
+  if (meta.width * meta.height > MAX_INPUT_PIXELS) {
+    throw new Sb3Error('INVALID_IMAGE', 'Ảnh có kích thước quá lớn. Chọn ảnh nhỏ hơn nhé.');
+  }
+
+  try {
+    return await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate()
+      .resize({ width: THUMB_WIDTH, height: THUMB_HEIGHT, fit: 'cover', position: 'centre' })
+      .webp({ quality: 82 })
+      .toBuffer();
+  } catch {
+    throw LOI;
+  }
 }

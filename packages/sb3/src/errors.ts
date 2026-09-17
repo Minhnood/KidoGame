@@ -18,11 +18,12 @@ export type Sb3ErrorCode =
   | 'CUSTOM_EXTENSION_URL'
   | 'PROFANITY'
   | 'PACKAGE_FAILED'
-  // Bốn mã dưới do tầng ứng dụng dùng, không phát sinh từ nội dung .sb3.
+  // Năm mã dưới do tầng ứng dụng dùng, không phát sinh từ nội dung .sb3.
   | 'INVALID_TITLE'
   | 'RATE_LIMITED'
   | 'PREVIEW_EXPIRED'
-  | 'INVALID_COVER';
+  | 'INVALID_COVER'
+  | 'INVALID_IMAGE';
 
 export class Sb3Error extends Error {
   readonly code: Sb3ErrorCode;

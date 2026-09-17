@@ -5,6 +5,7 @@ import {
   validateAndNormalize,
   packageToHtml,
   renderCoverOptions,
+  normalizeCoverImage,
   readSb3Zip,
   Sb3Error,
   type Sb3Warning,
@@ -116,8 +117,10 @@ interface BanXemThu {
   htmlSha256: string;
   /** Bìa mặc định, = `bia[0]`. Giữ riêng vì bản xem thử ghi trước khi có `bia` không có mảng đó. */
   thumbSha256: string;
-  /** Các bìa bé được chọn, bìa mặc định đứng đầu. */
+  /** Các bìa bé được chọn, bìa mặc định đứng đầu, ảnh bé tự tải nối vào cuối. */
   bia?: string[];
+  /** Bao nhiêu phần tử đầu của `bia` là bìa vẽ từ game; từ chỉ số này trở đi là ảnh tự tải. */
+  soBiaTuDong?: number;
   runtimeSha256: string;
   usesMusic: boolean;
   warnings: Sb3Warning[];
@@ -222,6 +225,7 @@ export async function taoBanXemThu(input: XemThuInput): Promise<KetQuaXemThu> {
     htmlSha256: packaged.sha256,
     thumbSha256: thumbSha,
     bia: biaSha,
+    soBiaTuDong: biaSha.length,
     runtimeSha256: packaged.runtime.sha256,
     usesMusic: packaged.usesMusic,
     warnings: normalized.warnings,
@@ -238,6 +242,69 @@ export async function taoBanXemThu(input: XemThuInput): Promise<KetQuaXemThu> {
     hetHan,
     warnings: normalized.warnings.map((w) => ({ code: w.code, message: w.message })),
   };
+}
+
+/** Số ảnh bìa bé được tự tải cho MỘT bản xem thử. Tải thêm thì ảnh cũ nhất bị thay. */
+export const MAX_BIA_TU_TAI = 3;
+
+/** Số lần tải ảnh bìa mỗi giờ cho một bé. Mỗi lần là một lượt giải mã ảnh bằng sharp. */
+export const BIA_TU_TAI_MOI_GIO = 20;
+
+export interface KetQuaBiaTuTai {
+  /** Danh sách bìa mới, cùng thứ tự với chỉ số `bia` lúc Đăng. */
+  biaUrls: string[];
+  /** Chỉ số của ảnh vừa tải trong `biaUrls`. */
+  chiSo: number;
+}
+
+/**
+ * Bé tải ảnh riêng làm bìa: xử lý ảnh (bỏ EXIF/GPS, cắt 480×360) rồi nối vào danh sách bìa
+ * của bản xem thử.
+ *
+ * Giành bản xem thử bằng `rename` như `dangBanXemThu`: đọc - sửa - ghi mà không giành thì
+ * một lần bấm Đăng chen vào giữa sẽ xoá bản thử, rồi lần ghi này dựng nó lại — và cùng một
+ * mã đăng được lần thứ hai.
+ */
+export async function themBiaTuTai(maXemThu: string, childId: string, anh: Buffer): Promise<KetQuaBiaTuTai> {
+  const HET = new Sb3Error(
+    'PREVIEW_EXPIRED',
+    'Bản chơi thử này đã hết hạn hoặc đã được đăng rồi. Chọn lại file game nhé.'
+  );
+  const file = fileXemThu(maXemThu);
+  if (!file) throw HET;
+
+  if (tooMany(rateKey('bia-tu-tai', childId), BIA_TU_TAI_MOI_GIO, 60 * 60 * 1000)) {
+    throw new Sb3Error('RATE_LIMITED', 'Bé đổi ảnh bìa nhiều quá rồi, nghỉ một lát rồi thử lại nhé!');
+  }
+
+  const dangGiu = `${file}.sua-${randomBytes(6).toString('hex')}`;
+  try {
+    await fs.rename(file, dangGiu);
+  } catch {
+    throw HET;
+  }
+
+  try {
+    const ban = JSON.parse(await fs.readFile(dangGiu, 'utf8')) as BanXemThu;
+    if (ban.childId !== childId || ban.hetHan < Date.now()) throw HET;
+
+    const webp = await normalizeCoverImage(anh);
+    const sha = await sha256(webp);
+    await putObject('thumb', sha, webp);
+
+    const cacBia = ban.bia ?? [ban.thumbSha256];
+    const soTuDong = ban.soBiaTuDong ?? cacBia.length;
+    let tuTai = cacBia.slice(soTuDong).filter((s) => s !== sha);
+    tuTai.push(sha);
+    if (tuTai.length > MAX_BIA_TU_TAI) tuTai = tuTai.slice(-MAX_BIA_TU_TAI);
+    const moi = [...cacBia.slice(0, soTuDong), ...tuTai];
+
+    await fs.writeFile(dangGiu, JSON.stringify({ ...ban, bia: moi, soBiaTuDong: soTuDong }));
+    return { biaUrls: moi.map((s) => objectUrl('thumb', s)), chiSo: moi.length - 1 };
+  } finally {
+    // Luôn trả bản xem thử về chỗ cũ: ảnh hỏng hay hết lượt không được làm mất bản thử.
+    await fs.rename(dangGiu, file).catch(() => {});
+  }
 }
 
 /**
@@ -314,6 +381,8 @@ export async function dangBanXemThu(
       throw HET;
     }
 
+    const laAnhTuTai = chiSoBia >= (ban.soBiaTuDong ?? cacBia.length);
+
     const game = await prisma.game.create({
       data: {
         childId,
@@ -356,7 +425,7 @@ export async function dangBanXemThu(
      * trang chủ. Trạng thái tệ nhất có thể.
      */
     try {
-      await notifyParentOfNewGame(game.id);
+      await notifyParentOfNewGame(game.id, laAnhTuTai ? objectUrl('thumb', thumbSha256) : null);
     } catch (e) {
       console.error('[ingest] không gửi được mail báo phụ huynh:', e);
     }
@@ -388,7 +457,7 @@ export async function dangBanXemThu(
  * Gửi cho MỌI game mới, kể cả khi bé đăng mười cái một ngày. Gộp lại thành một thư
  * cuối ngày thì tiết kiệm hòm thư nhưng làm hỏng đúng thứ cần: biết SỚM.
  */
-async function notifyParentOfNewGame(gameId: string): Promise<void> {
+async function notifyParentOfNewGame(gameId: string, anhTuTai: string | null): Promise<void> {
   const game = await prisma.game.findUnique({
     where: { id: gameId },
     select: {
@@ -413,6 +482,11 @@ async function notifyParentOfNewGame(gameId: string): Promise<void> {
       ...(game.description ? [`  ${game.description}`] : []),
       `  ${origin}/game/${game.id}`,
       '',
+      /* Ảnh bìa tự tải là thứ duy nhất trong game KHÔNG đến từ file Scratch, và là chỗ dễ
+         lọt ảnh chụp mặt bé nhất — nên nói riêng, kèm link thẳng tới ảnh. */
+      ...(anhTuTai
+        ? ['Bé dùng một ẢNH TỰ TẢI LÊN làm bìa game. Bạn xem ảnh đó ở đây:', '', `  ${anhTuTai}`, '']
+        : []),
       'Game đã hiện công khai ngay. KidoGame không duyệt trước, nên lá thư này là',
       'cách để bạn biết và xem lại.',
       '',

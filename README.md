@@ -39,7 +39,7 @@ node infra/player-server.mjs               # http://127.0.0.1:3001
 Bốn bộ không cần server:
 
 ```bash
-pnpm --filter @kidogame/sb3 test           # 60 unit test, gồm fixture độc hại
+pnpm --filter @kidogame/sb3 test           # 64 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
 node infra/caddy-config-check.mjs          # 28 phép, +4 nữa nếu có Docker
 node infra/umami-check.mjs                 # 16, đo thẳng production, không làm bẩn số liệu
@@ -86,7 +86,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 47, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 48, cần psql; chạy storage:prune khô
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
 node infra/contrast-check.mjs                                      # 160 phép đo màu
 node infra/a11y-check.mjs                                          # 27
 ```
@@ -645,6 +645,14 @@ tên → **Đăng game**.
   trang: trình duyệt không phát `change` khi chọn lại đúng file đang chọn, nên bé sửa game
   trong Scratch, lưu đè cùng tên rồi chọn lại sẽ kẹt ở bản cũ. Vì thế ô file không có
   `required`.
+- **Ảnh bìa bé tự tải:** `POST /api/upload/bia` (`themBiaTuTai` + `normalizeCoverImage`)
+  nhận JPEG/PNG/WebP, **xoay theo cờ EXIF Orientation rồi bỏ sạch EXIF** — ảnh chụp điện
+  thoại mang toạ độ GPS nơi chụp — cắt 480×360, lưu WebP, nối vào danh sách bìa của bản
+  xem thử (tối đa 3 ảnh mỗi bản, 20 lượt/giờ mỗi bé). Không nhận SVG, chặn ảnh quá 10MB và
+  ảnh quá nhiều điểm ảnh. Không đọc được HEIC (bản `sharp` dựng sẵn không có bộ giải), nên
+  ô chọn khai `accept="image/jpeg,image/png,image/webp"` để Safari iPhone tự đổi sang JPEG.
+  Thư báo bố mẹ nói rõ khi bìa là ảnh tự tải, kèm link ảnh — đó là thứ duy nhất trong game
+  không đến từ file Scratch.
 - **Chọn bìa:** `renderCoverOptions` (packages/sb3) vẽ tối đa 6 bìa từ chính game — bìa
   mặc định (= `renderThumbnail`), cảnh nền đầu + từng nhân vật khác, từng cảnh nền khác +
   nhân vật đầu, cảnh nền không nhân vật; bìa trùng từng byte bị bỏ. Game 1 nhân vật + 1

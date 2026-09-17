@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
-import { renderCoverOptions, renderThumbnail, THUMB_WIDTH, THUMB_HEIGHT } from '../src/thumbnail.js';
+import {
+  MAX_COVER_IMAGE_BYTES,
+  normalizeCoverImage,
+  renderCoverOptions,
+  renderThumbnail,
+  THUMB_WIDTH,
+  THUMB_HEIGHT,
+} from '../src/thumbnail.js';
 import type { ProjectJson } from '../src/validate.js';
 import { validateAndNormalize } from '../src/validate.js';
 import { readSb3Zip } from '../src/zip.js';
@@ -128,5 +135,55 @@ describe('các bìa để bé chọn', () => {
     const bia = await renderCoverOptions([], { targets: [] });
     expect(bia.length).toBe(1);
     expect((await sharp(bia[0]).metadata()).format).toBe('webp');
+  });
+});
+
+describe('ảnh bìa bé tự tải', () => {
+  const anh = (w: number, h: number, dinhDang: 'jpeg' | 'png' | 'webp' = 'jpeg') =>
+    sharp({ create: { width: w, height: h, channels: 3, background: '#3a86ff' } })[dinhDang]().toBuffer();
+
+  it('ra WebP 480×360 dù ảnh vào khổ nào', async () => {
+    for (const [w, h] of [[1200, 1600], [4000, 1000], [30, 20]]) {
+      const ra = await normalizeCoverImage(await anh(w, h));
+      const m = await sharp(ra).metadata();
+      expect([m.format, m.width, m.height]).toEqual(['webp', THUMB_WIDTH, THUMB_HEIGHT]);
+    }
+  });
+
+  it('bỏ sạch EXIF, kể cả toạ độ GPS', async () => {
+    const coGps = await sharp(await anh(800, 600))
+      .withExif({
+        IFD0: { Make: 'DienThoaiCuaBe' },
+        IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '21/1 1/1 0/1', GPSLongitudeRef: 'E', GPSLongitude: '105/1 51/1 0/1' },
+      })
+      .jpeg()
+      .toBuffer();
+    expect((await sharp(coGps).metadata()).exif?.toString('latin1')).toContain('DienThoaiCuaBe');
+    const m = await sharp(await normalizeCoverImage(coGps)).metadata();
+    expect(m.exif).toBeUndefined();
+    expect(m.xmp).toBeUndefined();
+  });
+
+  it('xoay đúng chiều theo cờ Orientation trước khi bỏ EXIF', async () => {
+    // Ảnh ngang 800×400, nửa trái đỏ nửa phải xanh; Orientation 6 = cần xoay 90° mới đúng.
+    const tron = await sharp({ create: { width: 800, height: 400, channels: 3, background: '#ff0000' } })
+      .composite([{ input: await sharp({ create: { width: 400, height: 400, channels: 3, background: '#0000ff' } }).png().toBuffer(), left: 400, top: 0 }])
+      .jpeg()
+      .toBuffer();
+    const coCo = await sharp(tron).withMetadata({ orientation: 6 }).jpeg().toBuffer();
+    const ra = await normalizeCoverImage(coCo);
+    const { data } = await sharp(ra).raw().toBuffer({ resolveWithObject: true });
+    // Xoay 90° theo chiều kim đồng hồ: nửa đỏ lên TRÊN. Điểm giữa mép trên phải đỏ.
+    const i = (5 * THUMB_WIDTH + Math.floor(THUMB_WIDTH / 2)) * 3;
+    expect(data[i]).toBeGreaterThan(150);
+    expect(data[i + 2]).toBeLessThan(100);
+  });
+
+  it('từ chối thứ không phải ảnh, SVG, và ảnh có kích thước khổng lồ', async () => {
+    await expect(normalizeCoverImage(Buffer.from('không phải ảnh'))).rejects.toThrow(/không dùng được/);
+    await expect(normalizeCoverImage(SPRITE)).rejects.toThrow(/không dùng được/);
+    const khongLo = await sharp({ create: { width: 8000, height: 6000, channels: 3, background: '#ffffff' } }).png().toBuffer();
+    expect(khongLo.length).toBeLessThan(MAX_COVER_IMAGE_BYTES);
+    await expect(normalizeCoverImage(khongLo)).rejects.toThrow(/quá lớn/);
   });
 });

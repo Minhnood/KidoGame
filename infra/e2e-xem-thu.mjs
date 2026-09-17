@@ -19,6 +19,8 @@
  *     không dùng lại được sau khi hết hạn.
  *  6. `storage:prune` KHÔNG dọn file của bản thử đang chơi dở, nhưng vẫn dọn khi đã cũ.
  *  7. Bé chọn được bìa khác lấy từ chính game, và game đăng lên mang ĐÚNG bìa đã chọn.
+ *  8. Bé tải được ảnh riêng làm bìa: ảnh ra KHÔNG còn EXIF/GPS, file lạ bị chặn, và thư
+ *     báo bố mẹ nói rõ bìa là ảnh tự tải kèm link ảnh.
  *
  * Chạy:
  *   SB3_FIXTURE=<đường-dẫn.sb3> MAIL_LOG=/tmp/kg-mail.log node infra/e2e-xem-thu.mjs
@@ -32,6 +34,7 @@ import path from 'node:path';
 import { batBuocMailLog, choMailToi, taoBoBamLink } from './e2e-mail.mjs';
 import { zip } from './e2e-zip.mjs';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 const PLAYER = process.env.PLAYER_ORIGIN ?? 'http://127.0.0.1:3001';
@@ -463,6 +466,134 @@ let HTML_DIEN_THOAI = '';
   const id = m.url().split('/game/')[1] ?? '';
   const thumb = id ? sql(`select "thumbSha256" from "Game" where id = '${id}'`) : '';
   check('Đăng xong: game mang ĐÚNG bìa số 3 đã chọn, không phải bìa mặc định', thumb.length === 64 && thumb === shaTuUrl(urls[2]) && thumb !== shaTuUrl(urls[0]), thumb.slice(0, 12));
+  await ctx.close();
+}
+
+// ---------- 10. Tải ảnh riêng làm bìa ----------
+{
+  // `sharp` nằm ở packages/sb3, không ở gốc repo.
+  const sharp = createRequire(path.join(ROOT, 'packages', 'sb3', 'package.json'))('sharp');
+  const thuMuc = path.dirname(FIXTURE);
+  const taoAnh = async (ten, mau, them = (x) => x) => {
+    const f = path.join(thuMuc, ten);
+    fs.writeFileSync(f, await them(sharp({ create: { width: 1200, height: 900, channels: 3, background: mau } })).jpeg().toBuffer());
+    return f;
+  };
+  const ANH_GPS = await taoAnh('anh-gps.jpg', '#ff006e', (x) =>
+    x.withExif({
+      IFD0: { Make: 'DienThoaiCuaBe' },
+      IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '21/1 1/1 30/1', GPSLongitudeRef: 'E', GPSLongitude: '105/1 51/1 10/1' },
+    })
+  );
+  const exifVao = (await sharp(fs.readFileSync(ANH_GPS)).metadata()).exif?.toString('latin1') ?? '';
+  check('Ảnh thử đúng là có EXIF (đối chứng)', exifVao.includes('DienThoaiCuaBe'));
+
+  const KHONG_PHAI_ANH = path.join(thuMuc, 'that-ra-la-game.jpg');
+  fs.copyFileSync(FIXTURE, KHONG_PHAI_ANH);
+  const SVG = path.join(thuMuc, 'hinh.svg');
+  fs.writeFileSync(SVG, '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>');
+  const QUA_LON = path.join(thuMuc, 'qua-lon.jpg');
+  fs.writeFileSync(QUA_LON, Buffer.alloc(10.5 * 1024 * 1024, 1));
+
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const m = await dangNhapBe(ctx, BE2);
+  await m.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
+
+  /* File .sb3 trên 10MB phải tới được app NGUYÊN VẸN. Next cắt body quá
+     `middlewareClientMaxBodySize` (mặc định 10MB) mà không báo lỗi, và bé nhận "Dữ liệu
+     gửi lên không hợp lệ" — trần của app là 50MB. File rác 11MB: đọc được hết thì app
+     trả đúng câu "không phải file Scratch". */
+  const RAC_11MB = path.join(thuMuc, 'rac-11mb.sb3');
+  fs.writeFileSync(RAC_11MB, Buffer.alloc(11 * 1024 * 1024, 7));
+  await chonFile(m, RAC_11MB);
+  const loi11 = await m.locator('[data-testid=upload-form] [role=alert]').first().innerText().catch(() => '');
+  check('File .sb3 11MB tới app nguyên vẹn (không bị Next cắt ở 10MB)', /không phải file Scratch/i.test(loi11), loi11.replace(/\n/g, ' '));
+
+  const ban = await chonFile(m, FIXTURE);
+  const MA = ban?.maXemThu ?? 'khong-co-ma-khong-co-ma-khong-co';
+  const oBia = () => m.locator('[data-testid=chon-bia] input[type=radio]');
+
+  const nut = await m.evaluate(() => document.querySelector('label[for=anh-bia]')?.getBoundingClientRect().height ?? 0);
+  check('390px: nút "Tải ảnh làm bìa" cao đủ tầm tay', nut >= 44, `${Math.round(nut)}px`);
+
+  /** Chọn ảnh và chờ phản hồi của /api/upload/bia. Trả mã HTTP (hoặc 0). */
+  const taiAnh = async (f) => {
+    const cho = m.waitForResponse((r) => new URL(r.url()).pathname === '/api/upload/bia', { timeout: 30000 }).catch(() => null);
+    await m.setInputFiles('[data-testid=tai-anh-bia]', f);
+    const r = await cho;
+    await m.waitForTimeout(400);
+    return r?.status() ?? 0;
+  };
+
+  const truoc = await oBia().count();
+  const maGps = await taiAnh(ANH_GPS);
+  const sau = await oBia().count();
+  const daChon = sau > 0 ? await oBia().nth(sau - 1).isChecked() : false;
+  const lon = await m.locator('[data-testid=bia-xem-thu]').getAttribute('src').catch(() => '');
+  const oCuoi = sau > 0 ? await m.locator('[data-testid=chon-bia] img').nth(sau - 1).getAttribute('src') : '';
+  check('Tải ảnh: thành một ô bìa mới, được chọn luôn, ảnh bìa lớn là ảnh đó', maGps === 200 && sau === truoc + 1 && daChon && lon === oCuoi, `HTTP ${maGps}, ${truoc}→${sau} ô`);
+
+  const raBuf = lon ? Buffer.from(await (await m.request.get(lon)).body()) : Buffer.alloc(0);
+  const raMeta = raBuf.length ? await sharp(raBuf).metadata().catch(() => ({})) : {};
+  check('Ảnh bìa trên player là WebP 480×360', raMeta.format === 'webp' && raMeta.width === 480 && raMeta.height === 360, `${raMeta.format} ${raMeta.width}×${raMeta.height}`);
+  check('… và KHÔNG còn EXIF (toạ độ GPS nơi chụp đã bị bỏ)', raBuf.length > 0 && raMeta.exif === undefined && !raBuf.toString('latin1').includes('DienThoaiCuaBe'));
+
+  for (const [ten, f, re] of [
+    ['File không phải ảnh (game đổi đuôi .jpg)', KHONG_PHAI_ANH, /không dùng được/],
+    ['Ảnh SVG', SVG, /không dùng được/],
+    ['Ảnh quá 10MB', QUA_LON, /quá lớn/],
+  ]) {
+    const ma = await taiAnh(f);
+    const loi = await m.locator('[data-testid=xem-thu] [role=alert]').innerText().catch(() => '');
+    check(`${ten}: bị từ chối, báo rõ, không thêm ô bìa`, ma >= 400 && re.test(loi) && (await oBia().count()) === sau, `HTTP ${ma}: ${loi.replace(/\n/g, ' ')}`);
+  }
+  check('… và bản xem thử vẫn còn nguyên sau các lần hỏng', fs.existsSync(fileXemThu(MA)));
+
+  const ANH2 = await taoAnh('anh-2.jpg', '#8338ec');
+  const ANH3 = await taoAnh('anh-3.jpg', '#3a86ff');
+  const ANH4 = await taoAnh('anh-4.jpg', '#fb5607');
+  for (const f of [ANH2, ANH3, ANH4]) await taiAnh(f);
+  check('Tối đa 3 ảnh tự tải cho một bản thử: tải ảnh thứ 4 thì ảnh cũ nhất bị thay', (await oBia().count()) === truoc + 3, `${await oBia().count()} ô (bìa tự tạo ${truoc})`);
+
+  const guiBia = (p, ma) =>
+    p.evaluate(async (ma) => {
+      const fd = new FormData();
+      fd.set('maXemThu', ma);
+      fd.set('anh', new Blob([new Uint8Array([255, 216, 255])], { type: 'image/jpeg' }), 'a.jpg');
+      return (await fetch('/api/upload/bia', { method: 'POST', body: fd })).status;
+    }, ma);
+  {
+    const ctx1b = await browser.newContext();
+    const c1 = await dangNhapBe(ctx1b, BE1);
+    check('Bé KHÁC tải ảnh vào bản thử của bé này: 410', (await guiBia(c1, MA)) === 410);
+    await ctx1b.close();
+    check('Bố mẹ tải ảnh bìa: 403', (await guiBia(phuHuynh, MA)) === 403);
+    const khach = await (await browser.newContext()).newPage();
+    await khach.goto(`${APP}/`, { waitUntil: 'domcontentloaded' });
+    check('Chưa đăng nhập: 401', (await guiBia(khach, MA)) === 401);
+    await khach.context().close();
+  }
+
+  const tran = await m.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  check('390px: có ảnh tự tải vẫn không tràn ngang', tran === 0, `${tran}px`);
+
+  const TEN_ANH = `Game anh tu tai ${suffix}`;
+  const urlChon = await m.locator('[data-testid=bia-xem-thu]').getAttribute('src').catch(() => '');
+  await m.fill('#title', TEN_ANH);
+  await m.locator('[data-testid=dang-game-that]').tap().catch(() => {});
+  await m.waitForURL(/\/game\//, { timeout: 30000 }).catch(() => {});
+  const id = m.url().split('/game/')[1] ?? '';
+  const thumb = id ? sql(`select "thumbSha256" from "Game" where id = '${id}'`) : '';
+  check('Đăng xong: game mang đúng ảnh bé tự tải', thumb.length === 64 && thumb === shaTuUrl(urlChon), thumb.slice(0, 12));
+  check(
+    'Thư báo bố mẹ nói rõ bìa là ẢNH TỰ TẢI, kèm link tới đúng ảnh đó',
+    await choMailToi(MAIL_LOG, PARENT_EMAIL, new RegExp(`${TEN_ANH}[\\s\\S]*ẢNH TỰ TẢI[\\s\\S]*${thumb || 'khong-co'}`))
+  );
+  check(
+    'Game dùng bìa tự tạo thì thư KHÔNG có dòng "ảnh tự tải" (đối chứng)',
+    !(await choMailToi(MAIL_LOG, PARENT_EMAIL, new RegExp(`${TEN1}[\\s\\S]*ẢNH TỰ TẢI`), 1500)) &&
+      (await choMailToi(MAIL_LOG, PARENT_EMAIL, new RegExp(TEN1), 1500))
+  );
   await ctx.close();
 }
 

@@ -46,7 +46,14 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
   const [picked, setPicked] = useState<string[]>([]);
   const [ban, setBan] = useState<BanXemThu | null>(null);
   /** Chỉ số trong `ban.biaUrls`; 0 là bìa mặc định. */
-  const [bia, setBia] = useState(0);
+  const [bia, setBiaState] = useState(0);
+  /* Ref song song vì `onSubmit` có thể phải chờ ảnh bìa tải xong, và chỉ số của ảnh đó
+     chưa kịp vào closure của lần render đã bấm. */
+  const biaRef = useRef(0);
+  const setBia = (i: number) => {
+    biaRef.current = i;
+    setBiaState(i);
+  };
 
   /* Ref song song với state: `onSubmit` phải đọc được bản xem thử MỚI NHẤT sau khi chờ,
      còn state trong closure của lần render cũ thì vẫn là null. */
@@ -55,6 +62,9 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
   const luot = useRef(0);
   /** File đang chọn. Ô chọn file tự xoá giá trị sau mỗi lần chọn — xem `FilePicker`. */
   const fileRef = useRef<File | null>(null);
+  const [dangTaiBia, setDangTaiBia] = useState(false);
+  const [loiBia, setLoiBia] = useState<string | null>(null);
+  const choBia = useRef<Promise<void> | null>(null);
 
   /*
    * Chặn tick quá số cho phép ngay tại chỗ thay vì để server lặng lẽ cắt bớt.
@@ -74,6 +84,41 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
     banRef.current = b;
     setBan(b);
     setBia(0);
+    setLoiBia(null);
+  }
+
+  /**
+   * Bé tải ảnh riêng làm bìa. Server bỏ EXIF (kể cả GPS) và cắt 480×360; ảnh vừa tải
+   * thành một ô bìa và được chọn luôn.
+   */
+  function taiAnhBia(anh: File) {
+    const banLuc = banRef.current;
+    if (!banLuc) return;
+    setLoiBia(null);
+    setDangTaiBia(true);
+    const fd = new FormData();
+    fd.set('maXemThu', banLuc.maXemThu);
+    fd.set('anh', anh);
+    choBia.current = (async () => {
+      try {
+        const res = await fetch('/api/upload/bia', { method: 'POST', body: fd });
+        const data = await res.json();
+        // Bé đã chọn file game khác trong lúc chờ: ảnh này thuộc bản thử cũ, bỏ.
+        if (banRef.current?.maXemThu !== banLuc.maXemThu) return;
+        if (!res.ok) {
+          setLoiBia(data.error ?? 'Không tải được ảnh, thử lại nhé.');
+          return;
+        }
+        const moi = { ...banLuc, biaUrls: data.biaUrls as string[] };
+        banRef.current = moi;
+        setBan(moi);
+        setBia(data.chiSo as number);
+      } catch {
+        setLoiBia('Không gửi được ảnh. Kiểm tra kết nối mạng nhé.');
+      } finally {
+        setDangTaiBia(false);
+      }
+    })();
   }
 
   function xemThu(file: File) {
@@ -108,6 +153,7 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
     setDangDang(true);
 
     if (choXemThu.current) await choXemThu.current;
+    if (choBia.current) await choBia.current;
     const banHienTai = banRef.current;
     if (!banHienTai) {
       // Lỗi xem thử (file hỏng, không phải Scratch…) đã hiện ngay dưới ô chọn file.
@@ -123,7 +169,7 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           maXemThu: banHienTai.maXemThu,
-          bia,
+          bia: biaRef.current,
           title: String(fd.get('title') ?? ''),
           description: String(fd.get('description') ?? ''),
           tags: fd.getAll('tags').map(String),
@@ -254,6 +300,48 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
               </div>
             </fieldset>
           )}
+
+          {/*
+            Tải ảnh riêng làm bìa. Input thật ẩn bằng sr-only (bàn phím vẫn tới được), nhãn là
+            nút bấm. Xoá giá trị sau mỗi lần chọn để chọn lại đúng ảnh cũ vẫn phát `change`.
+            `accept` chỉ JPEG/PNG/WebP: Safari trên iPhone tự đổi ảnh HEIC sang JPEG cho ô như
+            vậy, còn server không đọc được HEIC.
+          */}
+          <div className="mt-4">
+            <input
+              id="anh-bia"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="peer sr-only"
+              data-testid="tai-anh-bia"
+              aria-describedby="anh-bia-goi-y"
+              onChange={(e) => {
+                const f = e.currentTarget.files?.[0];
+                if (f) taiAnhBia(f);
+                e.currentTarget.value = '';
+              }}
+            />
+            <label
+              htmlFor="anh-bia"
+              className="inline-flex min-h-touch cursor-pointer items-center rounded-full border border-border bg-surface px-5 font-bold text-ink hover:bg-bg peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus"
+            >
+              {dangTaiBia ? 'Đang tải ảnh…' : 'Tải ảnh làm bìa'}
+            </label>
+            <p className="mt-2 text-sm text-ink-soft" id="anh-bia-goi-y">
+              Ảnh bìa hiện cho mọi người thấy. Đừng dùng ảnh có mặt mình hay mặt bạn, tên
+              trường, hay địa chỉ nhà nhé.
+            </p>
+            {dangTaiBia && (
+              <p className="sr-only" role="status">
+                Đang tải ảnh bìa…
+              </p>
+            )}
+            {loiBia && (
+              <Notice tone="error" role="alert">
+                {loiBia}
+              </Notice>
+            )}
+          </div>
         </section>
       )}
 
