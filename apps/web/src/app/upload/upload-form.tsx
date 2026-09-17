@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { AnhBia } from '@/components/anh-bia';
 import { Button } from '@/components/button';
 import { Field, TextArea, TextInput } from '@/components/field';
 import { FilePicker } from '@/components/file-picker';
@@ -245,8 +246,10 @@ export function UploadForm({ tags }: { tags: TagOption[] }) {
           <p className="mt-5 font-semibold">Bìa game</p>
           <p className="text-sm text-ink-soft">Bìa này hiện ở trang chủ và trong danh sách game.</p>
           {/* 240×180: đúng khổ 4:3 của sân khấu Scratch, cỡ gần bằng thẻ game trên trang chủ. */}
-          <img
+          {/* Chưa có tên game ở bước này (bé đặt tên sau), nên ô thay thế mang chữ K. */}
+          <AnhBia
             src={ban.biaUrls[bia] ?? ban.thumbUrl}
+            ten="KidoGame"
             alt="Bìa game đang chọn"
             width={240}
             height={180}

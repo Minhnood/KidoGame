@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AnhBia } from './anh-bia';
 import { KHUNG_THE } from './card';
 import { Hoa, La } from './site-decor';
 import { TheDangMo } from './the-dang-mo';
@@ -330,12 +331,11 @@ export function GameCard({ game }: { game: GameCardData }) {
           {/*
             Ảnh nằm trên player origin nên dùng <img> thường thay vì next/image:
             next/image sẽ đòi cấu hình remotePatterns, mà ảnh đã đúng kích thước và
-            đã là webp rồi, không cần tối ưu thêm.
+            đã là webp rồi, không cần tối ưu thêm. `AnhBia` vẽ ô thay thế khi ảnh hỏng.
           */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <AnhBia
             src={game.thumbUrl}
-            alt=""
+            ten={game.title}
             loading="lazy"
             width={480}
             height={360}

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
 import { choBeDangNhapAction, createChildAction } from '@/lib/actions';
+import { AnhBia } from '@/components/anh-bia';
 import { Button } from '@/components/button';
 import { gameDangBiKhieuNai } from '@/lib/takedown';
 import { objectUrl } from '@/lib/storage';
@@ -320,9 +321,9 @@ export default async function ParentDashboard({
                         đọc thì cả danh sách đọc được trong một cái liếc.
                       */}
                       <span className="flex min-w-0 items-center gap-3">
-                        <img
+                        <AnhBia
                           src={objectUrl('thumb', game.thumbSha256)}
-                          alt=""
+                          ten={game.title}
                           width={80}
                           height={60}
                           loading="lazy"
