@@ -27,8 +27,20 @@ export function FormColumn({
   rong?: 'vua' | 'to';
   children: ReactNode;
 }) {
+  /*
+   * Khai bề rộng cột cho tranh trang trí hai bên (xem `--kg-cot` ở `site-decor`): cột
+   * form + 48px hở mỗi bên. Không khai thì cành bám theo khung 1024px và dừng cách thẻ
+   * form 262px ở 1280px, để hở một mảng tối giữa tranh và nội dung.
+   *
+   * Thẻ <style> đặt ở đây chứ không phải ở từng trang: bảy trang dùng `FormColumn`, khai
+   * tay ở từng trang là bảy chỗ để quên, và trang thêm sau sẽ lặng lẽ không có.
+   */
+  const cot = rong === 'to' ? '41rem' : '37.25rem';
   return (
-    <div className={`mx-auto w-full ${rong === 'to' ? 'max-w-140' : 'max-w-125'}`}>{children}</div>
+    <>
+      <style>{`:root{--kg-cot:${cot}}`}</style>
+      <div className={`mx-auto w-full ${rong === 'to' ? 'max-w-140' : 'max-w-125'}`}>{children}</div>
+    </>
   );
 }
 

@@ -58,7 +58,11 @@ Còn lại cần **cả hai server đang chạy + Chrome**, và server phải đ
 
 ```bash
 # GLITCHTIP_DSN chỉ cần cho e2e-glitchtip (máy nhận giả ở cổng 3997).
+# Ba biến MIXPANEL_* chỉ cần cho e2e-mixpanel (máy nhận giả ở cổng 3998). Thiếu chúng
+# thì máy chủ không gửi sự kiện nào — đúng trạng thái mặc định — và bộ đó ĐỎ.
 GLITCHTIP_DSN=http://0123456789abcdef0123456789abcdef@127.0.0.1:3997/7 \
+MIXPANEL_TOKEN=token-thu MIXPANEL_ID_SALT=muoi-thu-cho-bo-kiem-1234 \
+MIXPANEL_API=http://127.0.0.1:3998 \
   pnpm --filter @kidogame/web dev > /tmp/kg-mail.log 2>&1 &
 node infra/player-server.mjs &
 
@@ -80,6 +84,8 @@ node infra/e2e-bao-loi.mjs                                         # 30, cần p
 node infra/e2e-touch.mjs                                           # 14, tự dựng game có phím
 node infra/e2e-errorlog.mjs                                        # 40, không cần .sb3
 node infra/e2e-glitchtip.mjs                                       # 26, chạy lại cách 60 giây
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG MIXPANEL_TOKEN=token-thu \
+  node infra/e2e-mixpanel.mjs                                      # 22, cần psql + ba biến MIXPANEL_* ở server
 node infra/e2e-admin-origin.mjs                                    # 27, không cần .sb3
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 49, cần psql
@@ -89,7 +95,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
 node infra/e2e-bia-hong.mjs                                        # 13, cần psql + tài khoản demo
 node infra/contrast-check.mjs                                      # 160 phép đo màu
-node infra/a11y-check.mjs                                          # 27
+node infra/a11y-check.mjs                                          # 29
 ```
 
 > **`e2e-discovery` cần DB dev có hơn 24 game published.** Phần phân trang của nó

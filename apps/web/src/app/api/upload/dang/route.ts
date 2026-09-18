@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Sb3Error } from '@kidogame/sb3';
 import { dangBanXemThu, MAX_TAGS_PER_GAME } from '@/lib/ingest';
+import { guiSuKien } from '@/lib/mixpanel';
 import { getActor } from '@/lib/session';
 
 /**
@@ -50,14 +51,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });
   }
 
+  /* Bước 3 của phễu: bé đã bấm "Đăng game". Gửi TRƯỚC khi tạo game, vì cái cần đo là
+     bé có bấm hay không — tạo hỏng thì `dang-loi` ngay dưới sẽ nói. */
+  const batDau = Date.now();
+  guiSuKien('bam-dang', actor.id, { bia_tu_tai: bia > 0 });
+
   try {
     const result = await dangBanXemThu(maXemThu, actor.id, { title, description, tagSlugs, chiSoBia: bia });
+    guiSuKien('dang-xong', actor.id, { mili_giay: Date.now() - batDau });
     return NextResponse.json(result, { status: 201 });
   } catch (e) {
     if (e instanceof Sb3Error) {
       const status = e.code === 'RATE_LIMITED' ? 429 : e.code === 'PREVIEW_EXPIRED' ? 410 : 400;
+      guiSuKien('dang-loi', actor.id, { ma_loi: e.code, mili_giay: Date.now() - batDau });
       return NextResponse.json({ error: e.message, code: e.code }, { status });
     }
+    guiSuKien('dang-loi', actor.id, { ma_loi: 'KHONG_RO', mili_giay: Date.now() - batDau });
     console.error('[upload/dang] lỗi không lường trước:', e);
     return NextResponse.json({ error: 'Có lỗi xảy ra, thử lại sau nhé.' }, { status: 500 });
   }
