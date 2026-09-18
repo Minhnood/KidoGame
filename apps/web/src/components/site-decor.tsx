@@ -73,6 +73,16 @@
  */
 const RONG_LE = 'w-[calc(min((100vw-64rem)/2,32rem)+var(--kg-lan))]';
 
+/*
+ * MẶT ĐẤT KHÔNG THEO `--kg-cot`, CÀNH THÌ CÓ — và đây là chỗ duy nhất hai thứ lệch nhau.
+ *
+ * Ghi chú trên nói ba hình cùng một lề phải cùng bề rộng. Vẫn đúng với ba hình ấy ở
+ * TRÊN CAO. Nhưng mặt đất nằm ở đáy trang, ngay dưới chân trang, mà chữ chân trang bắt
+ * đầu đúng ở mép khung 1024px (`Wrap`). Cho mặt đất rộng theo cột form (596px) thì ở
+ * 1280px nó chiếm tới x=342 trong khi chữ "KidoGame — sân chơi…" bắt đầu ở x=148: cái
+ * cây mọc đè lên chữ. Cành ở hai bên sườn trang thì không gặp chữ nào.
+ */
+
 /**
  * Khoảng tranh được LAN RA NGOÀI mép màn hình, chỉ ở dải màn hình hẹp.
  *
@@ -562,6 +572,12 @@ function Canh({ delay = 0, ru = false }: { delay?: number; ru?: boolean }) {
  * Việc lật làm BÊN TRONG `Canh`, không phải bằng `-scale-y-100` ở thẻ <svg> này —
  * lật cả thẻ là lật luôn quả táo với bông hoa, mà hai thứ đó có chiều đúng - sai.
  */
+/**
+ * Cành dài tối đa bao nhiêu pixel (ở `co` = 1). Khung vẽ rộng 300 đơn vị, nên đây cũng
+ * là tỉ lệ vẽ tối đa: 360px = 1.2. Trên cỡ này lá bắt đầu to hơn tán cây ở chân trang.
+ */
+const CANH_TOI_DA = 360;
+
 function CanhVien({
   ben,
   top,
@@ -584,7 +600,22 @@ function CanhVien({
       // nhân thêm `co`.
       style={{
         top,
-        width: `calc((min((100vw - 64rem) / 2, 32rem) + var(--kg-lan)) * ${co})`,
+        /*
+         * CÀNH DÀI TỚI ĐÂU: theo lề THẬT của trang, có trần.
+         *
+         * `--kg-cot` là bề rộng cột nội dung thật, mặc định 64rem (khung chung); trang
+         * chỉ có một form khai lại nó (xem `FormColumn`) vì cột form rộng 500px trong
+         * khung 1024px. Không có nó thì ở 1280px cành dừng cách thẻ form 262px và ở giữa
+         * là một mảng tối chẳng có gì — thứ fen chỉ ra ngày 18/9.
+         *
+         * TRẦN `CANH_TOI_DA` mới là chỗ quyết định, và nó có vì hai hướng đã thử đều sai:
+         *  - Cho cành rộng bằng cả lề thật: tỉ lệ vẽ lên 1.35 ở 1280px và 1.57 ở 1536px,
+         *    lá cành to hơn tán cây dưới chân trang — cùng một khu vườn, hai cỡ lá.
+         *  - Giữ nguyên cỡ rồi DỜI cành vào sát nội dung: cành rời khỏi mép màn hình,
+         *    lơ lửng giữa dải, trong khi cả bộ tranh này vẽ cành MỌC TỪ MÉP vào.
+         * Nên: gốc vẫn ở mép, cành dài thêm tới trần rồi thôi.
+         */
+        width: `min((min((100vw - var(--kg-cot, 64rem)) / 2, 32rem) + var(--kg-lan)) * ${co}, ${CANH_TOI_DA * co}px)`,
         // Cành nhỏ hơn thì lan ra ngoài ít hơn, đúng theo `co` — không thì cành
         // co=0.7 bị đẩy ra ngoài quá nửa gốc trong khi cành co=1 chỉ mất một khúc.
         [ben === 'trai' ? 'left' : 'right']: `calc(var(--kg-lan) * ${co} * -1)`,

@@ -459,6 +459,98 @@ console.log('\n── Thanh điều hướng nằm trọn trong màn hình ─�
   await parent.close();
 }
 
+// ---------------------------------------------------------------------------
+// Dải trang trí hai bên: không đè nội dung, cũng không bỏ trống một mảng lớn
+// ---------------------------------------------------------------------------
+/*
+ * HAI PHÍA CỦA CÙNG MỘT CON SỐ, nên đo cùng nhau.
+ *
+ * Tranh hai bên rộng theo lề còn lại của trang. Rộng quá một chút là một nhát cắt dọc
+ * chồng lên chữ; hẹp quá thì giữa cành và nội dung hở ra một mảng tối chẳng có gì —
+ * đúng thứ fen chỉ ra ở 1280px ngày 18/9: trang form rộng 500px trong khung 1024px,
+ * nên mỗi bên trống khoảng 200px mà không ai vẽ.
+ *
+ * Đo trên HAI kiểu trang vì lề của chúng khác nhau: trang form (cột hẹp) và trang chủ
+ * (lưới rộng hết khung 1024px). Mốc 1280 là mốc tranh bắt đầu hiện.
+ */
+console.log('\n── Dải trang trí hai bên ───────────────────────────────────');
+{
+  const ctxDecor = await browser.newContext({ ignoreHTTPSErrors: true });
+  const page = await ctxDecor.newPage();
+  /* `/upload` cần phiên của bé — và đó đúng là trang fen chụp khi chỉ ra chỗ này. Cột
+     của nó rộng hơn (`FormColumn rong="to"`), nên nó kiểm luôn con số thứ hai. */
+  const ctxBe = await browser.newContext({ ignoreHTTPSErrors: true });
+  await ctxBe.addCookies(await child.cookies());
+  const pageBe = await ctxBe.newPage();
+  const doLe = async (duong, width) => {
+    const p = duong === '/upload' ? pageBe : page;
+    await p.setViewportSize({ width, height: 900 });
+    await p.goto(APP + duong, { waitUntil: 'networkidle' });
+    return p.evaluate(() => {
+      const W = document.documentElement.clientWidth;
+      const le = document.querySelector('[data-kg-decor=le]');
+      if (!le || getComputedStyle(le).display === 'none') return null;
+      const hinh = [...le.querySelectorAll('svg')]
+        .map((s) => s.getBoundingClientRect())
+        .filter((r) => r.width > 1 && r.height > 1);
+      /* Mép TRONG của tranh: xa nhất về phía giữa trang, tính riêng từng bên. */
+      const phaiCuaTrai = Math.max(...hinh.filter((r) => r.right < W / 2).map((r) => r.right), 0);
+      const traiCuaPhai = Math.min(...hinh.filter((r) => r.left > W / 2).map((r) => r.left), W);
+      /* Nội dung thật = thứ CÓ VẼ RA: có nền, có viền, hoặc là ô chữ không còn con.
+         Khung bọc trong suốt (`max-w-5xl` rộng 1024px) không vẽ gì, mà đo theo nó thì
+         khe hở luôn bằng 0 và phép kiểm này xanh suông — đã vấp đúng một lần. */
+      const oNoiDung = [...document.querySelectorAll('main *')]
+        .map((el) => ({ el, r: el.getBoundingClientRect(), s: getComputedStyle(el) }))
+        .filter(({ r, s }) => r.width > 24 && r.height > 8 && r.width < W - 8 && s.visibility !== 'hidden')
+        .filter(({ el, s }) =>
+          s.backgroundColor !== 'rgba(0, 0, 0, 0)' ||
+          s.backgroundImage !== 'none' ||
+          parseFloat(s.borderTopWidth) > 0 ||
+          (el.children.length === 0 && (el.textContent ?? '').trim() !== '')
+        );
+      if (!oNoiDung.length) return null;
+      const traiNoiDung = Math.min(...oNoiDung.map(({ r }) => r.left));
+      const phaiNoiDung = Math.max(...oNoiDung.map(({ r }) => r.right));
+      return {
+        deTrai: Math.round(phaiCuaTrai - traiNoiDung),
+        dePhai: Math.round(phaiNoiDung - traiCuaPhai),
+        hoTrai: Math.round(traiNoiDung - phaiCuaTrai),
+        hoPhai: Math.round(traiCuaPhai - phaiNoiDung),
+      };
+    });
+  };
+
+  const de = [];
+  const ho = [];
+  /*
+   * Khe hở chỉ soi từ 1280 tới 1536. Cành dài có TRẦN (`CANH_TOI_DA`, 360px) để lá
+   * không to hơn tán cây ở chân trang, nên màn càng rộng khe càng lớn — ở 1920px là
+   * 350px và đó là cố ý. Mốc 1536 là chỗ trần bắt đầu ăn; đòi khe nhỏ ở mọi cỡ là đòi
+   * bỏ trần, tức quay lại đúng cái đã phải sửa.
+   */
+  const KHE_TOI_DA = 160;
+  for (const duong of ['/be-dang-nhap', '/upload', '/']) {
+    for (const width of [1280, 1366, 1440, 1536, 1920]) {
+      const r = await doLe(duong, width);
+      if (!r) {
+        de.push(`${duong} ${width}px: không thấy dải trang trí`);
+        continue;
+      }
+      if (r.deTrai > 0.5 || r.dePhai > 0.5) de.push(`${duong} ${width}px: đè ${r.deTrai}px/${r.dePhai}px`);
+      if (width <= 1536 && (r.hoTrai > KHE_TOI_DA || r.hoPhai > KHE_TOI_DA))
+        ho.push(`${duong} ${width}px: hở ${r.hoTrai}px/${r.hoPhai}px`);
+    }
+  }
+  check('Tranh hai bên KHÔNG đè lên nội dung, từ 1280px tới 1920px', de.length === 0, de.join(' | ') || '3 trang × 5 cỡ sạch');
+  check(
+    `… và từ 1280 tới 1536px không bỏ trống quá ${KHE_TOI_DA}px giữa tranh với nội dung`,
+    ho.length === 0,
+    ho.join(' | ') || '3 trang × 4 cỡ sạch'
+  );
+  await ctxDecor.close();
+  await ctxBe.close();
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
