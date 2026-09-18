@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Sb3Error, LIMITS } from '@kidogame/sb3';
 import { taoBanXemThu } from '@/lib/ingest';
+import { guiSuKien, nhomDungLuong } from '@/lib/mixpanel';
 import { getActor } from '@/lib/session';
 
 // Đóng gói cần Node API (sharp, zlib, fs) — không chạy được trên edge runtime.
@@ -72,20 +73,33 @@ export async function POST(request: Request) {
     );
   }
 
+  /*
+   * Bước 1 của phễu (xem `lib/mixpanel.ts`). Đặt SAU khi đã biết đây là bé thật và file
+   * hợp lệ về dung lượng: đếm cả request của người lạ thì phễu đếm cả bot.
+   */
+  const batDau = Date.now();
+  guiSuKien('chon-file', actor.id, { nhom_dung_luong: nhomDungLuong(file.size) });
+
   try {
     const result = await taoBanXemThu({
       sb3: Buffer.from(await file.arrayBuffer()),
       childId: actor.id,
+    });
+    guiSuKien('xem-thu-xong', actor.id, {
+      so_bia: Array.isArray(result.biaUrls) ? result.biaUrls.length : 0,
+      mili_giay: Date.now() - batDau,
     });
     return NextResponse.json(result, { status: 200 });
   } catch (e) {
     if (e instanceof Sb3Error) {
       // `detail` chỉ để log phía server, không bao giờ lộ ra client.
       console.warn(`[upload] từ chối ${e.code}: ${e.detail ?? e.message}`);
+      guiSuKien('dang-loi', actor.id, { ma_loi: e.code, mili_giay: Date.now() - batDau });
       const status = e.code === 'RATE_LIMITED' ? 429 : 400;
       return NextResponse.json({ error: e.message, code: e.code }, { status });
     }
     console.error('[upload] lỗi không lường trước:', e);
+    guiSuKien('dang-loi', actor.id, { ma_loi: 'KHONG_RO', mili_giay: Date.now() - batDau });
     return NextResponse.json({ error: 'Có lỗi xảy ra, thử lại sau nhé.' }, { status: 500 });
   }
 }

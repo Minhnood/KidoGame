@@ -48,6 +48,9 @@ function A({ href, children }: { href: string; children: ReactNode }) {
 }
 
 export default function TermsPage() {
+  /* Khai đúng những gì ĐANG chạy: xem ghi chú ở đoạn "Các bước khi bé đăng game". */
+  const guiPheuDangGame =
+    !!process.env.MIXPANEL_TOKEN?.trim() && !!process.env.MIXPANEL_ID_SALT?.trim();
   const op = operator();
 
   return (
@@ -249,11 +252,31 @@ export default function TermsPage() {
         <p>
           <strong>Thống kê lượt xem:</strong> chúng tôi đếm số lượt mở từng trang để biết web có
           ai dùng và trang nào hay bị lỗi. Việc đếm chạy trên chính máy chủ của KidoGame, không
-          gửi cho công ty quảng cáo hay phân tích nào, không đặt cookie và không lưu địa chỉ IP.
+          gửi cho công ty quảng cáo nào, không đặt cookie và không lưu địa chỉ IP.
           Mỗi lượt chỉ ghi trang được mở, loại trình duyệt, thiết bị, cỡ màn hình, ngôn ngữ, và
           quốc gia/thành phố ước đoán từ địa chỉ IP — không gắn với tài khoản nào, và không ghi lại những gì bé gõ
           vào ô tìm kiếm. Trình duyệt bật &quot;Do Not Track&quot; thì không được đếm.
         </p>
+        {/*
+          ĐOẠN NÀY CHỈ HIỆN KHI TÍNH NĂNG THẬT SỰ BẬT.
+          Thiếu `MIXPANEL_TOKEN` hoặc `MIXPANEL_ID_SALT` là máy chủ không gửi một byte nào
+          (xem `lib/mixpanel.ts`), và một trang điều khoản khai một việc không xảy ra thì
+          cũng sai như khai thiếu một việc đang xảy ra. `/dieu-khoan` là trang dynamic nên
+          bật/tắt biến môi trường là câu chữ đổi theo, không cần build lại.
+        */}
+        {guiPheuDangGame && (
+          <p>
+            <strong>Các bước khi bé đăng game:</strong> để biết bé hay dừng lại ở bước nào, chúng
+            tôi gửi năm mốc — bé chọn file, bản chơi thử dựng xong, bấm Đăng, đăng xong, và đăng
+            lỗi — sang <strong>Mixpanel</strong>, một dịch vụ phân tích đặt tại Mỹ. Mỗi mốc chỉ
+            mang: một mã đại diện cho bé (băm một chiều bằng khoá chỉ máy chủ chúng tôi biết, nên
+            Mixpanel không dò ngược ra được bé nào), nhóm dung lượng file, số ảnh bìa, mã lỗi kỹ
+            thuật nếu có, và thời gian máy chủ xử lý. <em>Không</em> có tên đăng nhập, tên bé,
+            email bố mẹ, tên game, hay bất cứ chữ nào bé gõ. Việc gửi do máy chủ của chúng tôi
+            làm: không có đoạn mã nào của Mixpanel chạy trong máy của bé, và Mixpanel không nhận
+            địa chỉ IP của bé.
+          </p>
+        )}
         <p>
           <strong>Khi web bị lỗi:</strong> chúng tôi ghi lại trang bị lỗi (bỏ phần sau dấu{' '}
           <code>?</code>), thông báo lỗi kỹ thuật đã che email và các mã bí mật, và loại trình

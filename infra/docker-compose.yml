@@ -126,6 +126,12 @@ services:
       # của compose, không vòng ra Internet rồi vào lại Caddy. RỖNG = không gửi lỗi nào.
       # Chỉ server đọc biến này; nó không bao giờ xuống trình duyệt.
       GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      # Phễu đăng game gửi sang Mixpanel — chỉ SERVER gửi, không có SDK nào xuống
+      # trình duyệt của bé. THIẾU MỘT TRONG HAI = không gửi gì, và trang /dieu-khoan
+      # tự bỏ đoạn khai báo đi. `MIXPANEL_ID_SALT` là khoá băm id của bé trước khi
+      # gửi: đổi khoá là mọi bé thành người mới trong Mixpanel.
+      MIXPANEL_TOKEN: ${MIXPANEL_TOKEN:-}
+      MIXPANEL_ID_SALT: ${MIXPANEL_ID_SALT:-}
       # Cùng lý do như hai service backup và prune, nhưng hệ quả ở đây là thứ NGƯỜI
       # DÙNG đọc: mọi ngày tháng của app đều do container này định dạng. Không có
       # dòng này thì nó chạy UTC, và mốc nào rơi sau 17:00 giờ ta bị in lùi một ngày
