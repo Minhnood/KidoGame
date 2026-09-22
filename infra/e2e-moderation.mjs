@@ -321,14 +321,26 @@ const admin = await adminCtx.newPage();
     els.every((e) => /noopener/.test(e.rel) && /noreferrer/.test(e.rel))
   )) && soLink > 0;
   check('Mọi link ra ngoài đều có rel noopener noreferrer', relDu, `${soLink} link`);
-  /* Máy dev không cấu hình hai biến này, nên đúng trạng thái phải là "Chưa bật" — và
-     đó cũng là phép canh rằng trang KHÔNG vẽ chấm xanh cho thứ chưa ai đo. */
-  check(
-    'Máy dev chưa cấu hình: Umami ghi "Chưa bật", không phải "Đang chạy"',
-    (await admin.locator('[data-testid=giam-sat-umami-trang-thai]').innerText()).trim() ===
-      'Chưa bật',
-    await admin.locator('[data-testid=giam-sat-umami-trang-thai]').innerText()
-  );
+  /*
+   * BẤT BIẾN, không chốt cứng một trạng thái: máy dev của người này có `STATS_ORIGIN`,
+   * máy người kia không, nên "Umami phải ghi Chưa bật" là phép đỏ oan chờ sẵn — đã
+   * đỏ oan thật ngay hôm trỏ máy dev vào dashboard production.
+   *
+   * Cái luôn đúng ở mọi cấu hình: nhãn phải nằm trong bốn nhãn đã biết (sai chính tả
+   * hay thêm trạng thái thứ năm là lộ ra ở đây), và "Chưa bật" phải đi cùng KHÔNG có
+   * link — một thẻ vừa nói chưa bật vừa mời bấm là tự mâu thuẫn.
+   */
+  const NHAN_BIET = ['Đang chạy', 'Không trả lời', 'Chưa bật', 'Đang bật · không tự đo được'];
+  for (const id of ['umami', 'glitchtip', 'mixpanel']) {
+    const nhan = (await admin.locator(`[data-testid=giam-sat-${id}-trang-thai]`).innerText()).trim();
+    const coLink = (await admin.locator(`[data-testid=giam-sat-${id}] a[target=_blank]`).count()) > 0;
+    check(`Thẻ ${id} mang một nhãn trạng thái đã biết`, NHAN_BIET.includes(nhan), nhan);
+    check(
+      `Thẻ ${id}: "Chưa bật" thì không có link, và ngược lại`,
+      (nhan === 'Chưa bật') !== coLink,
+      `${nhan} · ${coLink ? 'có link' : 'không link'}`
+    );
+  }
   await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
 
   const row = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
