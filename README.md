@@ -69,7 +69,7 @@ node infra/player-server.mjs &
 export SB3=/đường/dẫn/tới/game.sb3
 export MAIL_LOG=/tmp/kg-mail.log
 
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 92 kiểm tra
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 93 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 57
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 77
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
@@ -94,6 +94,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần p
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
 node infra/e2e-bia-hong.mjs                                        # 13, cần psql + tài khoản demo
+node infra/e2e-tai-ve.mjs                                          # 17, cần psql; mượn file của game PUBLISHED mới nhất
 node infra/contrast-check.mjs                                      # 160 phép đo màu
 node infra/a11y-check.mjs                                          # 29
 ```
