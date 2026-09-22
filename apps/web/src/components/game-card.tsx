@@ -43,6 +43,135 @@ const LA_CANH_MOC: Array<[number, number, number, number]> = [
 ];
 
 /**
+ * Một vòng dây leo bò quanh mép thẻ, VẼ DẦN THEO CHIỀU KIM ĐỒNG HỒ từ góc trên bên
+ * trái — fen chốt 22/9.
+ *
+ * Tổng thời gian một vòng. Mọi thứ khác trên thẻ đều lấy mốc từ đây: lá bật ra đúng
+ * lúc dây bò qua chỗ nó, và bốn cành góc mọc đúng lúc dây chạm góc ấy. Một con số duy
+ * nhất, nên không có chuyện lá đi trước dây.
+ */
+const VONG_MS = 900;
+
+/**
+ * `preserveAspectRatio="none"` là mấu chốt, không phải cẩu thả.
+ *
+ * Thẻ game cao thấp khác nhau (tên game một dòng hay hai dòng) và rộng khác nhau theo
+ * số cột, nên không có tỉ lệ cố định nào để khai. Cho khung 100×100 giãn tự do theo hộp
+ * thì bốn cạnh của `<rect>` LUÔN nằm đúng bốn mép thẻ. Cái giá là nét vẽ bị kéo méo —
+ * trả bằng `vector-effect="non-scaling-stroke"`, nhờ đó độ dày nét tính theo pixel màn
+ * hình chứ không theo khung đã giãn.
+ *
+ * `pathLength="100"` đổi chiều dài đường thành 100 đơn vị, bất kể thẻ to nhỏ. Nhờ vậy
+ * `stroke-dashoffset` chạy 100 → 0 là vẽ hết đúng một vòng, và vị trí của một chiếc lá
+ * tính theo phần trăm cũng chính là mốc thời gian của nó.
+ *
+ * `<rect>` của SVG vẽ THEO CHIỀU KIM ĐỒNG HỒ và bắt đầu ở cạnh trên bên trái — đúng
+ * chiều fen muốn, nên không phải tự viết path.
+ */
+function DayLeo() {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      focusable="false"
+      className="pointer-events-none absolute inset-0 size-full"
+      fill="none"
+    >
+      <rect
+        x="1"
+        y="1"
+        width="98"
+        height="98"
+        rx="6"
+        pathLength="100"
+        vectorEffect="non-scaling-stroke"
+        stroke="var(--color-decor-than)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        /* Vẽ dần bằng `transition` chứ không bằng `@keyframes`: khối
+           `prefers-reduced-motion` chung ở cuối `globals.css` ép mọi transition về
+           0,01ms, nên người xin ít chuyển động thấy dây hiện ra ngay, đứng yên. Dùng
+           animation thì phải nhớ thêm tên class vào danh sách tắt ở đó — một chỗ nữa
+           để quên. */
+        data-testid="day-leo"
+        className="[stroke-dasharray:100] [stroke-dashoffset:100] transition-[stroke-dashoffset] ease-out group-hover:[stroke-dashoffset:0]"
+        style={{ transitionDuration: `${VONG_MS}ms` }}
+      />
+    </svg>
+  );
+}
+
+/**
+ * Lá mọc dọc bốn cạnh: [phần trăm dọc đường đi, trái %, trên %, góc xoay].
+ *
+ * Phần trăm dọc đường đi vừa là chỗ đứng vừa là mốc thời gian — cạnh trên chiếm 0–25,
+ * phải 25–50, dưới 50–75, trái 75–100, đúng như `<rect>` tự vẽ. Góc xoay cho lá CHĨA RA
+ * NGOÀI thẻ: chĩa vào trong thì lá nằm đè lên ảnh bìa của bé.
+ */
+const LA_VIEN: Array<[number, number, number, number]> = [
+  // Cạnh trên, trái → phải
+  [5, 20, 0, -80],
+  [11, 44, 0, -100],
+  [17, 68, 0, -75],
+  [23, 92, 0, -95],
+  // Cạnh phải, trên → dưới
+  [30, 100, 20, 10],
+  [36, 100, 44, -10],
+  [42, 100, 68, 15],
+  [48, 100, 92, -5],
+  // Cạnh dưới, phải → trái
+  [55, 80, 100, 100],
+  [61, 56, 100, 80],
+  [67, 32, 100, 105],
+  [73, 8, 100, 85],
+  // Cạnh trái, dưới → lên
+  [80, 0, 80, 190],
+  [86, 0, 56, 170],
+  [92, 0, 32, 195],
+  [98, 0, 8, 175],
+];
+
+function LaVien() {
+  return (
+    <>
+      {LA_VIEN.map(([moc, trai, tren, g], i) => (
+        /*
+         * HAI TẦNG, cùng cái bẫy đã ghi ở `CanhMoc` và ở lá rơi: tầng ngoài giữ phép
+         * đặt chỗ (dịch về đúng mép, xoay ra ngoài), tầng trong mới mang hiệu ứng nở.
+         * Gộp một tầng thì `scale-0` của Tailwind ghi đè `translate`+`rotate` và cả
+         * mười sáu chiếc lá nhảy về góc trên bên trái thẻ.
+         */
+        <span
+          key={i}
+          aria-hidden="true"
+          data-testid="la-vien"
+          className="pointer-events-none absolute"
+          style={{ left: `${trai}%`, top: `${tren}%`, transform: `translate(-50%, -50%) rotate(${g}deg)` }}
+        >
+          <svg
+            viewBox="0 -8 26 16"
+            className="block h-2.5 w-4 scale-0 opacity-0 transition-all duration-200 ease-out group-hover:scale-100 group-hover:opacity-100"
+            /* Lá bật ra ĐÚNG LÚC dây bò tới chỗ nó. Trừ đi một nhịp ngắn để lá nhú
+               ngay sau nét vẽ chứ không lẽo đẽo phía sau. */
+            style={{ transitionDelay: `${Math.max(0, (moc / 100) * VONG_MS - 60)}ms` }}
+            fill="none"
+          >
+            <La
+              x={0}
+              y={0}
+              g={0}
+              s={1}
+              mau={i % 2 ? 'var(--color-decor-la-dam)' : 'var(--color-decor-la)'}
+            />
+          </svg>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
  * MỘT cành mọc ra từ một góc thẻ khi trỏ chuột vào.
  *
  * `origin-*` đặt ở đúng góc cành dính vào thẻ, rồi `scale-0` → `scale-100`: nó lớn dần
@@ -79,6 +208,7 @@ function CanhMoc({
   lat = false,
   doc = false,
   cham = 0,
+  moc = 0,
 }: {
   /** Lớp Tailwind đặt chỗ: góc nào của thẻ, và gốc phóng ở đâu. */
   o: string;
@@ -87,6 +217,8 @@ function CanhMoc({
   doc?: boolean;
   /** Lệch pha nhịp rung, giây. Ba cành rung cùng nhịp thì cả thẻ giật như một khối. */
   cham?: number;
+  /** Góc này nằm ở đâu trên vòng dây leo, phần trăm — quyết định lúc cành bung ra. */
+  moc?: number;
 }) {
   return (
     <svg
@@ -94,6 +226,7 @@ function CanhMoc({
       aria-hidden="true"
       focusable="false"
       className={`pointer-events-none absolute scale-0 opacity-0 transition-all duration-300 ease-out group-hover:scale-100 group-hover:opacity-100 ${o} ${rong}`}
+      style={{ transitionDelay: `${(moc / 100) * VONG_MS}ms` }}
       fill="none"
     >
       <g
@@ -280,25 +413,34 @@ export function GameCard({ game }: { game: GameCardData }) {
      * cành và lá đều `absolute` nên chúng không nới hộp của lớp bọc ra.
      */
     <div className="kg-the-game group relative">
-      <CanhMoc o="bottom-full left-full -mb-6 -ml-10 origin-bottom-left" rong="w-28" />
+      {/*
+        `moc` là vị trí của góc ấy trên vòng dây leo, nên bốn cành bung ra theo đúng
+        chiều kim đồng hồ: trên-trái (0) → trên-phải (25) → dưới-phải (50) → dưới-trái
+        (75). Trước đây cả bốn mọc cùng lúc, và cùng lúc thì thẻ chỉ "nở bụp" một cái
+        chứ không đọc ra là có thứ gì đang bò quanh.
+      */}
+      <CanhMoc o="bottom-full left-full -mb-6 -ml-10 origin-bottom-left" rong="w-28" moc={25} />
       <CanhMoc
         o="top-full right-full -mr-9 -mt-6 origin-top-right"
         rong="w-24"
         lat
         doc
         cham={-0.7}
+        moc={75}
       />
       <CanhMoc
         o="bottom-full right-full -mb-5 -mr-8 origin-bottom-right"
         rong="w-20"
         lat
         cham={-1.4}
+        moc={0}
       />
       <CanhMoc
         o="top-full left-full -ml-8 -mt-5 origin-top-left"
         rong="w-16"
         doc
         cham={-2.1}
+        moc={50}
       />
 
       <Link
@@ -433,6 +575,14 @@ export function GameCard({ game }: { game: GameCardData }) {
           <p className="truncate text-sm text-ink-soft">{game.authorName}</p>
         </div>
       </Link>
+
+      {/*
+        Dây leo và lá viền vẽ SAU thẻ, tức nằm TRƯỚC mặt thẻ. Ngược với bốn cành góc:
+        cành phải nằm phía sau để trông như mọc từ sau thẻ chĩa ra, còn dây leo phải bò
+        TRÊN mép thẻ — nằm sau thì nó bị chính thẻ che kín và không thấy gì.
+      */}
+      <DayLeo />
+      <LaVien />
 
       {/* Lá rơi vẽ SAU CÙNG nên nó trôi qua trước mặt thẻ — xem ghi chú ở `LaRoi`. */}
       <LaRoi />

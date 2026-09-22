@@ -1477,6 +1477,19 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    /*
+     * ĐỘ TRỄ cũng phải về 0, không chỉ thời lượng — và chỗ này từng thiếu.
+     *
+     * Lá mọc quanh viền thẻ game xếp độ trễ tăng dần để bò một vòng trong 0,9 giây.
+     * Ép mỗi thời lượng thì từng chiếc lá bật ra tức thì, nhưng CẢ VÒNG vẫn kéo dài
+     * đúng 0,9 giây — hoá ra mười sáu cú nảy rời rạc nối nhau, giật hơn hẳn một
+     * chuyển động mượt. Đo được: sau 120ms mới có 2/16 lá hiện ra.
+     *
+     * `animation-delay` thì KHÔNG đụng tới: năm đám mây dùng độ trễ âm để rải chỗ
+     * đứng, ép nó về 0 là cả năm đám chồng lên nhau ở một chỗ — xem ghi chú ngay
+     * dưới đây.
+     */
+    transition-delay: 0s !important;
   }
 
   /*
