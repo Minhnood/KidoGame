@@ -2,14 +2,15 @@
  * Rê chuột vào thẻ game thì lá mọc quanh viền, THEO CHIỀU KIM ĐỒNG HỒ (fen chốt 22/9).
  *
  * VÌ SAO KHÔNG CHỈ ĐẾM LÁ. Một bản cài sai — bỏ hết độ trễ, hoặc đặt độ trễ ngược —
- * vẫn cho ra đủ 16 chiếc lá hiện ra khi hover, và mọi phép đếm vẫn xanh. Thứ duy nhất
+ * vẫn cho ra đủ 28 chiếc lá hiện ra khi hover, và mọi phép đếm vẫn xanh. Thứ duy nhất
  * phân biệt được là ĐO GIỮA CHỪNG: chụp độ mờ của từng chiếc ở một thời điểm cố định
  * sau khi chuột vào, rồi xem lá nào đã nở, lá nào chưa. Đúng chiều thì ranh giới nằm
  * gọn ở một chỗ và mọi lá trước nó đều nở, mọi lá sau nó đều chưa.
  *
- * VÌ SAO CÓ PHÉP "KHÔNG CHẶN CÚ BẤM". Lá và dây leo nằm ĐÈ LÊN mặt thẻ (nằm sau thì bị
- * thẻ che kín). Thiếu `pointer-events-none` thì một đứa trẻ bấm trúng chiếc lá sẽ không
- * mở được game, và lỗi ấy không bao giờ hiện ra trong ảnh chụp màn hình.
+ * VÌ SAO CÓ PHÉP "KHÔNG CHẶN CÚ BẤM". Lá nằm SAU thẻ nhưng nửa ngoài của nó ló ra ngoài
+ * mép, tức nằm trên vùng người ta vẫn bấm trúng; dây leo thì nằm hẳn TRƯỚC mặt thẻ.
+ * Thiếu `pointer-events-none` là một đứa trẻ bấm trúng trang trí và game không mở, mà
+ * lỗi ấy không bao giờ hiện ra trong ảnh chụp màn hình.
  *
  * Chạy (cần app đang chạy, trang chủ có ít nhất 1 game):
  *   node infra/e2e-la-vien.mjs
@@ -17,8 +18,8 @@
 import { chromium } from 'playwright';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
-/** Số lá quanh viền, khớp `LA_VIEN` trong `components/game-card.tsx`. */
-const SO_LA = 16;
+/** Số lá quanh viền, khớp bảng `LA_VIEN` trong `components/game-card.tsx`. */
+const SO_LA = 28;
 /** Thời gian dây leo bò hết một vòng, khớp `VONG_MS`. */
 const VONG_MS = 900;
 
@@ -30,7 +31,7 @@ const check = (ten, ok, chiTiet = '') => {
 
 const browser = await chromium.launch({ channel: 'chrome' });
 
-/** Độ mờ của 16 lá trên MỘT thẻ, theo đúng thứ tự trong DOM = thứ tự kim đồng hồ. */
+/** Độ mờ của 28 lá trên MỘT thẻ, theo đúng thứ tự trong DOM = thứ tự kim đồng hồ. */
 async function doMo(the) {
   return the
     .locator('[data-testid=la-vien] > svg')
@@ -73,19 +74,23 @@ try {
   );
 
   /*
-   * Ranh giới phải LIỀN MỘT KHỐI theo thứ tự DOM. Thứ tự DOM chính là thứ tự kim đồng
-   * hồ (cạnh trên trái→phải, rồi phải, rồi dưới, rồi trái), nên "mọi lá trước ranh giới
-   * đều nở, mọi lá sau đều chưa" đúng là định nghĩa của mọc theo vòng. Đặt độ trễ ngược
-   * chiều hay xáo trộn thì phép này đỏ, còn phép đếm ở trên vẫn xanh.
+   * ĐỘ MỜ PHẢI GIẢM DẦN theo thứ tự DOM, và thứ tự DOM chính là thứ tự kim đồng hồ
+   * (cạnh trên trái→phải, rồi phải, rồi dưới, rồi trái). Đó đúng là dấu vết của một
+   * vòng quét: chiếc nào dây bò qua trước thì nở nhiều hơn chiếc sau nó.
+   *
+   * KHÔNG đòi ranh giới nở/chưa nở gọn thành một điểm — bản đầu đòi thế và ĐỎ OAN khi
+   * số lá tăng từ 16 lên 28: lá dày hơn thì tại một thời điểm có cả một dải đang nở dở
+   * (0,9 · 0,8 · 0,6 · 0,3), hoàn toàn đúng, mà phép kiểm lại gọi đó là nhảy cóc.
+   *
+   * Đảo chiều độ trễ thì dãy này tăng dần chứ không giảm, nên phép vẫn đỏ đúng lúc cần.
    */
-  const ranh = giua.findIndex((m) => m < 0.1);
-  const truocRanhDeuNo = giua.slice(0, ranh).every((m) => m > 0.5);
-  const sauRanhDeuChua = giua.slice(ranh).every((m) => m < 0.5);
+  const giamDan = giua.every((m, i) => i === 0 || m <= giua[i - 1] + 0.02);
   check(
     'Lá nở theo đúng thứ tự vòng quanh, không nhảy cóc',
-    ranh > 0 && truocRanhDeuNo && sauRanhDeuChua,
+    giamDan && giua[0] > 0.9 && giua[SO_LA - 1] < 0.05,
     giua.map((m) => m.toFixed(1)).join(' ')
   );
+
   check(
     'Lá cạnh TRÊN nở trước lá cạnh TRÁI (tức đi theo chiều kim đồng hồ)',
     giua[0] > giua[SO_LA - 1],
@@ -95,7 +100,7 @@ try {
   /* --- Hết vòng ---------------------------------------------------------------- */
   await page.waitForTimeout(VONG_MS);
   const het = await doMo(the);
-  check('Hết một vòng thì đủ 16 lá đều hiện', het.every((m) => m > 0.9), `${het.filter((m) => m > 0.9).length}/${SO_LA}`);
+  check('Hết một vòng thì đủ 28 lá đều hiện', het.every((m) => m > 0.9), `${het.filter((m) => m > 0.9).length}/${SO_LA}`);
   const dashHet = await the
     .locator('[data-testid=day-leo]')
     .evaluate((e) => getComputedStyle(e).strokeDashoffset);
@@ -108,6 +113,64 @@ try {
     const moKhac = await doMo(theKhac);
     check('Thẻ bên cạnh KHÔNG mọc theo', moKhac.every((m) => m === 0), `${moKhac.filter((m) => m > 0).length} lá hiện`);
   }
+
+  /*
+   * LÁ NẰM SAU THẺ — fen chốt. Mỗi chiếc neo ở gốc và vươn ra ngoài, nhưng gốc thụt vào
+   * trong nên có một khúc chồng lên thẻ. Tìm đúng khúc chồng ấy rồi hỏi trình duyệt "ở
+   * điểm này, phần tử trên cùng là ai": phải là THẺ, không phải chiếc lá.
+   *
+   * Đọc thứ tự DOM thì không đủ — `z-index` hay một stacking context mới ở đâu đó vẫn
+   * lật ngược được, và đó đúng là cái bẫy đã ghi trong `game-card.tsx`.
+   */
+  const cardBox = await the.locator('[data-testid=game-card]').boundingBox();
+  let chongLen = null;
+  for (let i = 0; i < SO_LA && !chongLen; i += 1) {
+    const l = await the.locator('[data-testid=la-vien]').nth(i).boundingBox();
+    /* Phần giao giữa hộp chiếc lá và hộp thẻ — tức khúc gốc lá bị thẻ che. */
+    const x1 = Math.max(l.x, cardBox.x);
+    const x2 = Math.min(l.x + l.width, cardBox.x + cardBox.width);
+    const y1 = Math.max(l.y, cardBox.y);
+    const y2 = Math.min(l.y + l.height, cardBox.y + cardBox.height);
+    if (x2 - x1 > 2 && y2 - y1 > 2) chongLen = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+  }
+  check('Có lá chồng một phần lên thẻ (gốc lá khuất sau thẻ)', !!chongLen, JSON.stringify(chongLen));
+
+  const oTrenCung = chongLen
+    ? await page.evaluate(
+        ([x, y]) => {
+          /* Tạm cho lá bắt chuột rồi trả lại: `elementFromPoint` BỎ QUA phần tử có
+             `pointer-events: none`, nên hỏi thẳng thì câu trả lời luôn là thẻ, kể cả khi
+             lá nằm đè lên trên. Đã thử cho đỏ và phát hiện đúng chỗ này. */
+          const las = [...document.querySelectorAll('[data-testid=la-vien]')];
+          las.forEach((el) => (el.style.pointerEvents = 'auto'));
+          const e = document.elementFromPoint(x, y);
+          const ra = {
+            the: !!e?.closest('[data-testid=game-card]'),
+            la: !!e?.closest('[data-testid=la-vien]'),
+          };
+          las.forEach((el) => el.style.removeProperty('pointer-events'));
+          return ra;
+        },
+        [chongLen.x, chongLen.y]
+      )
+    : { the: false, la: true };
+  check(
+    'Lá nằm SAU thẻ: chỗ lá chồng lên thẻ thì thẻ vẫn ở trên cùng',
+    oTrenCung.the && !oTrenCung.la,
+    JSON.stringify(oTrenCung)
+  );
+
+  /*
+   * HÀNG RÀO CẮT NGANG phải còn đó. Lá chìa ra ngoài mép thẻ, nên thẻ ở cột ngoài cùng
+   * chìa ra ngoài khung trang; thứ duy nhất giữ cho trang không phải vuốt ngang trên
+   * điện thoại là `overflow-x-clip` ở `<main>` (xem ghi chú trong `layout.tsx`).
+   *
+   * Phép cũ đo "trang có cuộn ngang không" và nó LUÔN XANH — chính hàng rào này làm nó
+   * không bao giờ đỏ được, kể cả với bản lá to gấp ba. Đo thẳng hàng rào thì mới có cái
+   * để đỏ: ai gỡ nó đi là biết ngay.
+   */
+  const rao = await page.locator('main#noi-dung').evaluate((e) => getComputedStyle(e).overflowX);
+  check('`<main>` còn hàng rào cắt ngang cho trang trí chìa ra', /clip|hidden/.test(rao), rao);
 
   /* --- Rời chuột --------------------------------------------------------------- */
   await page.mouse.move(o.x + o.width / 2, o.y - 200);
