@@ -229,7 +229,11 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
             này, chỗ được bấm nhiều nhất. Giải thích đầy đủ nằm một lần trên
             `/dieu-khoan`, đúng nơi lời hứa tải về được nêu ra.
           */}
-          <ButtonAnchor variant="ghost" href={objectUrl('sb3', game.sb3Sha256)} download>
+          {/*
+            Đường tải về nằm trên APP, không phải player origin: chỉ app biết tên game,
+            và tên file phải là tên game chứ không phải sha256. Xem `tai-ve/route.ts`.
+          */}
+          <ButtonAnchor variant="ghost" href={`/game/${game.id}/tai-ve`} download>
             Tải file .sb3
           </ButtonAnchor>
           <ButtonLink href="/" variant="ghost">

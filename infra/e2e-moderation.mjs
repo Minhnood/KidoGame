@@ -290,6 +290,59 @@ const admin = await adminCtx.newPage();
     (await admin.locator('[data-testid=admin-tab-go]').getAttribute('aria-current')) === 'page'
   );
 
+  /*
+   * TAB "THEO DÕI" — ba đường dẫn ra Umami, GlitchTip, Mixpanel.
+   *
+   * Bốn trạng thái của từng thẻ đo ở `giam-sat-lien-ket-check.ts` (gọi thẳng hàm, dựng
+   * máy chủ giả). Ở đây chỉ kiểm phần mà bộ kia không với tới: tab có trong thanh điều
+   * hướng, trang mở được bằng phiên quản trị, đủ ba thẻ, và mỗi link ra ngoài đều mở
+   * tab mới kèm `rel` — thiếu `noopener` thì trang mở ra cầm được tham chiếu ngược về
+   * tab quản trị.
+   */
+  check(
+    'Thanh điều hướng có tab Theo dõi',
+    (await admin.locator('[data-testid=admin-tab-theo-doi]').count()) === 1
+  );
+  await admin.goto(`${ADMIN}/admin/theo-doi`, { waitUntil: 'networkidle' });
+  check(
+    'Trang Theo dõi mở được bằng phiên quản trị',
+    admin.url().includes('/admin/theo-doi'),
+    admin.url()
+  );
+  for (const id of ['umami', 'glitchtip', 'mixpanel']) {
+    check(
+      `Trang Theo dõi có thẻ ${id} kèm trạng thái`,
+      (await admin.locator(`[data-testid=giam-sat-${id}-trang-thai]`).count()) === 1
+    );
+  }
+  const linkNgoai = admin.locator('[data-testid=giam-sat-the] a[target=_blank]');
+  const soLink = await linkNgoai.count();
+  const relDu = (await linkNgoai.evaluateAll((els) =>
+    els.every((e) => /noopener/.test(e.rel) && /noreferrer/.test(e.rel))
+  )) && soLink > 0;
+  check('Mọi link ra ngoài đều có rel noopener noreferrer', relDu, `${soLink} link`);
+  /*
+   * BẤT BIẾN, không chốt cứng một trạng thái: máy dev của người này có `STATS_ORIGIN`,
+   * máy người kia không, nên "Umami phải ghi Chưa bật" là phép đỏ oan chờ sẵn — đã
+   * đỏ oan thật ngay hôm trỏ máy dev vào dashboard production.
+   *
+   * Cái luôn đúng ở mọi cấu hình: nhãn phải nằm trong bốn nhãn đã biết (sai chính tả
+   * hay thêm trạng thái thứ năm là lộ ra ở đây), và "Chưa bật" phải đi cùng KHÔNG có
+   * link — một thẻ vừa nói chưa bật vừa mời bấm là tự mâu thuẫn.
+   */
+  const NHAN_BIET = ['Đang chạy', 'Không trả lời', 'Chưa bật', 'Đang bật · không tự đo được'];
+  for (const id of ['umami', 'glitchtip', 'mixpanel']) {
+    const nhan = (await admin.locator(`[data-testid=giam-sat-${id}-trang-thai]`).innerText()).trim();
+    const coLink = (await admin.locator(`[data-testid=giam-sat-${id}] a[target=_blank]`).count()) > 0;
+    check(`Thẻ ${id} mang một nhãn trạng thái đã biết`, NHAN_BIET.includes(nhan), nhan);
+    check(
+      `Thẻ ${id}: "Chưa bật" thì không có link, và ngược lại`,
+      (nhan === 'Chưa bật') !== coLink,
+      `${nhan} · ${coLink ? 'có link' : 'không link'}`
+    );
+  }
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
+
   const row = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
   const countText = await row.locator('[data-testid=admin-report-count]').innerText();
   check('Báo cáo trùng KHÔNG cộng thêm (vẫn 1 báo cáo)', /^1 báo cáo/.test(countText), countText);

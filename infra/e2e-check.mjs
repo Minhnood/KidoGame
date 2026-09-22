@@ -11,7 +11,7 @@
  *   node infra/e2e-check.mjs               # cửa sổ 3
  */
 import { chromium } from 'playwright';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
@@ -209,7 +209,28 @@ check(
  * viết theo TÍNH CHẤT cần có, để copy sang soi production bằng `curl -I` là xong.
  */
 {
-  const sb3Url = await page.locator('a[download]').first().getAttribute('href');
+  /*
+   * Nút tải về nay trỏ vào ĐƯỜNG CỦA APP (`/game/<id>/tai-ve`), vì chỉ app biết tên
+   * game để đặt cho file — kho file tĩnh đặt tên theo sha256. Nên đường tới file trên
+   * player origin phải dựng lại: tải qua đường app, băm nội dung, và tên file trong
+   * kho CHÍNH LÀ mã băm đó.
+   *
+   * Cách này còn buộc hai thứ phải khớp nhau: nếu đường app trả nhầm file, mã băm sẽ
+   * trỏ tới một đường player không tồn tại và phép kiểm ngay dưới đỏ.
+   *
+   * VÌ SAO VẪN ĐO PLAYER ORIGIN dù nút không còn trỏ vào đó: hai lá thư gửi phụ huynh
+   * và admin (`lib/moderation.ts`, `lib/xoa-gia-dinh.ts`) vẫn đính link thẳng tới đây,
+   * vì người nhận thư cần mở được file mà không phải đăng nhập.
+   */
+  const taiVeUrl = await page.locator('a[download]').first().getAttribute('href');
+  check(
+    'Nút tải về nằm trên app origin, không phải player origin',
+    (taiVeUrl ?? '').startsWith('/game/'),
+    taiVeUrl ?? '(không có)'
+  );
+  const byteTaiVe = Buffer.from(await (await fetch(new URL(taiVeUrl, APP))).arrayBuffer());
+  const shaSb3 = createHash('sha256').update(byteTaiVe).digest('hex');
+  const sb3Url = `${PLAYER}/sb3/${shaSb3.slice(0, 2)}/${shaSb3}.sb3`;
 
   /** Lấy header bằng HEAD — không cần tải cả file .sb3 về chỉ để đọc vài dòng. */
   const head = async (url) => {
