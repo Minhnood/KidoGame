@@ -47,6 +47,7 @@ node infra/glitchtip-check.mjs             # 22, production; lớp SSH gửi r�
 cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49
 cd apps/web && pnpm exec tsx ../../infra/scrypt-cap-check.ts    # 9
 cd apps/web && pnpm exec tsx ../../infra/mail-du-phong-check.ts  # 23, máy chủ SMTP giả
+cd apps/web && pnpm exec tsx ../../infra/giam-sat-lien-ket-check.ts  # 17, tab /admin/theo-doi
 ```
 
 Hai bộ cuối canh cùng một loại lỗi: thứ **chỉ hỏng sau khi deploy**. Cấu hình Caddy chỉ
@@ -71,7 +72,7 @@ export MAIL_LOG=/tmp/kg-mail.log
 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 93 kiểm tra
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 57
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 77
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 84
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 53, cần >24 game
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22

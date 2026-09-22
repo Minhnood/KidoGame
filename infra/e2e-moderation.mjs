@@ -290,6 +290,47 @@ const admin = await adminCtx.newPage();
     (await admin.locator('[data-testid=admin-tab-go]').getAttribute('aria-current')) === 'page'
   );
 
+  /*
+   * TAB "THEO DÕI" — ba đường dẫn ra Umami, GlitchTip, Mixpanel.
+   *
+   * Bốn trạng thái của từng thẻ đo ở `giam-sat-lien-ket-check.ts` (gọi thẳng hàm, dựng
+   * máy chủ giả). Ở đây chỉ kiểm phần mà bộ kia không với tới: tab có trong thanh điều
+   * hướng, trang mở được bằng phiên quản trị, đủ ba thẻ, và mỗi link ra ngoài đều mở
+   * tab mới kèm `rel` — thiếu `noopener` thì trang mở ra cầm được tham chiếu ngược về
+   * tab quản trị.
+   */
+  check(
+    'Thanh điều hướng có tab Theo dõi',
+    (await admin.locator('[data-testid=admin-tab-theo-doi]').count()) === 1
+  );
+  await admin.goto(`${ADMIN}/admin/theo-doi`, { waitUntil: 'networkidle' });
+  check(
+    'Trang Theo dõi mở được bằng phiên quản trị',
+    admin.url().includes('/admin/theo-doi'),
+    admin.url()
+  );
+  for (const id of ['umami', 'glitchtip', 'mixpanel']) {
+    check(
+      `Trang Theo dõi có thẻ ${id} kèm trạng thái`,
+      (await admin.locator(`[data-testid=giam-sat-${id}-trang-thai]`).count()) === 1
+    );
+  }
+  const linkNgoai = admin.locator('[data-testid=giam-sat-the] a[target=_blank]');
+  const soLink = await linkNgoai.count();
+  const relDu = (await linkNgoai.evaluateAll((els) =>
+    els.every((e) => /noopener/.test(e.rel) && /noreferrer/.test(e.rel))
+  )) && soLink > 0;
+  check('Mọi link ra ngoài đều có rel noopener noreferrer', relDu, `${soLink} link`);
+  /* Máy dev không cấu hình hai biến này, nên đúng trạng thái phải là "Chưa bật" — và
+     đó cũng là phép canh rằng trang KHÔNG vẽ chấm xanh cho thứ chưa ai đo. */
+  check(
+    'Máy dev chưa cấu hình: Umami ghi "Chưa bật", không phải "Đang chạy"',
+    (await admin.locator('[data-testid=giam-sat-umami-trang-thai]').innerText()).trim() ===
+      'Chưa bật',
+    await admin.locator('[data-testid=giam-sat-umami-trang-thai]').innerText()
+  );
+  await admin.goto(`${ADMIN}/admin`, { waitUntil: 'networkidle' });
+
   const row = admin.locator(`[data-testid=admin-game][data-game-id="${gameId}"]`);
   const countText = await row.locator('[data-testid=admin-report-count]').innerText();
   check('Báo cáo trùng KHÔNG cộng thêm (vẫn 1 báo cáo)', /^1 báo cáo/.test(countText), countText);

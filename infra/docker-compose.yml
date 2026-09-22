@@ -121,6 +121,13 @@ services:
       # Mã website trong Umami. RỖNG = không chèn thẻ script đếm lượt xem nào — web
       # chạy y như trước khi có Umami. Lấy mã ở dashboard sau khi tạo website.
       UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+      # Hai địa chỉ bảng điều khiển, CHỈ để tab `/admin/theo-doi` dẫn đường và gọi thử
+      # xem còn sống không. Khuôn `:+` giống ADMIN_ORIGIN: chưa đặt tên miền thì biến
+      # RỖNG, và tab ấy ghi "Chưa bật" thay vì dẫn tới `stats.localhost` trên VPS.
+      # Không dùng cho việc gì khác — Umami vẫn đếm qua `/_stats` trên chính app domain,
+      # còn lỗi vẫn đi đường nội bộ `glitchtip:8000` của GLITCHTIP_DSN.
+      STATS_ORIGIN: ${STATS_DOMAIN:+https://${STATS_DOMAIN}}
+      ERRORS_ORIGIN: ${ERRORS_DOMAIN:+https://${ERRORS_DOMAIN}}
       # DSN của project `web` trong GlitchTip, dạng NỘI BỘ `http://<khoá>@glitchtip:8000/1`
       # — không phải bản https://loi.… hiện trong dashboard: lỗi đi thẳng qua network
       # của compose, không vòng ra Internet rồi vào lại Caddy. RỖNG = không gửi lỗi nào.

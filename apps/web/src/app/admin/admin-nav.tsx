@@ -27,6 +27,12 @@ const MUC = [
   { href: '/admin', id: 'go', label: 'Kiểm duyệt', dem: 'go' as const },
   { href: '/admin/tai-khoan', id: 'tai-khoan', label: 'Tài khoản', dem: null },
   { href: '/admin/loi', id: 'loi', label: 'Lỗi', dem: 'loi' as const },
+  /*
+   * Đứng CUỐI, và không có nhãn đếm: ba tab trước là hàng đợi việc — có số nghĩa là có
+   * người đang chờ. Tab này không phải việc phải làm, nó là ba đường dẫn ra công cụ
+   * ngoài. Chen nó lên trước hàng đợi là đẩy việc thật xuống dưới một cái bookmark.
+   */
+  { href: '/admin/theo-doi', id: 'theo-doi', label: 'Theo dõi', dem: null },
 ];
 
 export function AdminNav({ soYeuCauGo, soNhomLoi }: { soYeuCauGo: number; soNhomLoi: number }) {
