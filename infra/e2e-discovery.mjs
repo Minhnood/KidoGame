@@ -57,8 +57,21 @@ const browser = await chromium.launch({ channel: 'chrome' });
  * hai hàng lọc và dòng đếm dính nhau. Mọi phép kiểm khác vẫn xanh, kể cả phép so khung
  * chờ với trang thật — khung chờ dùng chung lớp nên sai y hệt. Fen bắt bằng mắt.
  */
-const khoangLoc = (p) =>
-  p.evaluate(() => {
+/*
+ * Chờ dòng đếm CÓ CHỖ ĐỨNG THẬT rồi mới đo.
+ *
+ * Từ 23/9 phần kết quả của trang chủ nằm sau một ranh giới `Suspense`, nên nó tới muộn
+ * hơn hàng lọc. Đo ngay sau `domcontentloaded` thì bắt được đúng khoảnh khắc phần tử
+ * vừa vào DOM mà chưa được đặt chỗ: `getBoundingClientRect()` trả về toàn số 0, và
+ * khoảng cách tính ra là −644px — một con số vô nghĩa mà phép kiểm lại báo như thể bố
+ * cục hỏng.
+ */
+const khoangLoc = async (p) => {
+  await p.waitForFunction(() => {
+    const r = document.querySelector('[data-testid=result-count]')?.getBoundingClientRect();
+    return !!r && r.height > 0 && r.top > 0;
+  });
+  return p.evaluate(() => {
     const q = (s) => document.querySelector(s);
     const vien = (id) => q(`[data-testid=${id}] a`).getBoundingClientRect();
     const tim = q('[data-testid=search-form]').getBoundingClientRect();
@@ -67,6 +80,7 @@ const khoangLoc = (p) =>
     const dem = q('[data-testid=result-count]').getBoundingClientRect();
     return [loai.top - tim.bottom, tuoi.top - loai.bottom, dem.top - tuoi.bottom].map(Math.round);
   });
+};
 const dungKhoang = (k) => Math.abs(k[0] - 16) <= 1 && Math.abs(k[1] - 8) <= 1 && Math.abs(k[2] - 20) <= 1;
 const bamLinkXacMinh = taoBoBamLink(MAIL_LOG, { appOrigin: APP });
 const newSession = () => browser.newContext({ viewport: { width: 1300, height: 1000 } });

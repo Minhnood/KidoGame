@@ -385,6 +385,29 @@ let GAME_ID = '';
  * soi vào trang sau, lúc vòng xoay đã biến mất từ đời nào.
  */
 const ctxXoay = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+
+/*
+ * ═══ PHẢN HỒI KHI ĐIỀU HƯỚNG ═══
+ *
+ * Fen báo 23/9: "chuyển thẻ thì bị đơ và người dùng không biết đó là lỗi hay đang tải".
+ * Đo ra đúng thế — bấm sang trang 2 mất 2,9 GIÂY mà DOM y nguyên suốt 400ms đầu.
+ *
+ * HAI PHÉP TÁCH RỜI, cố ý, vì chúng canh hai thứ khác nhau và một trong hai không đo
+ * được bằng cách bấm thật:
+ *
+ *   1. Bấm thật  -> vòng xoay có hiện ra trong đúng cái nút vừa bấm không.
+ *   2. Chèn tay  -> có vòng xoay trên trang thì lưới có mờ và có chặn bấm không.
+ *
+ * Bản đầu gộp cả hai vào một lượt bấm thật, và nó CHẬP CHỜN: chạy hai lượt liên tiếp ra
+ * 33/35 rồi 35/35. Lý do là cửa sổ đo quá hẹp so với máy — trang chủ dev dựng mất 4–5
+ * giây (24 thẻ, mỗi thẻ hơn trăm phần tử SVG lá và hoa), lớp mờ lại có 120ms trễ, nên
+ * việc chụp trúng đúng khoảnh khắc "đã mờ mà chưa thay cây" là chuyện hên xui. Một phép
+ * hên xui thì đỏ cũng không ai tin, mà xanh cũng không chứng minh được gì.
+ *
+ * Phép 2 chèn thẳng một phần tử mang `data-testid=nut-dang-cho` vào DOM rồi đo, nên nó
+ * TẤT ĐỊNH: không chờ mạng, không chờ router. Nó canh đúng thứ cần canh — quy tắc
+ * `html:has(...)` trong `globals.css` còn sống và còn đúng đích.
+ */
 for (const [ten, sel] of [
   ['nhãn lọc loại', '[data-testid=tag-filters] a:nth-child(2)'],
   ['nhãn lọc tuổi', '[data-testid=age-filters] a:nth-child(3)'],
@@ -401,14 +424,14 @@ for (const [ten, sel] of [
   const truoc = await nut.boundingBox();
   await nut.click({ noWaitAfter: true });
 
-  let thay = false;
+  let coXoay = false;
   let sau = null;
-  for (let i = 0; i < 30 && !thay; i += 1) {
-    thay = (await nut.locator('[data-testid=nut-dang-cho]').count()) > 0;
-    if (thay) sau = await nut.boundingBox().catch(() => null);
+  for (let i = 0; i < 80 && !coXoay; i += 1) {
+    coXoay = (await nut.locator('[data-testid=nut-dang-cho]').count().catch(() => 0)) > 0;
+    if (coXoay) sau = await nut.boundingBox().catch(() => null);
     else await p.waitForTimeout(50);
   }
-  check(`Bấm ${ten}: vòng xoay hiện TRONG chính nút đó`, thay, thay ? 'có' : 'không thấy sau 1,5s');
+  check(`Bấm ${ten}: vòng xoay hiện TRONG chính nút đó`, coXoay, coXoay ? 'có' : 'không thấy sau 4s');
 
   /* Vòng xoay là lớp phủ `absolute`, nên nút KHÔNG được rộng ra hay nhích đi. Chèn hẳn
      một phần tử vào trong viên thuốc là cả hàng lọc dài ra và những viên bên cạnh nhảy
@@ -418,6 +441,59 @@ for (const [ten, sel] of [
     `Bấm ${ten}: nút KHÔNG xê dịch vì vòng xoay`,
     !!yen,
     truoc && sau ? `lệch ${Math.abs(sau.width - truoc.width).toFixed(1)}px rộng` : 'không đo được'
+  );
+  await p.close();
+}
+
+/*
+ * Phép 2: có vòng xoay trên trang thì lưới mờ và không bấm được; gỡ đi thì sáng lại.
+ *
+ * `pointer-events` là phần quan trọng nhất ở đây, không phải độ mờ: lưới CŨ còn nằm đó
+ * suốt mấy giây, và một đứa trẻ bấm vào cái thẻ nó đang thấy sẽ mở đúng game đó — trong
+ * khi nó vừa bảo trang đi chỗ khác. Chặn bấm thì cú chạm ấy rơi vào khoảng không thay
+ * vì mở nhầm một game rồi phải quay lại.
+ *
+ * Chờ qua mốc trễ 120ms của lớp mờ rồi mới đo: đo ngay thì `opacity` còn đúng 1 và phép
+ * đọc ra "lưới không mờ" trong khi nó sắp mờ — đã đỏ oan đúng như thế một lượt.
+ */
+{
+  const p = await ctxXoay.newPage();
+  await p.goto(APP, { waitUntil: 'networkidle' });
+  const doLuoi = () =>
+    p
+      .locator('[data-testid=luoi-game]')
+      .first()
+      .evaluate((e) => [Number(getComputedStyle(e).opacity), getComputedStyle(e).pointerEvents])
+      .catch(() => null);
+
+  const binhThuong = await doLuoi();
+  check(
+    'Lúc không điều hướng: lưới sáng bình thường và bấm được',
+    !!binhThuong && binhThuong[0] > 0.9 && binhThuong[1] !== 'none',
+    binhThuong ? `opacity ${binhThuong[0]} · pointer-events ${binhThuong[1]}` : 'không có lưới'
+  );
+
+  await p.evaluate(() => {
+    const el = document.createElement('span');
+    el.dataset.testid = 'nut-dang-cho';
+    el.id = 'xoay-gia';
+    document.body.appendChild(el);
+  });
+  await p.waitForTimeout(250);
+  const dangCho = await doLuoi();
+  check(
+    'Có vòng xoay trên trang: lưới mờ đi và không bấm được',
+    !!dangCho && dangCho[0] < 0.9 && dangCho[1] === 'none',
+    dangCho ? `opacity ${dangCho[0]} · pointer-events ${dangCho[1]}` : 'không có lưới'
+  );
+
+  await p.evaluate(() => document.getElementById('xoay-gia')?.remove());
+  await p.waitForTimeout(250);
+  const xong = await doLuoi();
+  check(
+    'Vòng xoay biến mất: lưới sáng lại, không kẹt ở trạng thái mờ',
+    !!xong && xong[0] > 0.9 && xong[1] !== 'none',
+    xong ? `opacity ${xong[0]} · pointer-events ${xong[1]}` : 'không có lưới'
   );
   await p.close();
 }

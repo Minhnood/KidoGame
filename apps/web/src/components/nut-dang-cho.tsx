@@ -40,6 +40,7 @@ import { useLinkStatus } from 'next/link';
  */
 export function NutDangCho() {
   const { pending } = useLinkStatus();
+
   if (!pending) return null;
   return (
     <span

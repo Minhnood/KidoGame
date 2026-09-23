@@ -1544,3 +1544,46 @@ body {
   padding-block: 0.75rem;
   margin-block: -0.75rem;
 }
+
+/*
+ * ĐANG CHUYỂN TRANG: lưới thẻ game mờ đi.
+ *
+ * Fen báo 23/9: bấm đổi bộ lọc thì "bị đơ, không biết là lỗi hay đang tải". Đo được
+ * bấm sang trang 2 mất 2,9 giây mà DOM y nguyên suốt 400ms đầu. Vòng xoay trên nút trả
+ * lời "máy có nghe thấy không"; khối này trả lời câu thứ hai, "thứ mình đang nhìn có
+ * còn đúng nữa không" — lưới mờ đi nói rằng danh sách này sắp được thay.
+ *
+ * ═══ `:has()` CHỨ KHÔNG PHẢI MỘT CỜ DO JAVASCRIPT CẮM LÊN ═══
+ *
+ * Bản đầu cho `NutDangCho` cắm một `data-` lên <html> trong `useEffect`, rồi CSS bám
+ * vào cờ đó. Chạy được, nhưng CHẬP CHỜN: đo hai lượt liên tiếp ra 33/35 rồi 35/35, vì
+ * trang chủ dựng mất 4–5 giây với 24 thẻ (mỗi thẻ hơn trăm phần tử SVG lá và hoa) nên
+ * effect có lượt chạy muộn hơn cả lượt điều hướng. Cờ do JS cắm còn mang sẵn một cách
+ * hỏng nặng hơn: quên gỡ là lưới mờ VĨNH VIỄN và không bấm được nữa.
+ *
+ * `:has()` gắn thẳng vào thứ đã có mặt sẵn — chính cái vòng xoay đang hiện trong nút.
+ * Vòng xoay còn thì lưới mờ, vòng xoay biến mất thì lưới sáng lại, không có bước trung
+ * gian nào để lỡ nhịp và không có gì để quên gỡ.
+ *
+ * ═══ TRỄ 120ms RỒI MỜ TỨC THÌ ═══
+ *
+ * Phần trễ là để khỏi nháy: một lượt đổi bộ lọc xong trong vòng một phần mười giây mà
+ * vẫn chớp một cái rồi sáng lại thì không ai đọc được gì, chỉ thấy giật.
+ *
+ * Phần "tức thì" (`0s`) là để trạng thái chỉ có hai mức rạch ròi. Mờ dần tạo ra một
+ * quãng nửa vời dài bằng cả hiệu ứng, và trong quãng ấy `opacity` là một con số bất kỳ
+ * — phép kiểm chụp trúng đó thì đọc ra "lưới không mờ" trong khi nó đang mờ dần, và đã
+ * đỏ oan đúng như thế một lượt.
+ *
+ * `pointer-events` KHÔNG chịu phần trễ: nó đổi ngay từ mili giây đầu. Chặn bấm là việc
+ * phải làm lập tức — lưới cũ còn nằm đó mấy giây, và một đứa trẻ bấm vào cái thẻ nó
+ * đang thấy sẽ mở đúng game đó, trong khi nó vừa bảo trang đi chỗ khác.
+ *
+ * KHÔNG làm mờ hàng lọc và ô tìm: đó là chỗ vừa bấm, và mờ nó đi là lấy mất câu trả
+ * lời cho "mình vừa chọn cái gì".
+ */
+html:has([data-testid='nut-dang-cho']) [data-testid='luoi-game'] {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0s ease 120ms;
+}
