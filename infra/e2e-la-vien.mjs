@@ -2,7 +2,7 @@
  * Rê chuột vào thẻ game thì lá mọc quanh viền, THEO CHIỀU KIM ĐỒNG HỒ (fen chốt 22/9).
  *
  * VÌ SAO KHÔNG CHỈ ĐẾM LÁ. Một bản cài sai — bỏ hết độ trễ, hoặc đặt độ trễ ngược —
- * vẫn cho ra đủ 28 chiếc lá hiện ra khi hover, và mọi phép đếm vẫn xanh. Thứ duy nhất
+ * vẫn cho ra đủ 104 chiếc lá hiện ra khi hover, và mọi phép đếm vẫn xanh. Thứ duy nhất
  * phân biệt được là ĐO GIỮA CHỪNG: chụp độ mờ của từng chiếc ở một thời điểm cố định
  * sau khi chuột vào, rồi xem lá nào đã nở, lá nào chưa. Đúng chiều thì ranh giới nằm
  * gọn ở một chỗ và mọi lá trước nó đều nở, mọi lá sau nó đều chưa.
@@ -18,8 +18,10 @@
 import { chromium } from 'playwright';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
-/** Số lá quanh viền, khớp bảng `LA_VIEN` trong `components/game-card.tsx`. */
-const SO_LA = 28;
+/** Số lá quanh viền = `LA_MOI_CANH` × 4 trong `components/game-card.tsx`. */
+const SO_LA = 104;
+/** Số hoa xen viền = `HOA_MOI_CANH` × 4. */
+const SO_HOA = 20;
 /** Thời gian dây leo bò hết một vòng, khớp `VONG_MS`. */
 const VONG_MS = 900;
 
@@ -31,10 +33,24 @@ const check = (ten, ok, chiTiet = '') => {
 
 const browser = await chromium.launch({ channel: 'chrome' });
 
-/** Độ mờ của 28 lá trên MỘT thẻ, theo đúng thứ tự trong DOM = thứ tự kim đồng hồ. */
+/** Độ mờ của 104 lá trên MỘT thẻ, theo đúng thứ tự trong DOM = thứ tự kim đồng hồ. */
 async function doMo(the) {
   return the
     .locator('[data-testid=la-vien] > svg')
+    .evaluateAll((els) => els.map((e) => Number(getComputedStyle(e).opacity)));
+}
+
+/** Độ mờ của hoa xen viền trên MỘT thẻ, theo thứ tự DOM. */
+async function doMoHoa(the) {
+  return the
+    .locator('[data-testid=hoa-vien] > svg')
+    .evaluateAll((els) => els.map((e) => Number(getComputedStyle(e).opacity)));
+}
+
+/** Độ mờ của bốn cành góc trên MỘT thẻ, theo thứ tự DOM. */
+async function doMoCanh(the) {
+  return the
+    .locator('[data-testid=canh-goc]')
     .evaluateAll((els) => els.map((e) => Number(getComputedStyle(e).opacity)));
 }
 
@@ -52,6 +68,15 @@ try {
   check('Mỗi thẻ có đủ lá quanh viền', (await la.count()) === SO_LA, `${await la.count()} lá`);
   check('Có dây leo bò quanh viền', (await the.locator('[data-testid=day-leo]').count()) === 1);
 
+  /* Bốn cành góc — fen cho quay lại 23/9, chạy CÙNG lá viền chứ không thay nhau. Bản
+     cũ không có `data-testid` nào nên suốt thời gian đó không phép kiểm nào giữ chúng;
+     lúc chúng bị gỡ ở `7420bdf` cả bộ kiểm vẫn xanh trơn. */
+  const canh = the.locator('[data-testid=canh-goc]');
+  check('Thẻ có đủ bốn cành góc', (await canh.count()) === 4, `${await canh.count()} cành`);
+
+  const hoa = the.locator('[data-testid=hoa-vien]');
+  check('Thẻ có đủ hoa xen viền', (await hoa.count()) === SO_HOA, `${await hoa.count()} bông`);
+
   /* Chưa rê chuột: mọi thứ phải TÀNG HÌNH. Hiện sẵn thì thẻ lúc nào cũng rậm rạp và
      hiệu ứng hover không còn nói lên điều gì. */
   const moNgu = await doMo(the);
@@ -60,6 +85,19 @@ try {
     .locator('[data-testid=day-leo]')
     .evaluate((e) => getComputedStyle(e).strokeDashoffset);
   check('Chưa rê chuột thì dây leo chưa vẽ nét nào', parseFloat(dashNgu) > 90, dashNgu);
+  const canhNgu = await doMoCanh(the);
+  check(
+    'Chưa rê chuột thì không cành nào hiện',
+    canhNgu.length === 4 && canhNgu.every((m) => m === 0),
+    `${canhNgu.length} cành · ${canhNgu.join(' ')}`
+  );
+
+  const hoaNgu = await doMoHoa(the);
+  check(
+    'Chưa rê chuột thì không bông hoa nào hiện',
+    hoaNgu.length === SO_HOA && hoaNgu.every((m) => m === 0),
+    `${hoaNgu.length} bông · ${hoaNgu.slice(0, 4).join(' ')}`
+  );
 
   /* --- ĐO GIỮA CHỪNG: đây là phép chính --------------------------------------- */
   await page.mouse.move(o.x + o.width / 2, o.y + o.height / 2);
@@ -87,24 +125,59 @@ try {
   const giamDan = giua.every((m, i) => i === 0 || m <= giua[i - 1] + 0.02);
   check(
     'Lá nở theo đúng thứ tự vòng quanh, không nhảy cóc',
-    giamDan && giua[0] > 0.9 && giua[SO_LA - 1] < 0.05,
+    giamDan && giua[0] > 0.9 && giua.at(-1) < 0.05,
     giua.map((m) => m.toFixed(1)).join(' ')
   );
 
   check(
     'Lá cạnh TRÊN nở trước lá cạnh TRÁI (tức đi theo chiều kim đồng hồ)',
-    giua[0] > giua[SO_LA - 1],
-    `lá đầu ${giua[0].toFixed(2)} · lá cuối ${giua[SO_LA - 1].toFixed(2)}`
+    giua[0] > giua.at(-1),
+    `lá đầu ${giua[0].toFixed(2)} · lá cuối ${giua.at(-1).toFixed(2)}`
   );
 
   /* --- Hết vòng ---------------------------------------------------------------- */
   await page.waitForTimeout(VONG_MS);
   const het = await doMo(the);
-  check('Hết một vòng thì đủ 28 lá đều hiện', het.every((m) => m > 0.9), `${het.filter((m) => m > 0.9).length}/${SO_LA}`);
+  check('Hết một vòng thì đủ 104 lá đều hiện', het.every((m) => m > 0.9), `${het.filter((m) => m > 0.9).length}/${SO_LA}`);
   const dashHet = await the
     .locator('[data-testid=day-leo]')
     .evaluate((e) => getComputedStyle(e).strokeDashoffset);
   check('Hết một vòng thì dây leo khép kín', parseFloat(dashHet) < 1, dashHet);
+  const canhHet = await doMoCanh(the);
+  check(
+    'Hết một vòng thì cả bốn cành góc đều mọc',
+    canhHet.length === 4 && canhHet.every((m) => m > 0.9),
+    `${canhHet.length} cành · ${canhHet.join(' ')}`
+  );
+
+  const hoaHet = await doMoHoa(the);
+  check(
+    'Hết một vòng thì cả hai mươi bông hoa đều nở',
+    hoaHet.length === SO_HOA && hoaHet.every((m) => m > 0.9),
+    `${hoaHet.filter((m) => m > 0.9).length}/${SO_HOA}`
+  );
+
+  /*
+   * MỌI BÔNG PHẢI LÓ RA khỏi mép thẻ. Hoa neo ở gốc cuống rồi thụt vào trong cho chỗ
+   * dính khuất sau thẻ — thụt quá tay thì cả bông nằm gọn sau thẻ và không ai thấy gì,
+   * mà phép đếm lẫn phép độ mờ đều vẫn xanh vì bông ấy vẫn tồn tại và vẫn `opacity: 1`.
+   * Cuống hoa ngắn hơn thân lá nhiều nên đây là chỗ dễ thụt quá tay nhất.
+   */
+  const hopThe2 = await the.locator('[data-testid=game-card]').boundingBox();
+  const loRaHoa = await the.locator('[data-testid=hoa-vien]').evaluateAll(
+    (els, t) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return Math.max(t.x - r.x, r.x + r.width - (t.x + t.width), t.y - r.y, r.y + r.height - (t.y + t.height));
+      }),
+    hopThe2
+  );
+  const nuot = loRaHoa.filter((v) => v <= 2).length;
+  check(
+    'Không bông hoa nào bị thẻ nuốt mất',
+    loRaHoa.length === SO_HOA && nuot === 0,
+    `ló ra ít nhất ${Math.min(...loRaHoa).toFixed(1)}px · ${nuot} bông khuất`
+  );
 
   /* Chỉ thẻ ĐANG rê chuột mới mọc. Thiếu điều này thì cả lưới 24 thẻ cùng rậm lên một
      lúc, và cái thẻ bé đang chỉ vào không còn nổi bật hơn cái nào. */
@@ -184,6 +257,18 @@ try {
     .first()
     .evaluate((e) => getComputedStyle(e).pointerEvents);
   check('Lá không bắt sự kiện chuột', hut === 'none', hut);
+  /* Cành chìa HẲN ra ngoài thẻ, đè lên khoảng trống giữa các thẻ và lên cả thẻ bên
+     cạnh — thiếu `pointer-events-none` là nó nuốt cú bấm của thẻ hàng xóm. */
+  const hutCanh = await the
+    .locator('[data-testid=canh-goc]')
+    .first()
+    .evaluate((e) => getComputedStyle(e).pointerEvents);
+  check('Cành góc không bắt sự kiện chuột', hutCanh === 'none', hutCanh);
+  const hutHoa = await the
+    .locator('[data-testid=hoa-vien]')
+    .first()
+    .evaluate((e) => getComputedStyle(e).pointerEvents);
+  check('Hoa viền không bắt sự kiện chuột', hutHoa === 'none', hutHoa);
   const hutDay = await the
     .locator('[data-testid=day-leo]')
     .evaluate((e) => getComputedStyle(e.closest('svg')).pointerEvents);
@@ -220,6 +305,60 @@ try {
      thật hai lượt, và cả hai lượt mình đi sửa nhầm chỗ khác. */
   await page.waitForURL(/\/game\//, { timeout: 10000 }).catch(() => {});
   check('Bấm trúng chiếc lá vẫn mở được trang game', /\/game\//.test(page.url()), page.url());
+
+  /*
+   * --- VIỀN PHẢI KÍN, KHÔNG CÒN KHE HỞ (fen chốt 22/9) ---------------------------
+   *
+   * Đây là phép giữ đúng thứ fen yêu cầu, và nó không suy ra được từ phép đếm: 28 lá
+   * cũng "đủ số" như 104 lá, chỉ là viền hở 26,7px giữa các chiếc.
+   *
+   * ĐO THEO PHÉP QUÉT, dồn mép xa nhất đã phủ tới — KHÔNG so với riêng chiếc liền
+   * trước. Lá xen ba cỡ, nên một chiếc bé lọt giữa hai chiếc to có mép cuối nằm sâu
+   * trong vùng chiếc to đã phủ; so kiểu "chiếc trước" báo khe hở KHÔNG CÓ THẬT, và
+   * lượt đo đầu đã dính đúng bẫy đó — nó báo còn hở cả khi lá chồng nhau gấp đôi bước.
+   *
+   * Đo ở BA KHỔ vì mật độ lá phụ thuộc cỡ thẻ: lá đặt theo phần trăm, còn thẻ thì co
+   * giãn theo số cột (154px rộng ở điện thoại, 234px ở máy tính). Khổ rộng là khổ
+   * thưa nhất, tức khổ dễ hở nhất.
+   */
+  for (const khoMan of [360, 768, 1280]) {
+    const ctxK = await browser.newContext({ viewport: { width: khoMan, height: 900 } });
+    const pK = await ctxK.newPage();
+    await pK.goto(APP, { waitUntil: 'domcontentloaded' });
+    const theK = pK.locator('.kg-the-game').first();
+    await theK.scrollIntoViewIfNeeded();
+    await theK.hover();
+    await pK.waitForTimeout(VONG_MS + 300);
+
+    const hop = await theK.locator('[data-testid=la-vien]').evaluateAll((els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { x: r.x, y: r.y, w: r.width, h: r.height };
+      })
+    );
+    const moiCanh = hop.length / 4;
+    let hoNhat = -Infinity;
+    for (let c = 0; c < 4; c += 1) {
+      /* Cạnh trên và dưới nằm ngang nên chỗ mỗi lá chiếm dọc viền là bề RỘNG hộp bao
+         của nó; hai cạnh kia thì là bề CAO. Hộp bao đã tính cả phép xoay. */
+      const ngang = c === 0 || c === 2;
+      const khoang = hop
+        .slice(c * moiCanh, (c + 1) * moiCanh)
+        .map((b) => (ngang ? [b.x, b.x + b.w] : [b.y, b.y + b.h]))
+        .sort((a, b) => a[0] - b[0]);
+      let toi = khoang[0][1];
+      for (let i = 1; i < khoang.length; i += 1) {
+        if (khoang[i][0] - toi > hoNhat) hoNhat = khoang[i][0] - toi;
+        if (khoang[i][1] > toi) toi = khoang[i][1];
+      }
+    }
+    check(
+      `Viền kín hết, không khe hở ở khổ ${khoMan}px`,
+      hoNhat <= 0,
+      `khe hở lớn nhất ${hoNhat.toFixed(1)}px (số âm = lá chồng nhau)`
+    );
+    await ctxK.close();
+  }
 
   /* --- Người xin ít chuyển động -------------------------------------------------- */
   const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
