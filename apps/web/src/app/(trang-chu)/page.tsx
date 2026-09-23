@@ -11,6 +11,7 @@ import { EmptyState, PageTitle } from '@/components/page';
 import { Pager } from '@/components/pager';
 import { demPhanUngNhieuGame } from '@/lib/phan-ung';
 import { gameMoiCuaBanBe } from '@/lib/theo-doi';
+import { NutDangCho } from '@/components/nut-dang-cho';
 import { HANG_LOC, LE_DUOI_LOAI, LE_DUOI_TUOI } from './hang-loc';
 
 export const dynamic = 'force-dynamic';
@@ -174,7 +175,9 @@ export default async function HomePage({
 
   const chip = (active: boolean) =>
     [
-      'min-h-touch inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-4 font-semibold no-underline',
+      /* `relative` là để `NutDangCho` phủ đúng viên thuốc này — vòng xoay của nó là
+         `absolute inset-0`, thiếu mốc thì nó bám ra tận thẻ tổ tiên gần nhất. */
+      'relative min-h-touch inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-4 font-semibold no-underline',
       active
         ? 'border-transparent bg-accent text-chrome'
         : 'border-border bg-surface text-ink hover:bg-bg',
@@ -320,6 +323,7 @@ export default async function HomePage({
       <div className={`${LE_DUOI_LOAI} ${HANG_LOC}`} data-testid="tag-filters">
         <Link href={linkWith({ tag: '' })} className={chip(!tagSlug)}>
           Tất cả
+          <NutDangCho />
         </Link>
         {tags.map((tag) => (
           <Link
@@ -329,6 +333,7 @@ export default async function HomePage({
             className={chip(tagSlug === tag.slug)}
           >
             {tag.label}
+            <NutDangCho />
           </Link>
         ))}
       </div>
@@ -337,6 +342,7 @@ export default async function HomePage({
         <span className="shrink-0 whitespace-nowrap text-sm text-ink-soft">Bé mấy tuổi làm?</span>
         <Link href={linkWith({ tuoi: '' })} className={chip(!bracket)}>
           Tuổi nào cũng được
+          <NutDangCho />
         </Link>
         {AGE_BRACKETS.map((b) => (
           <Link
@@ -346,6 +352,7 @@ export default async function HomePage({
             className={chip(ageKey === b.key)}
           >
             {b.label}
+            <NutDangCho />
           </Link>
         ))}
       </div>

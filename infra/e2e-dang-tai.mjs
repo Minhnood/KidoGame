@@ -369,6 +369,60 @@ let GAME_ID = '';
   await ctx.close();
 }
 
+/*
+ * ═══ VÒNG XOAY TRÊN NÚT ĐIỀU HƯỚNG ═══
+ *
+ * Fen báo 23/9: "chuyển thẻ thì bị đơ và người dùng không biết đó là lỗi hay đang tải".
+ * Đo ra đúng thế — bấm sang trang 2 mất 2,9 GIÂY mà DOM y nguyên suốt 400ms đầu, tức
+ * không một dấu hiệu nào. `loading.tsx` không cứu được: phân trang ở lại cùng route
+ * `(trang-chu)` và chỉ đổi query, nên nó không hề chạy.
+ *
+ * BẤM THẬT RỒI SOI DOM, không kiểm bằng việc component có mặt trong mã nguồn:
+ * `useLinkStatus` mà đặt ngoài `<Link>` thì `pending` mãi mãi `false` và KHÔNG lỗi gì
+ * cả — cùng cái bẫy im lặng đã ghi trong `the-dang-mo.tsx`.
+ *
+ * `noWaitAfter` vì cú bấm này mở đầu một lượt điều hướng: chờ nó xong rồi mới soi là
+ * soi vào trang sau, lúc vòng xoay đã biến mất từ đời nào.
+ */
+const ctxXoay = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+for (const [ten, sel] of [
+  ['nhãn lọc loại', '[data-testid=tag-filters] a:nth-child(2)'],
+  ['nhãn lọc tuổi', '[data-testid=age-filters] a:nth-child(3)'],
+  ['nút sang trang sau', 'a[data-testid$="-sau"]'],
+]) {
+  const p = await ctxXoay.newPage();
+  await p.goto(APP, { waitUntil: 'networkidle' });
+  const nut = p.locator(sel).first();
+  if ((await nut.count()) === 0) {
+    check(`Có ${ten} để đo`, false, 'không tìm thấy');
+    await p.close();
+    continue;
+  }
+  const truoc = await nut.boundingBox();
+  await nut.click({ noWaitAfter: true });
+
+  let thay = false;
+  let sau = null;
+  for (let i = 0; i < 30 && !thay; i += 1) {
+    thay = (await nut.locator('[data-testid=nut-dang-cho]').count()) > 0;
+    if (thay) sau = await nut.boundingBox().catch(() => null);
+    else await p.waitForTimeout(50);
+  }
+  check(`Bấm ${ten}: vòng xoay hiện TRONG chính nút đó`, thay, thay ? 'có' : 'không thấy sau 1,5s');
+
+  /* Vòng xoay là lớp phủ `absolute`, nên nút KHÔNG được rộng ra hay nhích đi. Chèn hẳn
+     một phần tử vào trong viên thuốc là cả hàng lọc dài ra và những viên bên cạnh nhảy
+     chỗ — ngay lúc ngón tay trẻ còn đang ở đó. */
+  const yen = truoc && sau && Math.abs(sau.width - truoc.width) < 1 && Math.abs(sau.x - truoc.x) < 1;
+  check(
+    `Bấm ${ten}: nút KHÔNG xê dịch vì vòng xoay`,
+    !!yen,
+    truoc && sau ? `lệch ${Math.abs(sau.width - truoc.width).toFixed(1)}px rộng` : 'không đo được'
+  );
+  await p.close();
+}
+await ctxXoay.close();
+
 await browser.close();
 
 const hong = results.filter((r) => !r.ok).length;

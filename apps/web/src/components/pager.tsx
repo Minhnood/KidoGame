@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { NutDangCho } from './nut-dang-cho';
 
 /**
  * Thanh phân trang dùng chung: ba danh sách của khu quản trị và TRANG CHỦ.
@@ -77,7 +78,9 @@ const HIEN_O_NHAY_TU = 8;
  * nút rút lại của ba tính năng xã hội. Trên khu quản trị nó chỉ phiền; trên trang chủ
  * thì người đọc là trẻ con, và "bấm vào không thấy gì nhúc nhích" đọc ra là hỏng.
  */
-const NUT = 'min-h-touch inline-flex items-center justify-center rounded-lg border px-3 font-semibold no-underline';
+/* `relative` là mốc cho `NutDangCho` phủ lên — vòng xoay của nó `absolute inset-0`,
+   thiếu mốc thì nó bám ra tận thẻ tổ tiên gần nhất và phủ cả thanh phân trang. */
+const NUT = 'relative min-h-touch inline-flex items-center justify-center rounded-lg border px-3 font-semibold no-underline';
 const NUT_THUONG = 'border-border bg-surface text-ink hover:bg-bg';
 
 export function Pager({
@@ -110,8 +113,12 @@ export function Pager({
       <div className={className} data-testid={`${testId}-khong-co`}>
         <p className="text-ink-soft">
           Không có trang {page} — danh sách chỉ có {lastPage} trang.{' '}
-          <Link href={href(lastPage)} className="font-bold text-accent-text underline">
+          {/* `relative inline-block` chỉ để làm mốc cho `NutDangCho`: link này nằm
+              giữa câu văn nên không mang class `NUT` như mấy nút kia, mà thiếu mốc thì
+              vòng xoay phủ ra cả đoạn văn. */}
+          <Link href={href(lastPage)} className="relative inline-block font-bold text-accent-text underline">
             Về trang {lastPage}
+            <NutDangCho />
           </Link>
         </p>
       </div>
@@ -129,6 +136,7 @@ export function Pager({
       {page > 1 && (
         <Link href={href(page - 1)} data-testid={`${testId}-truoc`} className={`${NUT} ${NUT_THUONG}`}>
           ← Trang trước
+          <NutDangCho />
         </Link>
       )}
 
@@ -155,6 +163,7 @@ export function Pager({
             ].join(' ')}
           >
             {n}
+            <NutDangCho />
           </Link>
         )
       )}
@@ -162,6 +171,7 @@ export function Pager({
       {page < lastPage && (
         <Link href={href(page + 1)} data-testid={`${testId}-sau`} className={`${NUT} ${NUT_THUONG}`}>
           Trang sau →
+          <NutDangCho />
         </Link>
       )}
 

@@ -92,7 +92,7 @@ node infra/e2e-admin-origin.mjs                                    # 27, không 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 49, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
 node infra/e2e-bia-hong.mjs                                        # 13, cần psql + tài khoản demo
 node infra/e2e-la-vien.mjs                                         # 31, lá kín viền + hoa xen + bốn cành góc khi hover
