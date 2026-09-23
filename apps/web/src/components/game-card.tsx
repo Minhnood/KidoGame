@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { AnhBia } from './anh-bia';
 import { KHUNG_THE } from './card';
-import { La } from './site-decor';
+import { Hoa, La } from './site-decor';
 import { TheDangMo } from './the-dang-mo';
 
 /**
@@ -85,52 +85,80 @@ function DayLeo() {
 }
 
 /**
- * Lá mọc dọc bốn cạnh: [phần trăm dọc đường đi, trái %, trên %, góc xoay, cỡ].
+ * LÁ PHỦ KÍN VIỀN, không còn khe hở — fen chốt 22/9, sau bản 28 chiếc còn thưa.
  *
- * Phần trăm dọc đường đi vừa là chỗ đứng vừa là mốc thời gian — cạnh trên chiếm 0–25,
+ * 26 chiếc mỗi cạnh là con số ĐO RA, không tính ra. Phép tính tay bảo 22 chiếc là đủ
+ * (thẻ lớn nhất 234×266px, chỗ mỗi lá chiếm dọc viền là `cỡ × (14·cos θ + 22·sin|θ|)`
+ * ≈ 17,6 / 14,4 / 11,6px, cặp xấu nhất cần bước ≤ 13px, 266 ÷ 13 = 20,5). Đo thật thì
+ * 22 chiếc vẫn hở 0,8px — phép tính bỏ sót rằng lá không rải đều theo cỡ, nên chỗ xấu
+ * nhất xấu hơn trung bình. Khe hở lớn nhất đo trên sáu khổ màn từ 360 đến 1920px:
+ *
+ *     28 chiếc: 26,7px · 48: 10,3px · 64: 5,3px · 80: 2,0px
+ *     88: 0,8px · 96: −0,2px · 104: −1,0px · 112: −1,8px
+ *
+ * Số âm là lá chồng nhau, tức viền kín. Ngưỡng kín rơi vào 96, và chọn 104 để có biên
+ * 1px chứ không phải 0,2px — thẻ đổi cỡ đôi chút là con số đó ăn hết.
+ *
+ * Kín ở thẻ LỚN NHẤT thì kín ở mọi khổ: thẻ nhỏ hơn chỉ làm lá chồng nhau dày hơn.
+ * Thẻ trong cùng một hàng luôn cao bằng nhau nhờ `h-full`, nên không có thẻ nào cao
+ * bất thường để hở thêm.
+ *
+ * Sinh bằng hàm chứ không liệt kê tay như bản 28 chiếc: 104 dòng toạ độ thì không ai
+ * đọc được, và sửa một con số trong đó là sửa 104 chỗ.
+ *
+ * Mỗi phần tử: [phần trăm dọc đường đi, trái %, trên %, góc xoay, cỡ].
+ * Phần trăm dọc đường đi vừa là chỗ đứng vừa là MỐC THỜI GIAN — cạnh trên chiếm 0–25,
  * phải 25–50, dưới 50–75, trái 75–100, đúng như `<rect>` tự vẽ.
  *
  * LÁ NẰM SAU THẺ (fen chốt 22/9), nên chỉ nửa ngoài của mỗi chiếc ló ra khỏi mép —
  * đọc ra là lá mọc từ phía sau thẻ chứ không phải dán lên mặt thẻ. Vì vậy góc xoay
  * phải CHĨA RA NGOÀI: chĩa vào trong thì nửa hiện ra là phần cuống, nhìn như cỏ dại.
- *
- * Bảy chiếc mỗi cạnh, cỡ so le 1 / 0,82 / 0,66. Đều một cỡ thì viền thành một hàng răng
- * cưa máy cắt; ba cỡ xen nhau mới ra dáng lá thật.
  */
-const LA_VIEN: Array<[number, number, number, number, number]> = [
-  // Cạnh trên, trái → phải
-  [2, 8, 0, -84, 1],
-  [5.25, 21, 0, -100, 0.66],
-  [8.5, 34, 0, -72, 0.82],
-  [11.75, 47, 0, -96, 1],
-  [15, 60, 0, -80, 0.66],
-  [18.25, 73, 0, -104, 0.82],
-  [21.5, 86, 0, -76, 1],
-  // Cạnh phải, trên → dưới
-  [27, 100, 8, 6, 0.82],
-  [30.25, 100, 21, -14, 1],
-  [33.5, 100, 34, 18, 0.66],
-  [36.75, 100, 47, -6, 0.82],
-  [40, 100, 60, 14, 1],
-  [43.25, 100, 73, -16, 0.66],
-  [46.5, 100, 86, 8, 0.82],
-  // Cạnh dưới, phải → trái
-  [52, 92, 100, 96, 1],
-  [55.25, 79, 100, 76, 0.66],
-  [58.5, 66, 100, 104, 0.82],
-  [61.75, 53, 100, 84, 1],
-  [65, 40, 100, 100, 0.66],
-  [68.25, 27, 100, 80, 0.82],
-  [71.5, 14, 100, 98, 1],
-  // Cạnh trái, dưới → lên
-  [77, 0, 92, 186, 0.82],
-  [80.25, 0, 79, 166, 1],
-  [83.5, 0, 66, 194, 0.66],
-  [86.75, 0, 53, 174, 0.82],
-  [90, 0, 40, 190, 1],
-  [93.25, 0, 27, 170, 0.66],
-  [96.5, 0, 14, 196, 0.82],
-];
+const LA_MOI_CANH = 26;
+
+/**
+ * Cỡ so le và góc lệch so le, hai chu kỳ ĐỘ DÀI NGUYÊN TỐ CÙNG NHAU (3 và 7).
+ *
+ * Đều một cỡ thì viền thành hàng răng cưa máy cắt; ba cỡ xen nhau mới ra dáng lá thật.
+ * Hai chu kỳ lệch nhau thì cặp (cỡ, góc) chỉ lặp lại sau 21 chiếc — tức gần hết một
+ * cạnh — nên mắt không bắt được nhịp lặp. Cùng độ dài thì cả bốn cạnh giống hệt nhau.
+ *
+ * Ba cỡ GIỮ NGUYÊN như bản 28 chiếc — đây là thẩm mỹ fen đã chốt, không phải nút vặn
+ * để bịt khe. Đã thử nới chiếc bé lên 0,70 cho kín viền: bịt được 0,33px trong khi chỗ
+ * hở là 0,53px, tức vẫn hở mà lại đổi một thứ fen không yêu cầu đổi. Thứ fen yêu cầu
+ * đổi là SỐ LÁ, nên chỗ để vặn là `LA_MOI_CANH`.
+ */
+const CO_LA = [1, 0.66, 0.82] as const;
+const LECH_GOC = [6, -14, 18, -6, 10, -14, 14] as const;
+
+/** Góc chĩa ra ngoài của từng cạnh, theo chiều kim đồng hồ từ cạnh trên. */
+const GOC_CANH = [-90, 0, 90, 180] as const;
+
+function raLaVien(): Array<[number, number, number, number, number]> {
+  const ds: Array<[number, number, number, number, number]> = [];
+  for (let canh = 0; canh < 4; canh += 1) {
+    for (let j = 0; j < LA_MOI_CANH; j += 1) {
+      const i = canh * LA_MOI_CANH + j;
+      // Đặt vào GIỮA ô của mình (j + 0,5) chứ không ở mép ô: hai chiếc ở hai đầu một
+      // cạnh vì thế cách góc thẻ nửa bước, nên bốn góc không bị hở cũng không bị dồn.
+      const doc = (j + 0.5) / LA_MOI_CANH; // 0 → 1 dọc cạnh này
+      const moc = (canh + doc) * 25;
+      const p = doc * 100;
+      const [trai, tren] =
+        canh === 0 ? [p, 0] : canh === 1 ? [100, p] : canh === 2 ? [100 - p, 100] : [0, 100 - p];
+      ds.push([
+        moc,
+        trai,
+        tren,
+        GOC_CANH[canh] + LECH_GOC[i % LECH_GOC.length],
+        CO_LA[i % CO_LA.length],
+      ]);
+    }
+  }
+  return ds;
+}
+
+const LA_VIEN = raLaVien();
 
 function LaVien() {
   return (
@@ -139,7 +167,7 @@ function LaVien() {
         /*
          * HAI TẦNG, cùng cái bẫy đã ghi ở lá rơi: tầng ngoài giữ phép đặt chỗ (dịch về
          * đúng mép, xoay ra ngoài), tầng trong mới mang hiệu ứng nở. Gộp một tầng thì
-         * `scale-0` của Tailwind ghi đè `translate`+`rotate` và cả hai mươi tám chiếc lá
+         * `scale-0` của Tailwind ghi đè `translate`+`rotate` và cả trăm lẻ tư chiếc lá
          * nhảy về góc trên bên trái thẻ.
          */
         <span
@@ -190,6 +218,219 @@ function LaVien() {
         </span>
       ))}
     </>
+  );
+}
+
+/**
+ * HOA XEN VÀO VIỀN, năm bông mỗi cạnh — fen chốt 23/9.
+ *
+ * THÊM một lớp riêng chứ KHÔNG đổi vài chiếc lá thành hoa. Bông hoa hẹp hơn chiếc lá
+ * (18 đơn vị so với 26) nên mỗi chỗ đổi là một chỗ viền hở lại, đúng cái vừa đo công
+ * mới bịt xong. Lá giữ nguyên 104 chiếc lo phần kín; hoa nằm đè lên, lo phần màu.
+ *
+ * Năm bông mỗi cạnh chứ không dày hơn: hoa là điểm nhấn, rải đặc thì viền thành một
+ * vòng hoa và mất hẳn cái dáng dây leo mọc lá.
+ *
+ * Mốc thời gian tính CÙNG một công thức với lá, nên bông hoa cũng bung ra đúng lúc dây
+ * leo bò tới chỗ nó — chung một vòng 900ms, không phải nhịp thứ hai.
+ */
+const HOA_MOI_CANH = 5;
+const MAU_HOA = ['var(--color-decor-hoa-hong)', 'var(--color-decor-hoa-vang)'] as const;
+/** Cỡ so le, lệch chu kỳ với số bông mỗi cạnh (3 và 5) nên bốn cạnh không giống nhau. */
+const CO_HOA = [1, 0.78, 0.9] as const;
+
+function raHoaVien(): Array<[number, number, number, number, number]> {
+  const ds: Array<[number, number, number, number, number]> = [];
+  for (let canh = 0; canh < 4; canh += 1) {
+    for (let j = 0; j < HOA_MOI_CANH; j += 1) {
+      const i = canh * HOA_MOI_CANH + j;
+      /* Lệch 0,32 thay vì 0,5: đặt đúng giữa ô thì bông hoa rơi trùng tâm một chiếc lá
+         và che mất nó. Lệch đi thì hoa nhú lên từ KẼ giữa hai chiếc lá. */
+      const doc = (j + 0.32) / HOA_MOI_CANH;
+      const moc = (canh + doc) * 25;
+      const p = doc * 100;
+      const [trai, tren] =
+        canh === 0 ? [p, 0] : canh === 1 ? [100, p] : canh === 2 ? [100 - p, 100] : [0, 100 - p];
+      ds.push([moc, trai, tren, GOC_CANH[canh] + LECH_GOC[i % LECH_GOC.length], CO_HOA[i % CO_HOA.length]]);
+    }
+  }
+  return ds;
+}
+
+const HOA_VIEN = raHoaVien();
+
+function HoaVien() {
+  return (
+    <>
+      {HOA_VIEN.map(([moc, trai, tren, g, co], i) => (
+        /* Hai tầng như lá, cùng lý do: tầng ngoài đặt chỗ, tầng trong nở. */
+        <span
+          key={i}
+          aria-hidden="true"
+          data-testid="hoa-vien"
+          className="pointer-events-none absolute"
+          style={{
+            left: `${trai}%`,
+            top: `${tren}%`,
+            transformOrigin: 'left center',
+            /* Thụt SÂU hơn lá (−34% so với −22%): cuống hoa ngắn hơn thân lá nhiều, để
+               nguyên mức của lá thì cả bông nổi hẳn ra ngoài mép, trông như dán lên
+               chứ không phải mọc lên từ sau thẻ. */
+            transform: `translateY(-50%) rotate(${g}deg) translateX(-34%)`,
+          }}
+        >
+          <svg
+            viewBox="0 -9 18 18"
+            className="block scale-0 opacity-0 transition-all duration-200 ease-out group-hover:scale-100 group-hover:opacity-100"
+            style={{
+              width: `${co * 18}px`,
+              height: `${co * 18}px`,
+              transitionDelay: `${Math.max(0, (moc / 100) * VONG_MS - 60)}ms`,
+            }}
+            fill="none"
+          >
+            {/* `Hoa` vẽ cuống chĩa LÊN (theo −y), mà chỗ này cần nó chĩa RA NGOÀI theo
+                +x như chiếc lá. Xoay 90° một lần ở đây, thay vì vẽ lại một bông hoa thứ
+                hai nằm ngang — hai bản vẽ của cùng một bông thì sớm muộn lệch nhau. */}
+            <g transform="rotate(90)">
+              <Hoa x={0} y={0} mau={MAU_HOA[i % MAU_HOA.length]} s={1} />
+            </g>
+          </svg>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Lá trên cành mọc: [x, y, góc xoay, cỡ]. Vẽ cho cành CHĨA LÊN PHẢI, gốc ở góc dưới
+ * bên trái khung 100×72; ba cành còn lại dùng lại đúng hình này rồi lật.
+ */
+const LA_CANH_MOC: Array<[number, number, number, number]> = [
+  [10, 60, -34, 0.6],
+  [20, 68, 26, 0.52],
+  [26, 52, -40, 0.58],
+  [36, 60, 22, 0.5],
+  [42, 44, -32, 0.56],
+  [52, 52, 26, 0.48],
+  [58, 36, -36, 0.54],
+  [68, 44, 22, 0.46],
+  [72, 28, -30, 0.5],
+  [82, 34, 24, 0.44],
+  [86, 20, -28, 0.46],
+  // Trên nhánh con chĩa xuống.
+  [50, 60, 46, 0.46],
+  [58, 68, 40, 0.42],
+];
+
+/**
+ * MỘT cành mọc ra từ một góc thẻ khi trỏ chuột vào.
+ *
+ * BỐN CÀNH GÓC QUAY LẠI — fen chốt 23/9. Chúng từng bị bỏ ở `7420bdf` khi lá viền thay
+ * chỗ, nhưng giờ chạy CÙNG lá viền chứ không thay nhau: lá viền lo cái mép thẻ, cành lo
+ * bốn góc chìa hẳn ra ngoài. Hai thứ không tranh chỗ vì cành neo ở NGOÀI hộp thẻ
+ * (`bottom-full`, `left-full`…) còn lá viền neo đúng trên mép.
+ *
+ * `origin-*` đặt ở đúng góc cành dính vào thẻ, rồi `scale-0` → `scale-100`: nó lớn dần
+ * RA TỪ chỗ đó nên đọc ra là MỌC, không phải hiện ra. Gốc phóng đặt sai chỗ (giữa
+ * khung chẳng hạn) thì cả cành phình ra từ hư không.
+ *
+ * Cành nào cũng là cùng một hình vẽ, chỉ LẬT: `lat` lật ngang, `doc` lật dọc. Lật bằng
+ * thuộc tính `transform` của thẻ <g> BÊN TRONG svg, không bằng class CSS ở ngoài —
+ * `scale-0`/`scale-100` của hiệu ứng mọc cũng là `transform` trên chính thẻ svg, hai
+ * cái đặt cùng chỗ thì cái sau xoá cái trước.
+ *
+ * HAI TẦNG <g>: tầng ngoài LẬT, tầng trong RUNG. Gộp một tầng thì hai cành lật dọc bay
+ * đi mất, và lý do rất kín:
+ *
+ *   `.kg-rung-canh` phải đặt `transform-box: fill-box` + `transform-origin: 0% 100%` để
+ *   rung quanh gốc cành. Mà thuộc tính `transform` của SVG cũng chỉ là thuộc tính CSS
+ *   `transform` viết tắt, nên nó chịu luôn cái `transform-origin` ấy. Bình thường gốc
+ *   biến hình của phần tử SVG là (0,0) của viewBox, phép lật vì thế soi gương đúng trục
+ *   mình tính; đổi gốc sang góc dưới bên trái HỘP BAO thì cùng một phép lật cho ra chỗ
+ *   khác hẳn. Đo được: cành lật dọc rơi xuống đơn vị y = 148 trên khung cao 72 — tức
+ *   nằm ngoài khung nhìn và bị svg cắt sạch, không còn một nét nào. Đó là vì sao trước
+ *   đây chỉ thấy hai cành trên, và cả thẻ đọc ra như cành của thẻ hàng trên chĩa xuống.
+ *
+ * Tầng trong nằm TRONG tầng lật nên hộp bao của nó là hình vẽ gốc, góc dưới bên trái
+ * của hộp ấy đúng là chỗ cành dính vào thẻ — nhịp rung vì thế pivot đúng gốc ở cả bốn
+ * hướng lật.
+ *
+ * Cùng một cái bẫy "CSS transform ghi đè transform của SVG" đã gặp ở mấy ngôi sao trên
+ * thanh nav và ở lá rơi bên dưới. Cách chữa cũng vẫn thế: tách tầng.
+ */
+function CanhMoc({
+  o,
+  rong,
+  lat = false,
+  doc = false,
+  cham = 0,
+  moc = 0,
+}: {
+  /** Lớp Tailwind đặt chỗ: góc nào của thẻ, và gốc phóng ở đâu. */
+  o: string;
+  rong: string;
+  lat?: boolean;
+  doc?: boolean;
+  /** Lệch pha nhịp rung, giây. Ba cành rung cùng nhịp thì cả thẻ giật như một khối. */
+  cham?: number;
+  /** Góc này nằm ở đâu trên vòng dây leo, phần trăm — quyết định lúc cành bung ra. */
+  moc?: number;
+}) {
+  return (
+    <svg
+      viewBox="0 0 100 72"
+      aria-hidden="true"
+      focusable="false"
+      data-testid="canh-goc"
+      className={`pointer-events-none absolute scale-0 opacity-0 transition-all duration-300 ease-out group-hover:scale-100 group-hover:opacity-100 ${o} ${rong}`}
+      style={{ transitionDelay: `${(moc / 100) * VONG_MS}ms` }}
+      fill="none"
+    >
+      <g
+        transform={`scale(${lat ? -1 : 1} ${doc ? -1 : 1}) translate(${lat ? -100 : 0} ${doc ? -72 : 0})`}
+      >
+        <g className="kg-rung-canh" style={{ animationDelay: `${cham}s` }}>
+          <path
+            d="M-4 72C16 66 40 54 60 40 74 30 86 22 96 16"
+            stroke="var(--color-decor-than)"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+          {/* Một nhánh con chĩa xuống. Cành trơ một nhánh thì đọc ra là cái gậy có lá
+              dán hai bên. */}
+          <path
+            d="M44 52C50 60 56 66 64 70"
+            stroke="var(--color-decor-than)"
+            strokeWidth="3.2"
+            strokeLinecap="round"
+          />
+          {LA_CANH_MOC.map(([x, y, g, s], i) => (
+            <La
+              key={i}
+              x={x}
+              y={y}
+              g={g}
+              s={s}
+              mau={i % 2 ? 'var(--color-decor-la-dam)' : 'var(--color-decor-la)'}
+            />
+          ))}
+          {/*
+            SÁU bông mỗi cành, fen chốt 23/9 — trước là hai. Năm bám thân, một trên
+            nhánh con.
+            Bám dọc thân cành (đường cong từ góc dưới trái lên góc trên phải) và NHỎ DẦN
+            về phía ngọn: bông to ở ngọn thì cành trông như bị bẻ gập vì đầu nặng. Một
+            bông đặt trên nhánh con chĩa xuống để nhánh ấy không còn trơ.
+          */}
+          <Hoa x={20} y={58} mau="var(--color-decor-hoa-vang)" s={0.72} />
+          <Hoa x={34} y={48} mau="var(--color-decor-hoa-hong)" s={0.7} />
+          <Hoa x={54} y={38} mau="var(--color-decor-hoa-vang)" s={0.64} />
+          <Hoa x={76} y={26} mau="var(--color-decor-hoa-hong)" s={0.6} />
+          <Hoa x={90} y={18} mau="var(--color-decor-hoa-vang)" s={0.52} />
+          <Hoa x={56} y={64} mau="var(--color-decor-hoa-hong)" s={0.54} />
+        </g>
+      </g>
+    </svg>
   );
 }
 
@@ -347,7 +588,43 @@ export function GameCard({ game }: { game: GameCardData }) {
         sau thẻ chứ không phải hình dán lên mặt thẻ. Nằm trước mặt thẻ thì lá che mất
         ảnh bìa và tên game của bé, tức trang trí ăn mất nội dung.
       */}
+      {/*
+        BỐN CÀNH GÓC, mỗi cành bung ra đúng lúc dây leo bò tới góc của nó, theo chiều
+        kim đồng hồ: trên-trái (0) → trên-phải (25) → dưới-phải (50) → dưới-trái (75).
+        Trước đây cả bốn mọc cùng lúc, và cùng lúc thì thẻ chỉ "nở bụp" một cái chứ
+        không đọc ra là có thứ gì đang bò quanh.
+
+        Vẽ TRƯỚC lá viền trong DOM, nên cành nằm dưới cùng: chỗ gốc cành gặp góc thẻ có
+        lá viền phủ lên, và chỗ nối ấy khuất đi thay vì hở ra một đầu cành cụt.
+      */}
+      <CanhMoc o="bottom-full left-full -mb-6 -ml-10 origin-bottom-left" rong="w-28" moc={25} />
+      <CanhMoc
+        o="top-full right-full -mr-9 -mt-6 origin-top-right"
+        rong="w-24"
+        lat
+        doc
+        cham={-0.7}
+        moc={75}
+      />
+      <CanhMoc
+        o="bottom-full right-full -mb-5 -mr-8 origin-bottom-right"
+        rong="w-20"
+        lat
+        cham={-1.4}
+        moc={0}
+      />
+      <CanhMoc
+        o="top-full left-full -ml-8 -mt-5 origin-top-left"
+        rong="w-16"
+        doc
+        cham={-2.1}
+        moc={50}
+      />
+
       <LaVien />
+      {/* Hoa vẽ SAU lá nhưng vẫn trước thẻ trong DOM: nó nằm trên nền lá (không bị một
+          chiếc lá nào che mất) mà vẫn khuất nửa trong sau mặt thẻ như lá. */}
+      <HoaVien />
 
       <Link
         href={`/game/${game.id}`}
