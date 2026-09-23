@@ -74,7 +74,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 93 kiểm tr
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 57
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 89
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 53, cần >24 game
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 55, cần >24 game
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql

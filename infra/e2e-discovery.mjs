@@ -9,6 +9,7 @@
  */
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { batBuocMailLog, taoBoBamLink } from './e2e-mail.mjs';
 
 const APP = process.env.APP_ORIGIN ?? 'http://localhost:3000';
@@ -528,6 +529,53 @@ async function xemTrang(params) {
     `${raHrefs.length} kết quả`
   );
   await p.close();
+}
+
+/*
+ * MỌI NHÃN DANH MỤC PHẢI VỪA viên thuốc trên thẻ game, ở khổ màn HẸP NHẤT.
+ *
+ * Viên thuốc là `truncate` trong `max-w-[calc(100%-4rem)]`, nên nhãn dài quá thì bị cắt
+ * bằng dấu ba chấm — mà một nhãn cụt ("Nghệ thuậ…", "Chơi bằng ph…") còn tệ hơn không
+ * có nhãn: nó chiếm chỗ, trông như lỗi, và vẫn không nói được game này loại gì.
+ *
+ * Đo ở 360px vì đó là khổ hẹp nhất còn dùng thật, và là điện thoại — thiết bị chính của
+ * trẻ ở đây. Ở 1280px thì nhãn nào cũng vừa, nên đo trên máy tính là không bao giờ đỏ.
+ *
+ * ĐỌC THẲNG danh sách từ `prisma/tags.ts` thay vì chép lại vào đây: chép lại là hai bản
+ * sẽ lệch ngay lần đầu có người thêm danh mục, và lúc đó phép kiểm canh một danh sách
+ * không còn ai dùng. Nhãn thêm về sau tự động bị soi mà không phải sửa file này.
+ *
+ * Đo bằng `scrollWidth > clientWidth` — đó là dấu hiệu duy nhất của `truncate`; đọc
+ * `textContent` thì vẫn ra chuỗi đầy đủ kể cả khi màn hình chỉ hiện một nửa.
+ */
+{
+  const nguon = readFileSync(new URL('../apps/web/prisma/tags.ts', import.meta.url), 'utf8');
+  const nhan = [...nguon.matchAll(/label:\s*'([^']+)'/g)].map((m) => m[1]);
+  check('Đọc được danh sách danh mục từ prisma/tags.ts', nhan.length >= 4, `${nhan.length} nhãn`);
+
+  const ctxN = await browser.newContext({ viewport: { width: 360, height: 900 } });
+  const pN = await ctxN.newPage();
+  await pN.goto(APP, { waitUntil: 'domcontentloaded' });
+  const vien = pN.locator('[data-testid=game-card] span.truncate').first();
+  if ((await vien.count()) === 0) {
+    check('Có thẻ game mang nhãn để đo', false, 'không thẻ nào có viên thuốc nhãn');
+  } else {
+    const cat = await vien.evaluate((e, ns) => {
+      const cu = e.textContent;
+      const ra = ns.filter((t) => {
+        e.textContent = t;
+        return e.scrollWidth > e.clientWidth + 0.5;
+      });
+      e.textContent = cu;
+      return ra;
+    }, nhan);
+    check(
+      'Không nhãn danh mục nào bị cắt cụt trên thẻ ở khổ 360px',
+      cat.length === 0,
+      cat.length ? `bị cắt: ${cat.join(', ')}` : `${nhan.length} nhãn đều vừa`
+    );
+  }
+  await ctxN.close();
 }
 
 await browser.close();
