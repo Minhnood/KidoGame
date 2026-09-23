@@ -67,6 +67,29 @@
 	# thì thứ tự chạy do Caddy tự sắp, không phải do thứ tự dòng trong file.
 	handle {
 		reverse_proxy web:3000 {
+			# THỬ LẠI trong 5 giây thay vì bỏ cuộc sau cú gọi đầu tiên.
+			#
+			# Đo ngày 23/9: trong lúc `up -d` thay container web, bắn 130 request thì
+			# 32 dính 502 — 24,6%, cửa sổ rộng 2,2 giây. Log Caddy phân loại 32/32 là
+			# `connect: connection refused` tới đúng IP của container mới, KHÔNG phải
+			# lỗi DNS: Caddy tra tên xong, có địa chỉ, gọi tới, và Next.js chưa kịp mở
+			# cổng. `docker compose` báo "Started" rồi vẫn còn ~1,5 giây nữa app mới
+			# nhận kết nối.
+			#
+			# 5 giây phủ được cửa sổ 2,2 giây đo được, còn dư biên cho lúc VPS bận.
+			# Cái giá: nếu web chết THẬT thì mỗi request treo 5 giây rồi mới báo lỗi,
+			# thay vì báo ngay. Đổi được, vì web chết thật là chuyện hiếm còn deploy
+			# là chuyện thường xuyên.
+			#
+			# KHÔNG dùng `fail_duration` kèm theo: chỉ có đúng một upstream, mà
+			# `fail_duration` đánh dấu upstream hỏng rồi loại nó ra — loại nốt cái
+			# duy nhất thì mọi request hỏng ngay lập tức, nặng hơn hẳn thứ đang chữa.
+			#
+			# Retry ở đây an toàn với cả POST: `connection refused` nghĩa là chưa một
+			# byte nào của request được gửi đi, nên gọi lại không thể thành gửi hai lần.
+			lb_try_duration 5s
+			lb_try_interval 100ms
+
 			# GHI ĐÈ X-Forwarded-For, không để Caddy nối thêm.
 			#
 			# Mặc định Caddy NỐI IP thật vào cuối chuỗi client gửi lên, nên phần tử
@@ -133,6 +156,11 @@
 	}
 
 	reverse_proxy web:3000 {
+		# Cùng lý lẽ thử lại như app domain — xem ghi chú dài ở đó. Khu quản trị đi
+		# chung một container `web`, nên nó dính đúng cửa sổ 2,2 giây ấy mỗi lần deploy.
+		lb_try_duration 5s
+		lb_try_interval 100ms
+
 		# Cùng lý lẽ ghi đè như app domain: Caddy là hop duy nhất trước app, nên
 		# giữ chuỗi client gửi lên là để client tự khai IP của mình.
 		header_up X-Forwarded-For {remote_host}

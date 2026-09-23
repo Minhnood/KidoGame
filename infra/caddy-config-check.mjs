@@ -205,6 +205,34 @@ console.log('\n── Trần body: Caddy ↔ middleware Next ↔ app ───�
   );
   check('Caddy: mọi đường khác của app tối đa 1MB', tranCaddy(khoiApp, 'khongNhanFile') > 0 && tranCaddy(khoiApp, 'khongNhanFile') <= 1024 ** 2, `${tranCaddy(khoiApp, 'khongNhanFile') / 1024 ** 2}MB`);
   check('Caddy: admin origin tối đa 1MB', tranCaddy(khoiAdmin, null) > 0 && tranCaddy(khoiAdmin, null) <= 1024 ** 2, `${tranCaddy(khoiAdmin, null) / 1024 ** 2}MB`);
+
+  /*
+   * MỌI upstream trỏ vào `web` PHẢI có `lb_try_duration`.
+   *
+   * Đo ngày 23/9: thiếu nó thì mỗi lần thay container web có 24,6% request dính 502
+   * suốt 2,2 giây — Next.js chưa kịp mở cổng, Caddy gọi một phát rồi bỏ cuộc. Gỡ dòng
+   * này ra là lặng lẽ mang cái đó về, và không phép kiểm nào khác nhận ra.
+   *
+   * Đòi CẢ HAI chỗ (app và admin) vì chúng dùng chung một container: sửa mỗi app thì
+   * người quản trị vẫn ăn trọn cửa sổ ấy.
+   */
+  const upstreamWeb = [...caddyfile.matchAll(/reverse_proxy\s+web:3000\s*\{([\s\S]*?)\n\t*\}/g)].map((m) => m[1]);
+  check(
+    'Caddy: mọi upstream web đều thử lại thay vì bỏ cuộc ngay (lb_try_duration)',
+    upstreamWeb.length >= 2 && upstreamWeb.every((k) => /lb_try_duration\s+\d+s/.test(k)),
+    `${upstreamWeb.filter((k) => /lb_try_duration/.test(k)).length}/${upstreamWeb.length} khối có`
+  );
+  /* Khoảng thử lại phải đủ ngắn so với cửa sổ 2,2 giây — 1 giây thì chỉ thử được hai
+     lần trong cả cửa sổ, tức vẫn trượt phần lớn. */
+  check(
+    'Caddy: khoảng thử lại đủ dày (lb_try_interval ≤ 250ms)',
+    upstreamWeb.length >= 2 &&
+      upstreamWeb.every((k) => {
+        const m = /lb_try_interval\s+(\d+)ms/.exec(k);
+        return m && Number(m[1]) <= 250;
+      }),
+    upstreamWeb.map((k) => /lb_try_interval\s+(\d+ms)/.exec(k)?.[1] ?? 'thiếu').join(' · ')
+  );
 }
 
 // ---------------------------------------------------------------------------
