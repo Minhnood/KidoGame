@@ -41,7 +41,7 @@ Bốn bộ không cần server:
 ```bash
 pnpm --filter @kidogame/sb3 test           # 64 unit test, gồm fixture độc hại
 node infra/contrast-check.mjs              # 160 phép đo màu, cả hai giao diện
-node infra/caddy-config-check.mjs          # 28 phép, +4 nữa nếu có Docker
+node infra/caddy-config-check.mjs          # 30 phép, +4 nữa nếu có Docker
 node infra/umami-check.mjs                 # 16, đo thẳng production, không làm bẩn số liệu
 node infra/glitchtip-check.mjs             # 22, production; lớp SSH gửi rồi xoá một lỗi thử
 cd apps/web && pnpm exec tsx ../../infra/tra-loi-thu-check.ts   # 49
@@ -74,7 +74,7 @@ SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-check.mjs      # 93 kiểm tr
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-auth.mjs        # 57
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-moderation.mjs  # 89
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-takedown.mjs    # 47
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 53, cần >24 game
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-discovery.mjs   # 55, cần >24 game
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-email.mjs       # 22
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-prune-removed.mjs  # 29, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xoa-gia-dinh.mjs   # 44, cần psql
@@ -92,7 +92,7 @@ node infra/e2e-admin-origin.mjs                                    # 27, không 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 49, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 23, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 32, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
 node infra/e2e-bia-hong.mjs                                        # 13, cần psql + tài khoản demo
 node infra/e2e-la-vien.mjs                                         # 31, lá kín viền + hoa xen + bốn cành góc khi hover

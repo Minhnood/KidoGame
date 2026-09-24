@@ -11,6 +11,9 @@ import { EmptyState, PageTitle } from '@/components/page';
 import { Pager } from '@/components/pager';
 import { demPhanUngNhieuGame } from '@/lib/phan-ung';
 import { gameMoiCuaBanBe } from '@/lib/theo-doi';
+import { Suspense } from 'react';
+import { LuoiGameCho } from '@/components/dang-tai';
+import { NutDangCho } from '@/components/nut-dang-cho';
 import { HANG_LOC, LE_DUOI_LOAI, LE_DUOI_TUOI } from './hang-loc';
 
 export const dynamic = 'force-dynamic';
@@ -76,26 +79,13 @@ export default async function HomePage({
     };
   }
 
-  const [actor, tags, total, games] = await Promise.all([
+  /*
+   * CHỈ hai truy vấn nhẹ ở đây. Đếm và lấy danh sách game nằm trong `<KetQua>` phía
+   * dưới một ranh giới `Suspense` — xem ghi chú dài ở đó.
+   */
+  const [actor, tags] = await Promise.all([
     getActor(),
     prisma.tag.findMany({ orderBy: { label: 'asc' }, select: { slug: true, label: true } }),
-    /* Đếm cùng `where` với danh sách. Đây là truy vấn thứ hai trên mọi lần tải trang
-       chủ, và nó mua đúng một thứ: con số tổng, thứ duy nhất biến "60 game đầu tiên"
-       thành một câu nói được còn bao nhiêu game nữa. */
-    prisma.game.count({ where }),
-    prisma.game.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        child: { select: { displayName: true } },
-        // Nhãn loại để hiện trên thẻ game. `take: 1` vì thẻ chỉ hiện nhãn đầu
-        // tiên — xem `NhanLoai` trong `game-card.tsx`; lấy cả hai rồi bỏ một cái
-        // là bắt Postgres làm việc không ai dùng, trên mọi lần tải trang chủ.
-        tags: { take: 1, include: { tag: { select: { label: true } } } },
-      },
-    }),
   ]);
 
   /*
@@ -108,14 +98,6 @@ export default async function HomePage({
    */
   const filtering = Boolean(query || tagSlug || bracket);
   const beXem = actor?.kind === 'child' ? actor : null;
-
-  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  /* Trang vượt quá cuối danh sách KHÔNG phải danh sách rỗng, và không được hiện ra
-     như danh sách rỗng. `?trang=999` cho một danh sách 2 trang thì truy vấn trả về
-     không có gì, và màn hình sẽ nói "Chưa có game nào cả. Đăng game đầu tiên nhé!" —
-     một câu sai hoàn toàn, ngay trên một trang chủ đầy game. `Pager` có sẵn câu đúng
-     kèm đường quay về; ở đây chỉ cần nhường chỗ cho nó. */
-  const vuotTrang = page > lastPage;
 
   /* Dải chào và dải bạn bè chỉ ở TRANG ĐẦU, đúng lý do đã khiến chúng biến mất khi
      lọc: người đã đi tới trang 2 không cần được mời chào lại, họ đang ở trong trang
@@ -132,9 +114,18 @@ export default async function HomePage({
    */
   const gameBanBe = !filtering && trangDau && beXem ? await gameMoiCuaBanBe(beXem.id, 4) : [];
 
-  // Một lượt `groupBy` cho CẢ hai dải. Hỏi riêng từng dải là hai truy vấn cho cùng
-  // một câu hỏi, trên mọi lần tải trang chủ của một bé có theo dõi ai đó.
-  const soIcon = await demPhanUngNhieuGame([...games, ...gameBanBe].map((g) => g.id));
+  /*
+   * Số icon cho RIÊNG dải bạn bè. Lưới chính hỏi lượt của nó bên trong `<KetQua>`.
+   *
+   * Trước đây đây là MỘT lượt `groupBy` cho cả hai dải. Tách ra là chấp nhận thêm một
+   * truy vấn — nhưng chỉ thêm đúng trong trường hợp dải bạn bè có hàng: bé đã đăng
+   * nhập, có theo dõi ai đó, đang ở trang đầu và không lọc. Đổi lại, lưới chính không
+   * còn phải chờ dải này, và đó mới là thứ người dùng đang nhìn.
+   *
+   * Mảng rỗng thì `demPhanUngNhieuGame` không chạm tới DB, nên mọi lần lọc hay sang
+   * trang vẫn đúng số truy vấn như cũ.
+   */
+  const soIconBanBe = await demPhanUngNhieuGame(gameBanBe.map((g) => g.id));
 
   /**
    * Giữ nguyên các bộ lọc khác khi bấm đổi một cái.
@@ -174,7 +165,9 @@ export default async function HomePage({
 
   const chip = (active: boolean) =>
     [
-      'min-h-touch inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-4 font-semibold no-underline',
+      /* `relative` là để `NutDangCho` phủ đúng viên thuốc này — vòng xoay của nó là
+         `absolute inset-0`, thiếu mốc thì nó bám ra tận thẻ tổ tiên gần nhất. */
+      'relative min-h-touch inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-4 font-semibold no-underline',
       active
         ? 'border-transparent bg-accent text-chrome'
         : 'border-border bg-surface text-ink hover:bg-bg',
@@ -273,7 +266,7 @@ export default async function HomePage({
                   authorName: game.child.displayName,
                   thumbUrl: objectUrl('thumb', game.thumbSha256),
                   playCount: game.playCount,
-                  reactionCount: soIcon[game.id]?.tong ?? 0,
+                  reactionCount: soIconBanBe[game.id]?.tong ?? 0,
                   tagLabels: game.tags.map((t) => t.tag.label),
                 }}
               />
@@ -320,6 +313,7 @@ export default async function HomePage({
       <div className={`${LE_DUOI_LOAI} ${HANG_LOC}`} data-testid="tag-filters">
         <Link href={linkWith({ tag: '' })} className={chip(!tagSlug)}>
           Tất cả
+          <NutDangCho />
         </Link>
         {tags.map((tag) => (
           <Link
@@ -329,6 +323,7 @@ export default async function HomePage({
             className={chip(tagSlug === tag.slug)}
           >
             {tag.label}
+            <NutDangCho />
           </Link>
         ))}
       </div>
@@ -337,6 +332,7 @@ export default async function HomePage({
         <span className="shrink-0 whitespace-nowrap text-sm text-ink-soft">Bé mấy tuổi làm?</span>
         <Link href={linkWith({ tuoi: '' })} className={chip(!bracket)}>
           Tuổi nào cũng được
+          <NutDangCho />
         </Link>
         {AGE_BRACKETS.map((b) => (
           <Link
@@ -346,10 +342,93 @@ export default async function HomePage({
             className={chip(ageKey === b.key)}
           >
             {b.label}
+            <NutDangCho />
           </Link>
         ))}
       </div>
 
+      {/*
+        RANH GIỚI CHỜ quanh phần kết quả — fen chốt 23/9.
+
+        `key` đổi theo bộ lọc và số trang, và đó là cả cơ chế: React thấy key khác thì
+        coi đây là cây khác, vứt cây cũ đi và hiện `fallback` trong lúc cây mới còn
+        đang chờ dữ liệu. Thiếu `key` thì Suspense chỉ chạy đúng một lần ở lần tải đầu,
+        còn mọi lần đổi bộ lọc sau đó vẫn giữ nguyên lưới cũ trên màn hình.
+
+        `loading.tsx` của route này KHÔNG thay được: nó chỉ chạy khi chuyển sang route
+        khác, mà lọc và phân trang thì ở nguyên `(trang-chu)`, chỉ đổi query.
+
+        Chỉ bọc phần KẾT QUẢ, không bọc cả trang: hàng lọc và ô tìm phải đứng yên, vì
+        thứ bé vừa bấm mà nhấp nháy theo thì không đọc được là mình đã chọn cái gì. Ô
+        chờ nằm đúng chỗ lưới, nên trang không co giãn.
+      */}
+      <Suspense key={`${query}|${tagSlug}|${ageKey}|${page}`} fallback={<LuoiGameCho so={PAGE_SIZE} />}>
+        <KetQua
+          where={where}
+          page={page}
+          filtering={filtering}
+          hrefTrang={hrefTrang}
+        />
+      </Suspense>
+    </>
+  );
+}
+
+/**
+ * Phần kết quả: câu đếm, lưới thẻ game, thanh phân trang.
+ *
+ * TÁCH RA KHỎI `HomePage` để có chỗ đặt ranh giới `Suspense`. Chừng nào mấy cái `await`
+ * này còn nằm trong `HomePage` thì không ô chờ nào hiện được — cả trang đứng lại chờ
+ * chúng, mà đó chính là hai, ba giây "đơ" mà fen báo.
+ *
+ * Nhận `where` đã dựng sẵn thay vì tự dựng lại từ searchParams: đếm và danh sách phải
+ * lọc bằng ĐÚNG một điều kiện, mà hai chỗ dựng cùng một `where` là hai chỗ sẽ lệch
+ * nhau lúc ai đó thêm bộ lọc thứ tư.
+ */
+async function KetQua({
+  where,
+  page,
+  filtering,
+  hrefTrang,
+}: {
+  where: Prisma.GameWhereInput;
+  page: number;
+  filtering: boolean;
+  hrefTrang: (p: number) => string;
+}) {
+  const [total, games] = await Promise.all([
+    /* Đếm cùng `where` với danh sách. Đây là truy vấn thứ hai trên mọi lần tải trang
+       chủ, và nó mua đúng một thứ: con số tổng, thứ duy nhất biến "60 game đầu tiên"
+       thành một câu nói được còn bao nhiêu game nữa. */
+    prisma.game.count({ where }),
+    prisma.game.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        child: { select: { displayName: true } },
+        // Nhãn loại để hiện trên thẻ game. `take: 1` vì thẻ chỉ hiện nhãn đầu
+        // tiên — xem `NhanLoai` trong `game-card.tsx`; lấy cả hai rồi bỏ một cái
+        // là bắt Postgres làm việc không ai dùng, trên mọi lần tải trang chủ.
+        tags: { take: 1, include: { tag: { select: { label: true } } } },
+      },
+    }),
+  ]);
+
+  // Một lượt `groupBy` cho cả trang game, chạy sau vì nó cần danh sách id.
+  const soIcon = await demPhanUngNhieuGame(games.map((g) => g.id));
+
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  /* Trang vượt quá cuối danh sách KHÔNG phải danh sách rỗng, và không được hiện ra
+     như danh sách rỗng. `?trang=999` cho một danh sách 2 trang thì truy vấn trả về
+     không có gì, và màn hình sẽ nói "Chưa có game nào cả. Đăng game đầu tiên nhé!" —
+     một câu sai hoàn toàn, ngay trên một trang chủ đầy game. `Pager` có sẵn câu đúng
+     kèm đường quay về; ở đây chỉ cần nhường chỗ cho nó. */
+  const vuotTrang = page > lastPage;
+
+  return (
+    <>
       {/*
         Đếm TỔNG, không đếm số thẻ đang bày ra.
 
@@ -389,7 +468,10 @@ export default async function HomePage({
           )}
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+        <div
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4"
+          data-testid="luoi-game"
+        >
           {games.map((game) => (
             <GameCard
               key={game.id}

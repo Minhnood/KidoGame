@@ -96,7 +96,11 @@ export function DauTrangCho({ canhGiua = false }: { canhGiua?: boolean }) {
  */
 export function TheGameCho() {
   return (
-    <div className={`${KHUNG_THE} bg-surface p-2`}>
+    /* `data-testid` để phép kiểm bám được: từ 23/9 ô chờ này không chỉ hiện lúc mở
+       trang nữa, nó còn hiện mỗi lần đổi bộ lọc hay sang trang (ranh giới `Suspense`
+       trong `(trang-chu)/page.tsx`), và "có hiện không" là thứ phải đo bằng cách bấm
+       thật chứ không đọc được từ mã nguồn. */
+    <div className={`${KHUNG_THE} bg-surface p-2`} data-testid="the-game-cho">
       <div className="relative overflow-hidden rounded-xl">
         <O className="aspect-4/3 w-full rounded-xl" />
 
