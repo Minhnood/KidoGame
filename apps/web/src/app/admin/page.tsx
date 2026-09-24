@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
@@ -314,7 +314,7 @@ export default async function AdminPage({
                   <p className="text-lg font-bold">
                     {req.game ? (
                       <>
-                        <Link href={`/game/${req.game.id}`}>{req.game.title}</Link>{' '}
+                        <LinkCho href={`/game/${req.game.id}`}>{req.game.title}</LinkCho>{' '}
                         <span className="align-middle text-sm font-semibold text-ink-soft">
                           ({STATUS_LABEL[req.game.status] ?? req.game.status})
                         </span>
@@ -382,13 +382,13 @@ export default async function AdminPage({
             </strong>
             .
           </span>{' '}
-          <Link href={`/admin?loc=${filter}`}>Bỏ lọc, xem tất cả</Link>
+          <LinkCho href={`/admin?loc=${filter}`}>Bỏ lọc, xem tất cả</LinkCho>
         </Notice>
       )}
 
       <nav className="mb-5 flex flex-wrap gap-2" data-testid="admin-filters">
         {FILTERS.map((f) => (
-          <Link
+          <LinkCho
             key={f.key}
             href={linkTo(f.key, 1)}
             data-testid={`admin-filter-${f.key}`}
@@ -401,7 +401,7 @@ export default async function AdminPage({
             ].join(' ')}
           >
             {f.label}
-          </Link>
+          </LinkCho>
         ))}
       </nav>
 
@@ -416,7 +416,7 @@ export default async function AdminPage({
 
       {games.length === 0 ? (
         <EmptyState>
-          Không có game nào trong mục này. <Link href="/">Về trang chủ</Link>
+          Không có game nào trong mục này. <LinkCho href="/">Về trang chủ</LinkCho>
         </EmptyState>
       ) : (
         <ul className="mb-8 mt-3 list-none space-y-4 p-0" data-testid="admin-list">
@@ -485,7 +485,7 @@ export default async function AdminPage({
                 <div className="sm:min-w-0 sm:flex-1">
                   <p className="text-lg font-bold">
                     {/* Admin xem được cả game đã ẩn — xem ngoại lệ trong /game/[id]/page.tsx */}
-                    <Link href={`/game/${game.id}`}>{game.title}</Link>{' '}
+                    <LinkCho href={`/game/${game.id}`}>{game.title}</LinkCho>{' '}
                     <span className="align-middle text-sm font-semibold text-ink-soft">
                       ({STATUS_LABEL[game.status] ?? game.status})
                     </span>

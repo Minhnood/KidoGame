@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { Notice } from '@/components/notice';
@@ -27,7 +27,7 @@ export default async function ResetPasswordPage({
         <div className="mb-12">
           <Notice tone="error" role="alert">
             Link không hợp lệ — thiếu mã xác nhận. Hãy mở đúng link trong email, hoặc{' '}
-            <Link href="/quen-mat-khau">yêu cầu link mới</Link>.
+            <LinkCho href="/quen-mat-khau">yêu cầu link mới</LinkCho>.
           </Notice>
         </div>
       </FormColumn>

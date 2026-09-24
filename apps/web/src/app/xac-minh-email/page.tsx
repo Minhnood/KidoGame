@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { verifyEmail } from '@/lib/account';
 import { AuthError } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -79,9 +79,9 @@ export default async function VerifyEmailPage({
           </Notice>
           <p className="mt-4 text-ink-soft">
             Vào{' '}
-            <Link href="/phu-huynh" className="font-bold text-accent-text underline">
+            <LinkCho href="/phu-huynh" className="font-bold text-accent-text underline">
               trang của bố mẹ
-            </Link>{' '}
+            </LinkCho>{' '}
             để bấm gửi lại link mới.
           </p>
         </div>

@@ -38,7 +38,24 @@ import { useLinkStatus } from 'next/link';
  * Chữ giữ nguyên chỗ còn vì một lẽ nữa: bé phải đọc được mình vừa chọn cái gì trong
  * suốt lúc chờ, không thì ba giây ấy là ba giây nhìn một nút trống không biết của ai.
  */
-export function NutDangCho() {
+/*
+ * `nen="toi"` cho link nằm trên thanh tối (`chrome`): thanh điều hướng, logo, tab quản
+ * trị. Chữ ở đó là `chrome-ink` gần trắng, nên vòng xoay (ăn `currentColor`) cũng gần
+ * trắng — mà lớp phủ mặc định `surface` ở giao diện sáng lại là trắng. Trắng trên trắng:
+ * nút phủ kín một viên thuốc trống, vòng xoay có mặt trong DOM mà mắt không thấy gì.
+ *
+ * `nen="cam"` cho nút cam (`ButtonLink` biến thể primary tự chọn). Chữ trên nút cam là
+ * `chrome` — tối ở CẢ HAI giao diện — còn `surface` thì tối ở giao diện tối: vòng xoay
+ * tối trên lớp phủ tối.
+ */
+export type NenCho = 'sang' | 'toi' | 'cam';
+const LOP_PHU: Record<NenCho, string> = {
+  sang: 'bg-surface/70',
+  toi: 'bg-chrome/70',
+  cam: 'bg-accent/70',
+};
+
+export function NutDangCho({ nen = 'sang' }: { nen?: NenCho }) {
   const { pending } = useLinkStatus();
 
   if (!pending) return null;
@@ -46,7 +63,7 @@ export function NutDangCho() {
     <span
       aria-hidden="true"
       data-testid="nut-dang-cho"
-      className="pointer-events-none absolute inset-0 grid place-items-center rounded-[inherit] bg-surface/70"
+      className={`pointer-events-none absolute inset-0 grid place-items-center rounded-[inherit] ${LOP_PHU[nen]}`}
     >
       {/*
         Vòng xoay vẽ bằng viền chứ không phải ảnh hay emoji: nó nhận màu từ `currentColor`

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 
 /**
  * Logo KidoGame: một dấu hiệu vuông bo góc, rồi tên viết bằng chữ.
@@ -39,8 +39,9 @@ import Link from 'next/link';
  */
 export function SiteLogo() {
   return (
-    <Link
+    <LinkCho
       href="/"
+      nen="toi"
       /*
        * `group` để dấu hiệu nảy nhẹ khi trỏ vào — cả cụm là MỘT link, nên phản hồi
        * cũng phải là của cả cụm, không phải riêng chữ.
@@ -120,6 +121,6 @@ export function SiteLogo() {
       <span className="text-lg font-extrabold tracking-tight sm:text-xl">
         Kido<span className="text-accent">Game</span>
       </span>
-    </Link>
+    </LinkCho>
   );
 }

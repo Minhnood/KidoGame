@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
@@ -57,21 +57,21 @@ export default async function LoginParentPage({
       */}
       <div className="mb-12 space-y-1 text-ink-soft">
         <p>
-          <Link href="/quen-mat-khau" className="kg-link-bam font-bold text-accent-text underline">
+          <LinkCho href="/quen-mat-khau" className="kg-link-bam font-bold text-accent-text underline">
             Quên mật khẩu?
-          </Link>
+          </LinkCho>
         </p>
         <p>
           Bé đăng nhập để đăng game?{' '}
-          <Link href="/be-dang-nhap" className="kg-link-bam font-bold text-accent-text underline">
+          <LinkCho href="/be-dang-nhap" className="kg-link-bam font-bold text-accent-text underline">
             Vào đây
-          </Link>
+          </LinkCho>
         </p>
         <p>
           Chưa có tài khoản?{' '}
-          <Link href="/dang-ky" className="kg-link-bam font-bold text-accent-text underline">
+          <LinkCho href="/dang-ky" className="kg-link-bam font-bold text-accent-text underline">
             Đăng ký
-          </Link>
+          </LinkCho>
         </p>
       </div>
     </FormColumn>

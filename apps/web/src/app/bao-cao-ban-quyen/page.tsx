@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { TAKEDOWN_SLA_WORKING_DAYS } from '@/lib/operator';
@@ -51,9 +51,9 @@ export default async function TakedownPage({
 
       <p className="mb-12 text-sm text-ink-soft">
         Quy trình đầy đủ nằm trong{' '}
-        <Link href="/dieu-khoan#quy-trinh-go" className="font-semibold underline">
+        <LinkCho href="/dieu-khoan#quy-trinh-go" className="font-semibold underline">
           điều khoản sử dụng
-        </Link>
+        </LinkCho>
         .
       </p>
     </>

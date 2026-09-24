@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import { PageTitle, EmptyState } from '@/components/page';
 import { Notice } from '@/components/notice';
@@ -54,9 +54,9 @@ export default async function BanBePage() {
       {ds.length === 0 ? (
         <EmptyState>
           Bé chưa theo dõi bạn nào.{' '}
-          <Link href="/" className="font-bold text-accent-text underline">
+          <LinkCho href="/" className="font-bold text-accent-text underline">
             Tìm một game hay
-          </Link>{' '}
+          </LinkCho>{' '}
           rồi bấm “Theo dõi” dưới game đó nhé!
         </EmptyState>
       ) : (
