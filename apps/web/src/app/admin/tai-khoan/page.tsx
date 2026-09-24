@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
@@ -213,15 +213,15 @@ export default async function AdminTaiKhoanPage({
           Tìm
         </Button>
         {q && (
-          <Link href={linkTo(filter, '')} className="min-h-touch inline-flex items-center px-2">
+          <LinkCho href={linkTo(filter, '')} className="min-h-touch inline-flex items-center px-2">
             Xoá tìm kiếm
-          </Link>
+          </LinkCho>
         )}
       </form>
 
       <nav className="mb-5 flex flex-wrap gap-2" data-testid="tk-filters">
         {FILTERS.map((f) => (
-          <Link
+          <LinkCho
             key={f.key}
             href={linkTo(f.key, q)}
             data-testid={`tk-filter-${f.key}`}
@@ -234,7 +234,7 @@ export default async function AdminTaiKhoanPage({
             ].join(' ')}
           >
             {f.label}
-          </Link>
+          </LinkCho>
         ))}
       </nav>
 
@@ -251,7 +251,7 @@ export default async function AdminTaiKhoanPage({
             <>
               {' '}
               Đang lọc <strong>{FILTERS.find((f) => f.key === filter)?.label}</strong> —{' '}
-              <Link href={linkTo('tat-ca', q)}>bỏ lọc</Link> thì có thể ra.
+              <LinkCho href={linkTo('tat-ca', q)}>bỏ lọc</LinkCho> thì có thể ra.
             </>
           )}
         </EmptyState>
@@ -309,9 +309,9 @@ export default async function AdminTaiKhoanPage({
                         rất dễ bấm nhầm sang game của một đứa trẻ khác trùng tên hiển
                         thị, mà nút bên cạnh là "Gỡ hẳn".
                       */}
-                      <Link href={`/admin?loc=tat-ca&be=${child.id}`} className="text-sm">
+                      <LinkCho href={`/admin?loc=tat-ca&be=${child.id}`} className="text-sm">
                         {child._count.games} game
-                      </Link>
+                      </LinkCho>
                       <span className="ml-auto">
                         <ChildLockButton childId={child.id} isLocked={child.isLocked} />
                       </span>

@@ -24,7 +24,7 @@
  * Màu lấy từ nhóm `--color-bd-*` trong `globals.css`, đã đo bằng validator ở cả hai
  * giao diện — đọc chú thích ở đó trước khi đổi bất cứ màu nào.
  */
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 
 export interface MucDonut {
   nhan: string;
@@ -175,7 +175,7 @@ export function DonutTrangThai({
       <ul className="m-0 min-w-44 flex-1 list-none space-y-1.5 p-0">
         {muc.map((m) => (
           <li key={m.nhan}>
-            <Link
+            <LinkCho
               href={m.href}
               className="flex items-baseline gap-2.5 rounded-field px-2 py-1 no-underline hover:bg-bg"
             >
@@ -188,7 +188,7 @@ export function DonutTrangThai({
               <span className="w-11 text-right tabular-nums text-sm text-ink-soft">
                 {tong === 0 ? '—' : `${((m.so / tong) * 100).toFixed(0)}%`}
               </span>
-            </Link>
+            </LinkCho>
           </li>
         ))}
       </ul>

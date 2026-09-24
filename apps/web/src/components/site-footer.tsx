@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { DatCuoiTrang, Hoa } from './site-decor';
 import { ThemeToggle } from './theme-toggle';
 
@@ -141,14 +141,14 @@ export function SiteFooter() {
         </p>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
           {LINKS.map((link) => (
-            <Link
+            <LinkCho
               key={link.href}
               href={link.href}
               data-testid={`footer-${link.href.slice(1)}`}
               className="min-h-touch inline-flex items-center font-semibold no-underline hover:text-ink"
             >
               {link.label}
-            </Link>
+            </LinkCho>
           ))}
           {/* Chỉ hiện dưới `sm` — trên đó nút nằm ở thanh điều hướng. Lý do ở `ThemeToggle`. */}
           <ThemeToggle viTri="chan-trang" />

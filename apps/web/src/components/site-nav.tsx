@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { ButtonLink } from './button';
+import { LinkCho } from './link-cho';
 import { logoutAction } from '@/lib/actions';
 import { getActor } from '@/lib/session';
 
@@ -63,6 +63,7 @@ export async function SiteNav() {
         <ButtonLink
           href="/phu-huynh"
           variant="ghost"
+          nen="toi"
           className="border-chrome-ink/25! text-chrome-ink! hover:bg-chrome-lift!"
         >
           {/*
@@ -99,9 +100,9 @@ export async function SiteNav() {
         </form>
       ) : (
         <>
-          <Link href="/dang-nhap" className={MUC_CHU}>
+          <LinkCho href="/dang-nhap" className={MUC_CHU} nen="toi">
             Bố mẹ
-          </Link>
+          </LinkCho>
           {/*
             Quầng cam quanh nút, CHỈ ở đây chứ không sửa vào `variant="primary"`.
             Nút cam trên nền tím đêm thì quầng sáng cùng màu làm nó nổi hẳn lên như

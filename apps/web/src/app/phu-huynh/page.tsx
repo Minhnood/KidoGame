@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getActor } from '@/lib/session';
@@ -335,9 +335,9 @@ export default async function ParentDashboard({
                           }`}
                         />
                         <span className="min-w-0">
-                        <Link href={`/game/${game.id}`} className="kg-link-bam font-semibold">
+                        <LinkCho href={`/game/${game.id}`} className="kg-link-bam font-semibold">
                           {game.title}
-                        </Link>
+                        </LinkCho>
                         {/* Dòng riêng dưới `sm`: nối đuôi tên game thì "5 lượt" ở cuối dòng
                             một còn "chơi" rớt xuống dòng hai, đọc như hai mảnh vỡ. */}
                         <span className="block text-sm text-ink-soft sm:ml-2 sm:inline">
@@ -417,26 +417,26 @@ export default async function ParentDashboard({
                   />
                   {/* Thu gọn về đúng thẻ của bé này, không về đầu trang. */}
                   {child.tongGame > GAME_THU_GON && (
-                    <Link
+                    <LinkCho
                       href={`/phu-huynh#be-${child.username}`}
                       data-testid={`thu-gon-be-${child.username}`}
                       className="mt-3 inline-flex min-h-touch items-center font-semibold text-accent-text"
                     >
                       Thu gọn
-                    </Link>
+                    </LinkCho>
                   )}
                 </>
               ) : (
                 child.tongGame > GAME_THU_GON && (
                   /* Nói luôn con số: "Xem tất cả" trần không cho biết bấm vào là thêm 1
                      game hay thêm 200. */
-                  <Link
+                  <LinkCho
                     href={hrefTrangBe(child.username)(1)}
                     data-testid={`xem-tat-ca-be-${child.username}`}
                     className="mt-3 inline-flex min-h-touch items-center font-semibold text-accent-text"
                   >
                     Xem tất cả {child.tongGame} game →
-                  </Link>
+                  </LinkCho>
                 )
               )}
             </li>

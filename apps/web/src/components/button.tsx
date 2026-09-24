@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import type { ComponentProps, ReactNode } from 'react';
+import { LinkCho } from './link-cho';
 
 type Variant = 'primary' | 'ghost' | 'danger';
 type Size = 'md' | 'lg' | 'lg-tu-sm';
@@ -97,17 +97,27 @@ export function ButtonAnchor({
   );
 }
 
-/** Nút nhưng là link. Dùng khi hành động là điều hướng, không phải submit. */
+/**
+ * Nút nhưng là link. Dùng khi hành động là điều hướng, không phải submit.
+ *
+ * Mang sẵn vòng xoay lúc trang sau đang dựng (`LinkCho`). `nen="toi"` khi nút nằm trên
+ * thanh tối mà bản thân nút trong suốt — lý do ở `NutDangCho`.
+ */
 export function ButtonLink({
   variant = 'primary',
   size = 'md',
   className,
   children,
+  nen,
   ...rest
-}: CommonProps & ComponentProps<typeof Link>) {
+}: CommonProps & ComponentProps<typeof LinkCho>) {
   return (
-    <Link className={classesFor(variant, size, className)} {...rest}>
+    <LinkCho
+      className={classesFor(variant, size, className)}
+      nen={nen ?? (variant === 'primary' ? 'cam' : 'sang')}
+      {...rest}
+    >
       {children}
-    </Link>
+    </LinkCho>
   );
 }

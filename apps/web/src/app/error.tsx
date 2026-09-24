@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { Notice } from '@/components/notice';
@@ -66,9 +66,9 @@ export default function Error({
       </p>
 
       <p className="mt-4">
-        <Link href="/" className="font-bold">
+        <LinkCho href="/" className="font-bold">
           Hoặc về trang chủ
-        </Link>
+        </LinkCho>
       </p>
 
       {/*
@@ -86,9 +86,9 @@ export default function Error({
         {error.digest ? (
           <>
             Kể cho chúng tôi chỗ hỏng này ở{' '}
-            <Link href={`/bao-loi?ma=${encodeURIComponent(error.digest)}&tu=${encodeURIComponent(duongDan)}`} className="font-bold">
+            <LinkCho href={`/bao-loi?ma=${encodeURIComponent(error.digest)}&tu=${encodeURIComponent(duongDan)}`} className="font-bold">
               trang báo lỗi
-            </Link>{' '}
+            </LinkCho>{' '}
             — mã lỗi đã điền sẵn giúp bạn. Mã đó là{' '}
             <code className="font-bold">{error.digest}</code>, giúp tìm ra nguyên nhân nhanh hơn
             nhiều.
@@ -96,9 +96,9 @@ export default function Error({
         ) : (
           <>
             Kể cho chúng tôi chỗ hỏng này ở{' '}
-            <Link href={`/bao-loi?tu=${encodeURIComponent(duongDan)}`} className="font-bold">
+            <LinkCho href={`/bao-loi?tu=${encodeURIComponent(duongDan)}`} className="font-bold">
               trang báo lỗi
-            </Link>
+            </LinkCho>
             . Lần này không có mã lỗi, nên bạn kể càng cụ thể càng dễ tìm.
           </>
         )}

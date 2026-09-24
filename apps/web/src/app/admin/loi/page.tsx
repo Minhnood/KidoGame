@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
@@ -230,7 +230,7 @@ export default async function AdminErrorsPage({
 
       <nav className="mb-5 mt-5 flex flex-wrap gap-2" data-testid="error-filters">
         {FILTERS.map((f) => (
-          <Link
+          <LinkCho
             key={f.key}
             href={linkTo(f.key, 1)}
             data-testid={`error-filter-${f.key}`}
@@ -243,7 +243,7 @@ export default async function AdminErrorsPage({
             ].join(' ')}
           >
             {f.label}
-          </Link>
+          </LinkCho>
         ))}
       </nav>
 
@@ -263,7 +263,7 @@ export default async function AdminErrorsPage({
           {filter === 'chua-xu-ly'
             ? 'Không có lỗi nào chưa xử lý. Đây là tin tốt.'
             : 'Không có nhóm nào trong mục này.'}{' '}
-          <Link href="/admin">Về trang kiểm duyệt</Link>
+          <LinkCho href="/admin">Về trang kiểm duyệt</LinkCho>
         </EmptyState>
       ) : (
         <ul className="mb-8 mt-3 list-none space-y-3 p-0" data-testid="error-list">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { Button } from '@/components/button';
 import { Notice } from '@/components/notice';
 import { reportGameAction, type FormState } from '@/lib/actions';
@@ -74,13 +74,13 @@ export function ReportForm({ gameId }: { gameId: string }) {
         */}
         <p className="mt-3 text-sm text-ink-soft">
           Bạn là người làm ra game gốc?{' '}
-          <Link
+          <LinkCho
             href={`/bao-cao-ban-quyen?game=${encodeURIComponent(gameId)}`}
             data-testid="report-takedown-link"
             className="font-semibold underline"
           >
             Gửi yêu cầu gỡ bản quyền
-          </Link>
+          </LinkCho>
         </p>
 
         {state && 'error' in state && (

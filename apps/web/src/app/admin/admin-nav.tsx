@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { usePathname } from 'next/navigation';
 
 /**
@@ -52,9 +52,10 @@ export function AdminNav({ soYeuCauGo, soNhomLoi }: { soYeuCauGo: number; soNhom
         const dem = m.dem === 'go' ? soYeuCauGo : m.dem === 'loi' ? soNhomLoi : 0;
 
         return (
-          <Link
+          <LinkCho
             key={m.href}
             href={m.href}
+            nen="toi"
             data-testid={`admin-tab-${m.id}`}
             aria-current={dangMo ? 'page' : undefined}
             className={[
@@ -78,7 +79,7 @@ export function AdminNav({ soYeuCauGo, soNhomLoi }: { soYeuCauGo: number; soNhom
                 {dem}
               </span>
             )}
-          </Link>
+          </LinkCho>
         );
       })}
     </nav>

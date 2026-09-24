@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { objectUrl } from '@/lib/storage';
@@ -206,13 +206,13 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         {game.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2" data-testid="game-tags">
             {game.tags.map(({ tag }) => (
-              <Link
+              <LinkCho
                 key={tag.slug}
                 href={`/?tag=${tag.slug}`}
                 className="inline-flex items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-semibold text-ink no-underline hover:border-accent"
               >
                 {tag.label}
-              </Link>
+              </LinkCho>
             ))}
           </div>
         )}

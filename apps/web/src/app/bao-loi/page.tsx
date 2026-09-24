@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
 import { isOperatorConfigured, operator } from '@/lib/operator';
@@ -48,9 +48,9 @@ export default async function BaoLoiPage({
           Chỗ này dành cho <strong>lỗi kỹ thuật</strong>: trang trắng, bấm không được, game không
           mở, thư không tới. Nếu là <strong>nội dung không phù hợp với trẻ em</strong> thì dùng nút{' '}
           <em>Báo cáo game này</em> ngay dưới game. Nếu là{' '}
-          <Link href="/bao-cao-ban-quyen" className="font-semibold underline">
+          <LinkCho href="/bao-cao-ban-quyen" className="font-semibold underline">
             bản gốc của bạn bị đăng lại
-          </Link>
+          </LinkCho>
           , dùng biểu mẫu riêng cho việc đó.
         </Notice>
       </div>

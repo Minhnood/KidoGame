@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import { FormColumn, PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
@@ -21,9 +21,9 @@ export default async function UploadPage() {
         <PageTitle title="Đăng game" />
         <Notice tone="info">
           Game cần được đăng từ tài khoản của bé để ghi công đúng người làm. Bố mẹ{' '}
-          <Link href="/phu-huynh" className="font-bold">
+          <LinkCho href="/phu-huynh" className="font-bold">
             tạo tài khoản cho bé ở đây
-          </Link>{' '}
+          </LinkCho>{' '}
           rồi để bé tự đăng nhập nhé.
         </Notice>
       </>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import type { ReactNode } from 'react';
 import { PageTitle } from '@/components/page';
 import { Notice } from '@/components/notice';
@@ -41,9 +41,9 @@ function Section({ id, title, children }: { id: string; title: string; children:
 /** Link trong thân bài gạch chân hẳn hoi — đây là trang toàn chữ, link phải nhìn ra được. */
 function A({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="font-semibold underline">
+    <LinkCho href={href} className="font-semibold underline">
       {children}
-    </Link>
+    </LinkCho>
   );
 }
 
@@ -341,9 +341,9 @@ export default function TermsPage() {
         <p>KidoGame do {op.name} vận hành.</p>
         <p data-testid="terms-operator-email">
           Riêng <strong>lỗi kỹ thuật</strong> thì nhanh nhất là{' '}
-          <Link href="/bao-loi" className="font-semibold underline">
+          <LinkCho href="/bao-loi" className="font-semibold underline">
             trang báo lỗi
-          </Link>{' '}
+          </LinkCho>{' '}
           — nó vào thẳng hàng đợi của người trực, không phải hòm thư. Còn mọi việc khác —
           khiếu nại, xoá dữ liệu, hỏi về điều khoản:{' '}
           <a href={`mailto:${op.email}`} className="font-semibold underline">

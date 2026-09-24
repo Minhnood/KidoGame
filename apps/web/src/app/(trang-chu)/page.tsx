@@ -14,6 +14,7 @@ import { gameMoiCuaBanBe } from '@/lib/theo-doi';
 import { Suspense } from 'react';
 import { LuoiGameCho } from '@/components/dang-tai';
 import { NutDangCho } from '@/components/nut-dang-cho';
+import { LinkCho } from '@/components/link-cho';
 import { HANG_LOC, LE_DUOI_LOAI, LE_DUOI_TUOI } from './hang-loc';
 
 export const dynamic = 'force-dynamic';
@@ -252,9 +253,9 @@ export default async function HomePage({
         <section className="mt-8" data-testid="game-ban-be">
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 className="text-xl font-extrabold tracking-tight">Game mới của bạn bè</h2>
-            <Link href="/ban-be" className="text-sm font-semibold text-accent-text">
+            <LinkCho href="/ban-be" className="text-sm font-semibold text-accent-text">
               Các bạn bé đang theo dõi
-            </Link>
+            </LinkCho>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
             {gameBanBe.map((game) => (
@@ -453,16 +454,16 @@ async function KetQua({
           {filtering ? (
             <>
               Không tìm thấy game nào khớp.{' '}
-              <Link href="/" className="font-bold text-accent-text underline">
+              <LinkCho href="/" className="font-bold text-accent-text underline">
                 Xem tất cả game
-              </Link>
+              </LinkCho>
             </>
           ) : (
             <>
               Chưa có game nào cả.{' '}
-              <Link href="/upload" className="font-bold text-accent-text underline">
+              <LinkCho href="/upload" className="font-bold text-accent-text underline">
                 Đăng game đầu tiên
-              </Link>{' '}
+              </LinkCho>{' '}
               nhé!
             </>
           )}

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { appOrigin, kiemDuongGuiMail } from '@/lib/mail';
@@ -85,7 +85,7 @@ function O({
    */
   const vach = gap && coViec ? 'border-l-danger' : coViec ? 'border-l-accent' : 'border-l-border';
   return (
-    <Link
+    <LinkCho
       href={href}
       data-testid={testId}
       data-so={so}
@@ -117,7 +117,7 @@ function O({
       </p>
       <p className="mt-2.5 font-bold text-ink group-hover:text-accent-text">{nhan}</p>
       <p className="mt-1 text-sm leading-snug text-ink-soft">{phu}</p>
-    </Link>
+    </LinkCho>
   );
 }
 
@@ -450,7 +450,7 @@ export default async function AdminTongQuanPage() {
             {goQuaHan} yêu cầu gỡ bản quyền đã quá hạn trả lời {TAKEDOWN_SLA_WORKING_DAYS} ngày
             làm việc.
           </strong>{' '}
-          Đây là hạn đã hứa công khai trên <Link href="/dieu-khoan">trang điều khoản</Link> với
+          Đây là hạn đã hứa công khai trên <LinkCho href="/dieu-khoan">trang điều khoản</LinkCho> với
           người ngoài, không phải hạn nội bộ.
         </Notice>
       )}
@@ -603,7 +603,7 @@ export default async function AdminTongQuanPage() {
           <h2 className="mb-1 text-lg font-extrabold tracking-tight">Lỗi mỗi ngày</h2>
           <p className="mb-4 text-sm text-ink-soft">
             Số LẦN người dùng gặp lỗi, tính theo ngày lỗi xuất hiện lần đầu.{' '}
-            <Link href="/admin/loi">Mở tab Lỗi</Link>
+            <LinkCho href="/admin/loi">Mở tab Lỗi</LinkCho>
             {baoLoiChuaXuLy > 0 && (
               <>
                 {' — '}

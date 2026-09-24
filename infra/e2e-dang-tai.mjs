@@ -499,6 +499,87 @@ for (const [ten, sel] of [
 }
 await ctxXoay.close();
 
+/*
+ * ═══ MỌI LINK KHÁC TRÊN SITE — `LinkCho` VÀ `ButtonLink` ═══
+ *
+ * 24/9: trước đó chỉ chip lọc, phân trang và thẻ game có phản hồi; logo, thanh điều
+ * hướng, chân trang, link trong trang đăng nhập đều im lặng trong lúc trang sau dựng.
+ *
+ * Mỗi loại link một đại diện, vì mỗi loại hỏng một kiểu khác nhau:
+ *   · logo, "Bố mẹ" nằm trên THANH TỐI — lớp phủ mặc định trắng thì vòng xoay trắng
+ *     của chúng vô hình (trắng trên trắng), dù có mặt trong DOM.
+ *   · nút cam — ở giao diện TỐI, lớp phủ `surface` tối đè lên chữ `chrome` tối.
+ *   · link chân trang, link chữ `kg-link-bam` — `LinkCho` thường, nền sáng.
+ *
+ * Nên ngoài "có vòng xoay không", phép này đo luôn ĐỘ TƯƠNG PHẢN giữa vòng xoay và lớp
+ * phủ, ngưỡng 3:1 của WCAG 1.4.11. Màu đọc qua canvas vì Tailwind 4 trả màu pha alpha
+ * dạng `oklab(...)`, không phải `rgb()` để tách số.
+ *
+ * Bóp mạng sau khi trang tải: không bóp thì một trang nhẹ như `/dang-ky` có thể dựng xong
+ * trong khoảng giữa hai lần soi, và phép đo đỏ oan vì chụp hụt chứ không vì thiếu.
+ */
+for (const [ten, trang, sel, giaoDien] of [
+  ['logo (thanh tối)', '/dieu-khoan', 'header a[href="/"]', 'light'],
+  ['"Bố mẹ" trên thanh (thanh tối)', '/dieu-khoan', 'header a[href="/dang-nhap"]', 'light'],
+  ['nút cam "Bé đăng nhập", giao diện tối', '/dieu-khoan', 'header a[href="/be-dang-nhap"]', 'dark'],
+  ['link chân trang', '/dieu-khoan', '[data-testid=footer-bao-loi]', 'light'],
+  ['link chữ "Đăng ký" ở trang đăng nhập', '/dang-nhap', 'main a[href="/dang-ky"]', 'light'],
+]) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: giaoDien });
+  const p = await ctx.newPage();
+  await p.goto(`${APP}${trang}`, { waitUntil: 'networkidle' });
+  const cdp = await ctx.newCDPSession(p);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.emulateNetworkConditions', CHAM);
+
+  const nut = p.locator(sel).first();
+  if ((await nut.count()) === 0) {
+    check(`Có ${ten} để đo`, false, `không thấy ${sel}`);
+    await ctx.close();
+    continue;
+  }
+  const truoc = await nut.boundingBox();
+  await nut.click({ noWaitAfter: true });
+
+  let doDuoc = null;
+  for (let i = 0; i < 80 && !doDuoc; i += 1) {
+    doDuoc = await nut
+      .locator('[data-testid=nut-dang-cho]')
+      .evaluate((phu) => {
+        const c = document.createElement('canvas').getContext('2d');
+        const rgb = (mau) => {
+          c.clearRect(0, 0, 1, 1);
+          c.fillStyle = mau;
+          c.fillRect(0, 0, 1, 1);
+          return [...c.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+        };
+        const L = ([r, g, b]) => {
+          const k = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+          return 0.2126 * k(r) + 0.7152 * k(g) + 0.0722 * k(b);
+        };
+        const a = L(rgb(getComputedStyle(phu).backgroundColor));
+        const b = L(rgb(getComputedStyle(phu.firstElementChild).borderLeftColor));
+        return { tuongPhan: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) };
+      }, null, { timeout: 50 })
+      .catch(() => null);
+    if (!doDuoc) await p.waitForTimeout(50);
+  }
+  const sau = doDuoc ? await nut.boundingBox().catch(() => null) : null;
+
+  check(`Bấm ${ten}: vòng xoay hiện TRONG chính link đó`, !!doDuoc, doDuoc ? 'có' : 'không thấy sau 4s');
+  check(
+    `Bấm ${ten}: vòng xoay nổi trên lớp phủ (≥ 3:1)`,
+    !!doDuoc && doDuoc.tuongPhan >= 3,
+    doDuoc ? `${doDuoc.tuongPhan.toFixed(2)}:1` : 'không đo được'
+  );
+  check(
+    `Bấm ${ten}: link KHÔNG xê dịch vì vòng xoay`,
+    !!truoc && !!sau && Math.abs(sau.width - truoc.width) < 1 && Math.abs(sau.x - truoc.x) < 1,
+    truoc && sau ? `lệch ${Math.abs(sau.width - truoc.width).toFixed(1)}px rộng` : 'không đo được'
+  );
+  await ctx.close();
+}
+
 await browser.close();
 
 const hong = results.filter((r) => !r.ok).length;

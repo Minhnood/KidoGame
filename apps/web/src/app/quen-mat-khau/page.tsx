@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { LinkCho } from '@/components/link-cho';
 import { AuthForm } from '@/components/auth-form';
 import { Field, TextInput } from '@/components/field';
 import { FormColumn, PageTitle } from '@/components/page';
@@ -32,9 +32,9 @@ export default function ForgotPasswordPage() {
 
       <p className="mb-12 text-ink-soft">
         Nhớ ra mật khẩu rồi?{' '}
-        <Link href="/dang-nhap" className="kg-link-bam font-bold text-accent-text underline">
+        <LinkCho href="/dang-nhap" className="kg-link-bam font-bold text-accent-text underline">
           Đăng nhập
-        </Link>
+        </LinkCho>
       </p>
     </FormColumn>
   );

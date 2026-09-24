@@ -1,10 +1,61 @@
 # KidoGame
 
-Nền tảng để trẻ em đăng tải và chia sẻ game Scratch.
+Nền tảng để trẻ em đăng và chia sẻ game Scratch tự làm. Bố mẹ tạo tài khoản cho con,
+con tải file `.sb3` lên, và game chạy ngay trong trình duyệt, cả trên điện thoại.
 
-Trẻ upload file `.sb3`, server kiểm tra rồi đóng gói thành HTML và phục vụ nó trên
-**một origin riêng, trong iframe sandbox**. Runtime scratch-vm nằm ở một file dùng
-chung cho mọi game — xem "Cân nặng".
+**Bản đang chạy thật:** <https://app.37-60-251-95.sslip.io>. Không cần đăng nhập vẫn
+xem và chơi được mọi game. Tài khoản dùng thử (một phụ huynh, một bé) có trong CV.
+
+Dự án cá nhân, một người làm từ 25/8/2026: viết code, triển khai lên VPS Linux, và tự
+vận hành (giám sát, sao lưu, xử lý sự cố).
+
+| | |
+|---|---|
+| Frontend | Next.js 15 (App Router, Server Components), React 19, Tailwind CSS 4 |
+| Backend | Server Actions + Route Handlers, Prisma, PostgreSQL (16 bảng) |
+| Hạ tầng | Docker Compose 7 dịch vụ trên VPS, Caddy (reverse proxy, HTTPS tự động) |
+| Vận hành | Umami, GlitchTip tự host, sao lưu tự động hằng ngày |
+| Kiểm thử | 33 bộ kiểm tự viết (Playwright + Node), hơn 1.300 phép kiểm |
+
+### Những phần đáng xem
+
+- **File do trẻ tải lên là mã chạy được, nên nó được cô lập.** Có ba origin: app,
+  player (phục vụ game trong iframe sandbox, kèm CSP riêng) và admin (cookie quản trị
+  không bao giờ đi tới hai origin kia). Mọi phần kiểm tra, chuẩn hoá và đóng gói
+  `.sb3` nằm trong [`packages/sb3`](packages/sb3/src), có unit test gồm cả file độc hại.
+- **Hai vai trò phụ huynh – bé.** Chỉ phụ huynh có email. Phụ huynh phải xác minh email
+  thì mới tạo được tài khoản cho con, vì đó là cơ chế đồng ý của người đại diện theo
+  Nghị định 13/2023 và COPPA. Phiên lưu trong DB chứ không dùng JWT, để khoá tài khoản
+  con là phiên của con bị thu hồi ngay. Xem [`auth.ts`](apps/web/src/lib/auth.ts),
+  [`session.ts`](apps/web/src/lib/session.ts).
+- **Kiểm duyệt hậu kiểm, bốn trạng thái.** Game công khai ngay khi đăng. Ba báo cáo từ
+  phụ huynh đã xác minh thì game bị rút khỏi trang chủ, sáu báo cáo thì bị ẩn hẳn. Toàn
+  bộ quy tắc nằm trong một hàm ([`moderation.ts`](apps/web/src/lib/moderation.ts)).
+- **Một sự cố thật, xử lý bằng số đo.** Mỗi lần deploy có request lỗi 502. Mình bắn 130
+  request trong lúc khởi động lại container: 32 request (24,6%) lỗi trong 2,2 giây, và
+  log cho thấy cả 32 đều là `connection refused` chứ không phải lỗi DNS như giả thuyết
+  ban đầu. Nguyên nhân là Next.js chưa kịp mở cổng. Sau khi cho Caddy thử lại
+  ([`Caddyfile`](infra/Caddyfile), `lb_try_duration`), đo lại được 0/99 lỗi.
+- **Runtime dùng chung.** Công cụ đóng gói nhúng nguyên scratch-vm vào từng game, nên
+  mỗi game nặng 1.796 KB. Mình tách runtime ra một file dùng chung, còn 55 KB mỗi game.
+  Game thứ hai trong cùng phiên chỉ phải tải 10,6 KB (xem mục "Cân nặng").
+- **Kiểm thử nghiêm với chính bộ kiểm.** Mỗi phép kiểm mới phải được làm cho đỏ một lần
+  trước khi tin nó xanh. Luật này đã bắt được những phép kiểm luôn xanh, ví dụ
+  `[].every(...)` trả `true` trên một danh sách rỗng.
+
+```
+             ┌───────────────── Caddy (HTTPS) ─────────────────┐
+  app.…  ──▶ │ Next.js: trang, API, Prisma ──▶ PostgreSQL      │
+  play.… ──▶ │ file tĩnh: game đã đóng gói (iframe sandbox)    │
+  admin.… ─▶ │ Next.js, chỉ /admin, cookie quản trị riêng      │
+             └─────────────────────────────────────────────────┘
+   + backup (dump hằng ngày) · prune (dọn theo hạn) · Umami · GlitchTip
+```
+
+---
+
+Phần dưới đây là **sổ tay kỹ thuật**: cách chạy, cách kiểm, cách triển khai, và lý do
+của từng quyết định.
 
 ## Chạy ở máy local
 
@@ -92,7 +143,7 @@ node infra/e2e-admin-origin.mjs                                    # 27, không 
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-icon.mjs        # 49, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-loi-nhan.mjs    # 36, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-theo-doi.mjs    # 37, cần psql
-SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 32, cần psql
+SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-dang-tai.mjs    # 47, cần psql
 SB3_FIXTURE=$SB3 MAIL_LOG=$MAIL_LOG node infra/e2e-xem-thu.mjs    # 66, cần psql; chạy storage:prune khô
 node infra/e2e-bia-hong.mjs                                        # 13, cần psql + tài khoản demo
 node infra/e2e-la-vien.mjs                                         # 31, lá kín viền + hoa xen + bốn cành góc khi hover
@@ -1646,18 +1697,16 @@ Xong: M0 (đóng gói player), M1 (upload → chơi được), M2 (auth phụ hu
 M2.5 (xác minh email + quên mật khẩu), M3 (tìm kiếm + tag + lọc tuổi),
 M4 (báo cáo → ẩn mềm ở 3 báo cáo đã xác minh, ẩn hẳn ở 6 → trang kiểm duyệt của admin).
 
-M5 (Deploy): cả ba phần của mốc này đã viết — Docker Compose + Caddy
-(`infra/Dockerfile`, `infra/docker-compose.yml`, `infra/.env.example`, Caddyfile
-đọc domain từ env), sao lưu Postgres + file, và cron dump (service `backup`).
+M5 (Deploy): **đang chạy trên VPS từ 8/9/2026.** Docker Compose + Caddy
+(`infra/Dockerfile`, `infra/docker-compose.yml`, `infra/.env.example`, Caddyfile đọc
+domain từ env), sao lưu Postgres + file hằng ngày lúc 3 giờ sáng (service `backup`),
+bản sao lưu được kéo ra khỏi VPS về một máy khác. Mỗi lần deploy chạy ba bộ kiểm thẳng
+vào production: `e2e-prod-routes`, `umami-check`, `glitchtip-check`. Xem phần "Triển
+khai lên VPS".
 
-**Chưa `docker compose up` lần nào** vì máy dev chưa cài Docker, nên phần
-container còn nguyên rủi ro. Riêng `infra/backup.sh` đã được kiểm thật trên host,
-gồm cả phục hồi ngược lại để đối chiếu. Xem phần "Triển khai lên VPS".
-
-Còn thiếu để gọi là hoàn tất: chạy 4 bước kiểm tay cần Docker trong plan (dựng
-tài khoản → upload → game chạy trong iframe; `curl -I` soi header player origin;
-kiểm cookie không lọt sang player origin; thử đổi tên file HTML thành `.sb3`), và
-đưa bản sao lưu ra khỏi máy.
+Sau M5: giám sát ba tầng (Umami, GlitchTip tự host, cảnh báo tự viết), khu quản trị trên
+origin riêng, người dùng tự báo lỗi, xem thử game trước khi đăng, danh mục "Bàn phím" /
+"Chạm tay" để trẻ dùng máy tính bảng biết game nào chơi được bằng tay.
 
 ### M3 — Khám phá
 
