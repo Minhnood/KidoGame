@@ -305,3 +305,48 @@
 		respond "404" 404
 	}
 }
+
+# ---------------------------------------------------------------------------
+# TEAMNEST — dự án khác (đồ án), CHỈ ở chung máy và chung Caddy này.
+#
+# Tên miền viết cứng chứ không `{$X:...}`: không có biến thì không thể ra khối site
+# rỗng (cái bẫy `caddy-config-check` canh), và tên này không đổi theo .env của KidoGame.
+# Tên là sslip.io theo IP VPS (giống KidoGame, chưa có tên miền thật): đổi IP thì đổi cả dòng site.
+#
+# api/web TeamNest là stack compose riêng (`teamnest-prod`), Caddy tới qua mạng ngoài
+# `edge` bằng tên dịch vụ teamnest-api / teamnest-web (vì sao phải có tiền tố: xem `edge`
+# ở dịch vụ caddy trong docker-compose.yml). Thân khối chép NGUYÊN VĂN từ TeamNest/deploy/caddy/teamnest.caddy (bản
+# đã đo trên máy); sửa ở đó trước rồi chép sang đây.
+# ---------------------------------------------------------------------------
+teamnest.37-60-251-95.sslip.io {
+	encode zstd gzip
+
+	# TeamNest chưa có tải file lên: mọi request tối đa 1MB (tin chat, bình luận chỉ vài KB).
+	request_body {
+		max_size 1MB
+	}
+
+	# /api/* (kể cả /api/socket.io cho WebSocket) đi THẲNG sang NestJS, không qua rewrite của Next: một chặng
+	# ít hơn, và WebSocket không phụ thuộc Next. Vẫn cùng một tên miền nên cookie refresh vẫn là first-party.
+	# Caddy tự ghi X-Forwarded-For bằng IP thật (không tin header client gửi lên); API tin header này nhờ
+	# TRUST_PROXY = dải mạng edge.
+	#
+	# lb_try_*: lúc deploy, container mới chưa mở cổng thì Caddy gọi lại trong tối đa 5 giây thay vì trả 502
+	# ngay (cách KidoGame đã dùng). Chỉ thử lại lỗi KẾT NỐI ("connection refused" = chưa byte nào được gửi), nên
+	# POST cũng không bị gửi hai lần. Đo trên máy, tạo lại container giữa dòng request đều đặn mỗi 50ms:
+	# chưa có thì api 23–24 lần 502 (cửa sổ 1,2s, gồm cả lúc chạy migrate), web 8–9 lần (0,4s). Có
+	# thì 0 lần, 3/3 lượt mỗi bên (~480 request mỗi lượt).
+	handle /api/* {
+		reverse_proxy teamnest-api:4000 {
+			lb_try_duration 5s
+			lb_try_interval 100ms
+		}
+	}
+
+	handle {
+		reverse_proxy teamnest-web:3100 {
+			lb_try_duration 5s
+			lb_try_interval 100ms
+		}
+	}
+}

@@ -216,6 +216,17 @@ services:
       # chứng chỉ mới, rất dễ chạm rate limit của Let's Encrypt.
       - caddy_data:/data
       - caddy_config:/config
+    # `edge` chỉ để Caddy tới được api/web của TeamNest (khối `teamnest.37-60-251-95.sslip.io` cuối
+    # Caddyfile). TeamNest là stack compose riêng, Postgres riêng; DB của nó không vào `edge`,
+    # và không service nào khác của KidoGame vào `edge` — TeamNest không thấy db hay web ở đây.
+    #
+    # BẪY: mọi tên trên `edge` cũng là tên Caddy tra được, và trùng tên thì KHÔNG chắc ra bản
+    # của KidoGame. Đo trên máy (container cắm `edge` + một mạng giả, mỗi mạng một `web`): 50/50
+    # lần `web` ra bản trên `edge`, cả hai thứ tự cắm mạng. Nên dịch vụ nào vào `edge` cũng KHÔNG được mang tên dịch vụ của KidoGame
+    # (web, db, umami, glitchtip, ...) — TeamNest vì thế đặt tên teamnest-api / teamnest-web.
+    networks:
+      - default
+      - edge
 
   # ---------------------------------------------------------------------------
   # Sao lưu hằng ngày: dump Postgres + đóng gói storage, giữ N bản gần nhất.
@@ -492,3 +503,10 @@ volumes:
   storage:
   caddy_data:
   caddy_config:
+
+networks:
+  # Mạng ngoài, tạo MỘT LẦN trên máy trước khi `up` (thiếu thì compose từ chối dựng caddy):
+  #   docker network create --subnet 172.31.250.0/24 edge
+  # Dải cố định vì API TeamNest chỉ tin X-Forwarded-For từ dải này (TRUST_PROXY).
+  edge:
+    external: true
